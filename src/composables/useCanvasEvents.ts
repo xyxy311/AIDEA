@@ -1,0 +1,53 @@
+import type { KonvaEventObject } from 'konva/lib/Node'
+import { useWhiteboardStore } from '@/stores/whiteboard'
+
+/**
+ * 画布事件处理
+ *
+ * 提供针对 v-stage 事件的回调：
+ * - handleStageClick：点击空白区域取消选中
+ * - handleStageDblClick：双击空白区域创建新节点
+ * - handleStageContextMenu：右键菜单（阻止默认）
+ */
+export function useCanvasEvents() {
+  const store = useWhiteboardStore()
+
+  /**
+   * 处理画布点击事件
+   * 当点击目标为 Stage 本身（非节点）时，取消选中
+   */
+  function handleStageClick(e: KonvaEventObject<MouseEvent>) {
+    // Konva 中：点击空白区域时，e.target === e.currentTarget (Stage)
+    if (e.target === e.currentTarget) {
+      store.selectNode(null)
+    }
+  }
+
+  /**
+   * 处理画布双击事件
+   * 仅在空白区域双击时创建新节点（避免双击节点时误创建）
+   */
+  function handleStageDblClick(e: KonvaEventObject<MouseEvent>) {
+    // 仅在点击 Stage 空白区域时创建节点（非节点/形状之上）
+    if (e.target !== e.currentTarget) {
+      return
+    }
+    const pos = e.target.getStage()?.getPointerPosition()
+    if (pos) {
+      store.addNode(pos.x, pos.y)
+    }
+  }
+
+  /**
+   * 处理画布右键菜单事件（阻止浏览器默认菜单）
+   */
+  function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
+    e.evt.preventDefault()
+  }
+
+  return {
+    handleStageClick,
+    handleStageDblClick,
+    handleStageContextMenu,
+  }
+}

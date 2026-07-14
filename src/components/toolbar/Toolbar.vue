@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { useWhiteboardStore } from '@/stores/whiteboard'
 import { useStageSize } from '@/composables/useStageSize'
+import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 const store = useWhiteboardStore()
 const { stageWidth, stageHeight } = useStageSize()
@@ -15,11 +16,26 @@ const { stageWidth, stageHeight } = useStageSize()
 /** 是否有选中节点（控制删除按钮的禁用状态） */
 const hasSelection = computed(() => store.selectedNodeId !== null)
 
-/** 在画布中央创建新节点 */
+/**
+ * 在视口中央创建新节点
+ *
+ * 视口中央 → 屏幕坐标 → 逆变换为世界坐标后创建节点。
+ * 无论画布如何平移/缩放，新节点始终出现在当前视野中央。
+ */
 function handleAddNode() {
-  const x = stageWidth.value / 2 - 100 // 减去半个节点宽度使节点居中
-  const y = stageHeight.value / 2 - 60 // 减去半个节点高度
-  store.addNode(x, y)
+  // 视口中心的屏幕坐标
+  const viewportCenterX = stageWidth.value / 2
+  const viewportCenterY = stageHeight.value / 2
+
+  // 转换为世界坐标：world = (screen - offset) / scale
+  const worldX = (viewportCenterX - store.stageX) / store.stageScale
+  const worldY = (viewportCenterY - store.stageY) / store.stageScale
+
+  // 节点左上角偏移半个尺寸，使节点中心对齐视口中心
+  const nodeX = worldX - DEFAULT_NODE_WIDTH / 2
+  const nodeY = worldY - DEFAULT_NODE_HEIGHT / 2
+
+  store.addNode(nodeX, nodeY)
 }
 
 /** 删除选中节点 */

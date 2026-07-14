@@ -28,13 +28,14 @@ describe('useCanvasEvents', () => {
     expect(store.selectedNodeId).toBeNull()
   })
 
-  it('should create a node on double click at the clicked position', () => {
+  it('should create a node on double click centered at the clicked position', () => {
     const store = useWhiteboardStore()
     const { handleStageDblClick } = useCanvasEvents()
 
-    // Mock a Konva Stage with getPointerPosition returning coordinates
+    // Mock a Konva Stage
+    // getRelativePointerPosition 返回世界坐标（已考虑 Stage 的 scale/offset）
     const mockStage = {
-      getPointerPosition: () => ({ x: 300, y: 200 }),
+      getRelativePointerPosition: () => ({ x: 300, y: 200 }),
     }
 
     // target 和 currentTarget 必须指向同一对象（模拟点击空白区域）
@@ -51,7 +52,9 @@ describe('useCanvasEvents', () => {
     handleStageDblClick(mockEvent)
     expect(store.nodesArray.length).toBe(1)
     const node = store.nodesArray[0]
-    expect(node.x).toBe(300)
-    expect(node.y).toBe(200)
+    // 节点左上角应偏移半个节点尺寸，使节点中心对齐鼠标位置
+    // DEFAULT_NODE_WIDTH=200 → 300-100=200, DEFAULT_NODE_HEIGHT=120 → 200-60=140
+    expect(node.x).toBe(200)
+    expect(node.y).toBe(140)
   })
 })

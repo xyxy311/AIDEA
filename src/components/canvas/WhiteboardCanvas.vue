@@ -29,7 +29,11 @@ const { stageWidth, stageHeight } = useStageSize()
 const stageConfig = computed(() => ({
   width: stageWidth.value,
   height: stageHeight.value,
-  ...nav.navConfig.value,
+  x: store.stageX,
+  y: store.stageY,
+  scaleX: store.stageScale,
+  scaleY: store.stageScale,
+  draggable: store.isPanMode,
 }))
 
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
@@ -126,7 +130,7 @@ function handleStageDragEnd(e: unknown): void {
   <div
     ref="stageContainerRef"
     class="canvas-wrapper"
-    :class="{ 'pan-mode': nav.isPanMode.value }"
+    :class="{ 'pan-mode': store.isPanMode }"
   >
     <!-- Konva Stage -->
     <v-stage
@@ -155,7 +159,7 @@ function handleStageDragEnd(e: unknown): void {
           :key="node.id"
           :node-id="node.id"
           :is-selected="node.id === store.selectedNodeId"
-          :is-pan-mode="nav.isPanMode.value"
+          :is-pan-mode="store.isPanMode"
           @select="store.selectNode"
           @dblclick="startTextEdit"
         />
@@ -172,9 +176,9 @@ function handleStageDragEnd(e: unknown): void {
       :node-y="editingNode.y"
       :node-width="editingNode.width"
       :node-height="editingNode.height"
-      :stage-scale="nav.stageScale.value"
-      :stage-x="nav.stageX.value"
-      :stage-y="nav.stageY.value"
+      :stage-scale="store.stageScale"
+      :stage-x="store.stageX"
+      :stage-y="store.stageY"
       :stage-container="stageContainerRef!"
       @save="finishTextEdit"
       @cancel="cancelTextEdit"

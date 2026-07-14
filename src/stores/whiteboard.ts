@@ -26,6 +26,18 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   /** 当前选中节点 ID，null 表示无选中 */
   const selectedNodeId = ref<string | null>(null)
 
+  /** 画布视口 X 偏移（平移） */
+  const stageX = ref(0)
+
+  /** 画布视口 Y 偏移（平移） */
+  const stageY = ref(0)
+
+  /** 画布缩放倍率 */
+  const stageScale = ref(1)
+
+  /** 是否处于平移模式（空格键按下） */
+  const isPanMode = ref(false)
+
   // ── Getters ──
   /** 节点数组（用于 v-for 渲染） */
   const nodesArray = computed<WhiteboardNode[]>(() =>
@@ -148,6 +160,10 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     // State
     nodes,
     selectedNodeId,
+    stageX,
+    stageY,
+    stageScale,
+    isPanMode,
     // Getters
     nodesArray,
     selectedNode,

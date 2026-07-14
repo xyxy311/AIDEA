@@ -1,5 +1,6 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useWhiteboardStore } from '@/stores/whiteboard'
+import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 /**
  * 画布事件处理
@@ -32,9 +33,15 @@ export function useCanvasEvents() {
     if (e.target !== e.currentTarget) {
       return
     }
-    const pos = e.target.getStage()?.getPointerPosition()
+    const stage = e.target.getStage()
+    // getRelativePointerPosition() 返回世界坐标（已考虑 Stage 的 scale/offset）
+    const pos = stage?.getRelativePointerPosition()
     if (pos) {
-      store.addNode(pos.x, pos.y)
+      // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
+      store.addNode(
+        pos.x - DEFAULT_NODE_WIDTH / 2,
+        pos.y - DEFAULT_NODE_HEIGHT / 2,
+      )
     }
   }
 

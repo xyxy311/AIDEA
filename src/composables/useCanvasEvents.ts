@@ -49,6 +49,10 @@ export function useCanvasEvents() {
    * 处理画布右键菜单事件（阻止浏览器默认菜单）
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
+    // 调试：打印信息
+    console.log('画布偏移:', store.stageX, store.stageY)
+    console.log('画布缩放:', store.stageScale)
+    console.log('所有节点坐标:', [...store.nodes.values()])
     e.evt.preventDefault()
   }
 

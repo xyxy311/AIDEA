@@ -118,7 +118,7 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   }
 
   /**
-   * 调整节点尺寸（用于 Transformer 操作）
+   * 调整节点尺寸（用于 Transformer 和 缩放操作）
    * 自动应用最小尺寸约束
    * @param id - 节点 ID
    * @param x - 新的 x 坐标
@@ -160,7 +160,7 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     // State
     nodes,
     selectedNodeId,
-    stageX,
+    stageX,  // 画布偏移量（相对于视图）
     stageY,
     stageScale,
     isPanMode,

@@ -18,6 +18,7 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import { CANVAS_BACKGROUND_COLOR } from '@/constants'
 import WhiteboardNode from './WhiteboardNode.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
+import OverviewMap from './OverviewMap.vue'
 
 // ── Store ──
 const store = useWhiteboardStore()
@@ -183,6 +184,9 @@ function handleStageDragEnd(e: unknown): void {
       @save="finishTextEdit"
       @cancel="cancelTextEdit"
     />
+
+    <!-- 右下角导航小地图 -->
+    <OverviewMap />
   </div>
 </template>
 

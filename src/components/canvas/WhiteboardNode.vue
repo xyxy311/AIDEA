@@ -187,22 +187,23 @@ function onDragEnd(e: KonvaEventObject<DragEvent>): void {
 }
 
 /** 变换结束：同步最终尺寸到 store */
-function onTransformEnd(e: KonvaEventObject<Event>): void {
-  const target: Konva.Rect = e.target as Konva.Rect
-  const scaleX: number = target.scaleX()
-  const scaleY: number = target.scaleY()
+// 暂时不使用变换
+// function onTransformEnd(e: KonvaEventObject<Event>): void {
+//   const target: Konva.Rect = e.target as Konva.Rect
+//   const scaleX: number = target.scaleX()
+//   const scaleY: number = target.scaleY()
 
-  // 重置 scale 并将变换应用到 width/height
-  target.scaleX(1)
-  target.scaleY(1)
+//   // 重置 scale 并将变换应用到 width/height
+//   target.scaleX(1)
+//   target.scaleY(1)
 
-  const newX: number = target.x()
-  const newY: number = target.y()
-  const newWidth: number = Math.max(target.width() * scaleX, MIN_NODE_WIDTH)
-  const newHeight: number = Math.max(target.height() * scaleY, MIN_NODE_HEIGHT)
+//   const newX: number = target.x()
+//   const newY: number = target.y()
+//   const newWidth: number = Math.max(target.width() * scaleX, MIN_NODE_WIDTH)
+//   const newHeight: number = Math.max(target.height() * scaleY, MIN_NODE_HEIGHT)
 
-  store.resizeNode(props.nodeId, newX, newY, newWidth, newHeight)
-}
+//   store.resizeNode(props.nodeId, newX, newY, newWidth, newHeight)
+// }
 </script>
 
 <template>

@@ -41,10 +41,8 @@ const stageConfig = computed(() => ({
 const stageContainerRef = ref<HTMLDivElement | null>(null)
 
 // ── 文本编辑状态 ──
-/** 当前正在编辑的节点 ID，null 表示无编辑 */
-const editingNodeId = ref<string | null>(null)
 /** 是否正在编辑（用于禁用快捷键） */
-const isEditing = computed(() => editingNodeId.value !== null)
+const isEditing = computed(() => store.editingNodeId !== null)
 
 // ── 快捷键（编辑状态下禁用） ──
 useKeyboardShortcuts(isEditing)
@@ -57,26 +55,25 @@ const nav = useCanvasNavigation()
 
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
-  if (!editingNodeId.value) return null
-  return store.nodesArray.find((n) => n.id === editingNodeId.value) ?? null
+  if (!store.editingNodeId) return null
+  return store.nodesArray.find((n) => n.id === store.editingNodeId) ?? null
 })
 
 // ── 编辑操作方法 ──
 
-/** 开始编辑指定节点 */
+/** 开始编辑指定节点（用于双击已有节点） */
 function startTextEdit(nodeId: string): void {
-  editingNodeId.value = nodeId
+  store.startEditing(nodeId)
 }
 
-/** 完成文本编辑（保存） */
+/** 完成文本编辑（保存）—— store.setNodeText 内部已清除编辑状态 */
 function finishTextEdit(nodeId: string, text: string): void {
   store.setNodeText(nodeId, text)
-  editingNodeId.value = null
 }
 
 /** 取消文本编辑 */
 function cancelTextEdit(): void {
-  editingNodeId.value = null
+  store.stopEditing()
 }
 
 // ── Stage 事件包装 ──
@@ -169,9 +166,9 @@ function handleStageDragEnd(e: unknown): void {
 
     <!-- 文本编辑器覆盖层 -->
     <NodeTextEditor
-      v-if="editingNodeId && editingNode"
-      :key="editingNodeId"
-      :node-id="editingNodeId"
+      v-if="store.editingNodeId && editingNode"
+      :key="store.editingNodeId"
+      :node-id="store.editingNodeId"
       :initial-text="editingNode.text"
       :node-x="editingNode.x"
       :node-y="editingNode.y"

@@ -26,6 +26,9 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   /** 当前选中节点 ID，null 表示无选中 */
   const selectedNodeId = ref<string | null>(null)
 
+  /** 当前正在编辑的节点 ID，null 表示无编辑 */
+  const editingNodeId = ref<string | null>(null)
+
   /** 画布视口 X 偏移（平移） */
   const stageX = ref(0)
 
@@ -76,6 +79,9 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     // 新节点自动选中
     selectedNodeId.value = id
 
+    // 新节点自动进入编辑模式
+    editingNodeId.value = id
+
     return id
   }
 
@@ -91,6 +97,11 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     // 若删除的是当前选中节点，清除选中状态
     if (selectedNodeId.value === id) {
       selectedNodeId.value = null
+    }
+
+    // 若删除的是正在编辑的节点，清除编辑状态
+    if (editingNodeId.value === id) {
+      editingNodeId.value = null
     }
   }
 
@@ -118,7 +129,7 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   }
 
   /**
-   * 调整节点尺寸（用于 Transformer 和 缩放操作）
+   * 调整节点尺寸（用于 Transformer）
    * 自动应用最小尺寸约束
    * @param id - 节点 ID
    * @param x - 新的 x 坐标
@@ -144,7 +155,23 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   }
 
   /**
+   * 开始编辑指定节点
+   * @param id - 节点 ID
+   */
+  function startEditing(id: string): void {
+    editingNodeId.value = id
+  }
+
+  /**
+   * 停止编辑（不保存）
+   */
+  function stopEditing(): void {
+    editingNodeId.value = null
+  }
+
+  /**
    * 设置节点文本内容（用于内联编辑保存）
+   * 保存后自动退出编辑模式
    * @param id - 节点 ID
    * @param text - 新的文本内容（允许空字符串）
    */
@@ -154,13 +181,17 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
 
     node.text = text
     triggerRef(nodes)
+
+    // 保存后退出编辑模式
+    editingNodeId.value = null
   }
 
   return {
     // State
     nodes,
     selectedNodeId,
-    stageX,  // 画布偏移量（相对于视图）
+    editingNodeId,
+    stageX,
     stageY,
     stageScale,
     isPanMode,
@@ -174,5 +205,7 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     moveNode,
     resizeNode,
     setNodeText,
+    startEditing,
+    stopEditing,
   }
 })

@@ -71,7 +71,7 @@ const editorStyle = computed(() => ({
   borderRadius: `${DEFAULT_NODE_STYLE.borderRadius * props.stageScale}px`,
   background: DEFAULT_NODE_STYLE.backgroundColor,
   color: DEFAULT_NODE_STYLE.textColor,
-  resize: 'both' as const,
+  resize: 'none' as const,
   outline: 'none',
   zIndex: 1000,
   boxSizing: 'border-box' as const,

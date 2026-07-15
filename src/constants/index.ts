@@ -31,10 +31,6 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   shadowOffsetY: 2,
 }
 
-// ── 节点选中样式 ──
-export const SELECTED_BORDER_COLOR: string = '#3b82f6'
-export const SELECTED_BORDER_WIDTH: number = 2
-
 // ── Transformer 配置 ──
 export const TRANSFORMER_ANCHOR_SIZE: number = 8
 export const TRANSFORMER_ANCHOR_CORNER_RADIUS: number = 2

@@ -11,7 +11,7 @@
 import { computed, ref, onUnmounted } from 'vue'
 import { useWhiteboardStore } from '@/stores/whiteboard'
 import { useStageSize } from '@/composables/useStageSize'
-import { DEFAULT_NODE_STYLE, MIN_SCALE, MAX_SCALE } from '@/constants'
+import { DEFAULT_NODE_STYLE, MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 // ── 小地图尺寸 ──
 const MAP_WIDTH = 200
@@ -91,6 +91,7 @@ const worldBounds = computed<Rect>(() => {
 })
 
 // ── 世界 → 小地图像素 ──
+
 
 function toMapX(wx: number): number {
   const b = worldBounds.value
@@ -225,6 +226,29 @@ function handleDragEnd(): void {
   document.removeEventListener('mouseup', handleDragEnd)
 }
 
+// ── 滚轮缩放（以小地图位置为锚点） ──
+
+function handleWheel(e: WheelEvent): void {
+  e.preventDefault()
+
+  const oldScale = store.stageScale
+  const direction = e.deltaY > 0 ? -1 : 1
+  const factor = direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
+  const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * factor))
+
+  if (newScale === oldScale) return
+
+  // 以当前视口中心为锚点缩放（即缩放时视口中心对应世界坐标不变）
+  const vpCenterX = stageWidth.value / 2
+  const vpCenterY = stageHeight.value / 2
+  const worldCenterX = (vpCenterX - store.stageX) / oldScale
+  const worldCenterY = (vpCenterY - store.stageY) / oldScale
+
+  store.stageScale = newScale
+  store.stageX = vpCenterX - worldCenterX * newScale
+  store.stageY = vpCenterY - worldCenterY * newScale
+}
+
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleDragMove)
   document.removeEventListener('mouseup', handleDragEnd)
@@ -232,7 +256,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="mapRef" class="overview-map" @click="handleMapClick">
+  <div ref="mapRef" class="overview-map" @click="handleMapClick" @wheel.prevent="handleWheel">
     <!-- 节点缩略（在下层） -->
     <div
       v-for="node in mapNodes"

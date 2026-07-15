@@ -2,7 +2,7 @@
 /**
  * WhiteboardNode - 白板节点组件
  *
- * 单个可拖拽、可选中、可调整大小的白板节点。
+ * 单个可拖拽、选中的白板节点。
  * 使用 vue-konva 的 v-group + v-rect + v-text + v-transformer 组合渲染。
  *
  * 交互：
@@ -20,13 +20,13 @@ import {
   DEFAULT_NODE_STYLE,
   SELECTED_BORDER_COLOR,
   SELECTED_BORDER_WIDTH,
-  MIN_NODE_WIDTH,
-  MIN_NODE_HEIGHT,
+  // MIN_NODE_WIDTH,
+  // MIN_NODE_HEIGHT,
   PLACEHOLDER_TEXT,
   PLACEHOLDER_TEXT_COLOR,
-  TRANSFORMER_ANCHOR_SIZE,
-  TRANSFORMER_BORDER_STROKE,
-  TRANSFORMER_BORDER_DASH,
+  // TRANSFORMER_ANCHOR_SIZE,
+  // TRANSFORMER_BORDER_STROKE,
+  // TRANSFORMER_BORDER_DASH,
 } from '@/constants'
 
 // ── Props ──

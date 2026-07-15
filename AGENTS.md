@@ -38,6 +38,14 @@ components/   → Vue SFC
 
 数据流：`Toolbar/Canvas events → store actions → shallowRef<Map> 变更 → triggerRef → nodesArray computed → v-for 重渲染`
 
+```
+types/                  → 仅仅定义数据结构，不提供方法
+stores/whiteboard.ts    → 唯一 store，管理节点和画布的状态，提供节点操作（添加、删除、移动、选择、修改等等），仅用来进行数据操作，和图形无关  
+composables/            → 处理鼠标键盘交互以及导航逻辑等等，直接操作 store
+canvas/WhiteboardCanvas.vue → 连接事件和组件
+```
+
+
 ## 关键陷阱
 
 ### Store 响应式：shallowRef + computed 的引用相等问题

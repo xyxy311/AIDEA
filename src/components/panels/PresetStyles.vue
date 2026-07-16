@@ -6,13 +6,13 @@
  */
 import { NText, NButton, NDivider } from 'naive-ui'
 import { PRESET_STYLES, type PresetStyle } from '@/constants'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 
 function applyStyle(preset: PresetStyle): void {
-  if (!store.selectedNodeId) return
-  store.applyPresetStyle(store.selectedNodeId, preset)
+  if (!active.board.selectedNodeId) return
+  active.board.applyPresetStyle(active.board.selectedNodeId, preset)
 }
 </script>
 
@@ -30,7 +30,7 @@ function applyStyle(preset: PresetStyle): void {
           borderColor: preset.borderColor,
           color: preset.textColor,
         }"
-        :disabled="!store.selectedNodeId"
+        :disabled="!active.board.selectedNodeId"
         @click="applyStyle(preset)"
       >
         {{ preset.name }}

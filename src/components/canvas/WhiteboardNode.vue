@@ -15,7 +15,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import {
   DEFAULT_NODE_STYLE,
   MIN_NODE_WIDTH,
@@ -41,7 +41,7 @@ const emit = defineEmits<{
 }>()
 
 // ── Store ──
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
@@ -52,7 +52,7 @@ const transformerRef = ref<VueKonvaRef<Konva.Transformer> | null>(null)
 // shallowRef<Map> 配合 triggerRef 时，Map 中对象引用不变，
 // Vue computed 默认按 === 比较，同引用会被视为"未变化"从而跳过通知
 const node = computed(() => {
-  const found = store.nodesArray.find((n) => n.id === props.nodeId)
+  const found = active.board.nodesArray.find((n) => n.id === props.nodeId)
   if (!found) return undefined
   return { ...found }
 })
@@ -184,7 +184,7 @@ function onDragStart(): void {
 function onDragEnd(e: KonvaEventObject<DragEvent>): void {
   const newX: number = e.target.x()
   const newY: number = e.target.y()
-  store.moveNode(props.nodeId, newX, newY)
+  active.board.moveNode(props.nodeId, newX, newY)
 }
 
 /**
@@ -216,8 +216,8 @@ function onTransformEnd(): void {
   const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
 
   // 世界坐标：group 偏移 + rect 在 group 内的偏移
-  const groupX = store.nodesArray.find((n) => n.id === props.nodeId)?.x ?? 0
-  const groupY = store.nodesArray.find((n) => n.id === props.nodeId)?.y ?? 0
+  const groupX = active.board.nodesArray.find((n) => n.id === props.nodeId)?.x ?? 0
+  const groupY = active.board.nodesArray.find((n) => n.id === props.nodeId)?.y ?? 0
   const worldX = groupX + rect.x()
   const worldY = groupY + rect.y()
 
@@ -228,7 +228,7 @@ function onTransformEnd(): void {
   rect.scaleY(1)
 
   // 写入 store（group 级别的位置 + 新尺寸）
-  store.resizeNode(props.nodeId, worldX, worldY, newWidth, newHeight)
+  active.board.resizeNode(props.nodeId, worldX, worldY, newWidth, newHeight)
 
   // 重新附着 Transformer，使其适应新尺寸
   const transformer = transformerRef.value?.getNode()

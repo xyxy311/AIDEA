@@ -10,7 +10,7 @@ describe('useWhiteboardStore', () => {
 
   describe('addNode', () => {
     it('should create a node with default values and return its id', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(100, 200)
 
       const node = store.selectedNode
@@ -24,7 +24,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should create a node with custom text', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       store.addNode(100, 200, '自定义文本')
 
       const node = store.selectedNode
@@ -32,14 +32,14 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should set the new node as selected', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       store.addNode(0, 0)
       expect(store.selectedNodeId).not.toBeNull()
       expect(store.selectedNode).not.toBeNull()
     })
 
     it('should add node to nodesArray', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       store.addNode(0, 0)
       expect(store.nodesArray.length).toBe(1)
 
@@ -50,7 +50,7 @@ describe('useWhiteboardStore', () => {
 
   describe('deleteNode', () => {
     it('should remove the node from the store', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0)
       expect(store.nodesArray.length).toBe(1)
 
@@ -59,7 +59,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should clear selection if deleted node was selected', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0)
       expect(store.selectedNodeId).toBe(id)
 
@@ -68,7 +68,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should not affect selection if a different node is deleted', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id1 = store.addNode(0, 0)
       const id2 = store.addNode(100, 0)
       // last added is selected (id2)
@@ -81,7 +81,7 @@ describe('useWhiteboardStore', () => {
 
   describe('selectNode', () => {
     it('should set selectedNodeId to the given id', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0)
       store.selectNode(null) // first deselect
       expect(store.selectedNodeId).toBeNull()
@@ -92,7 +92,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should set selectedNodeId to null when called with null', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       store.addNode(0, 0)
       expect(store.selectedNodeId).not.toBeNull()
 
@@ -104,7 +104,7 @@ describe('useWhiteboardStore', () => {
 
   describe('moveNode', () => {
     it('should update the node x and y position', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0)
 
       store.moveNode(id, 300, 400)
@@ -114,14 +114,14 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should not throw for non-existent node id', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       expect(() => store.moveNode('nonexistent', 0, 0)).not.toThrow()
     })
   })
 
   describe('resizeNode', () => {
     it('should update node dimensions and position', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(100, 100)
 
       store.resizeNode(id, 150, 150, 300, 200)
@@ -133,7 +133,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should enforce minimum dimensions', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(100, 100)
 
       store.resizeNode(id, 0, 0, 50, 30)
@@ -146,7 +146,7 @@ describe('useWhiteboardStore', () => {
 
   describe('setNodeText', () => {
     it('should update node text content', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0, '初始文本')
 
       store.setNodeText(id, '修改后的文本')
@@ -154,7 +154,7 @@ describe('useWhiteboardStore', () => {
     })
 
     it('should allow empty text', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id = store.addNode(0, 0, 'Hello')
 
       store.setNodeText(id, '')
@@ -164,12 +164,12 @@ describe('useWhiteboardStore', () => {
 
   describe('nodesArray getter', () => {
     it('should return empty array when no nodes exist', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       expect(store.nodesArray).toEqual([])
     })
 
     it('should return all nodes as an array', () => {
-      const store = useWhiteboardStore()
+      const store = useWhiteboardStore('test-board')
       const id1 = store.addNode(0, 0)
       const id2 = store.addNode(100, 100)
 

@@ -1,5 +1,5 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 /**
@@ -11,7 +11,7 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
  * - handleStageContextMenu：右键菜单（阻止默认）
  */
 export function useCanvasEvents() {
-  const store = useWhiteboardStore()
+  const active = useActiveWhiteboard()
 
   /**
    * 处理画布点击事件
@@ -20,7 +20,7 @@ export function useCanvasEvents() {
   function handleStageClick(e: KonvaEventObject<MouseEvent>) {
     // Konva 中：点击空白区域时，e.target === e.currentTarget (Stage)
     if (e.target === e.currentTarget) {
-      store.selectNode(null)
+      active.board.selectNode(null)
     }
   }
 
@@ -38,7 +38,7 @@ export function useCanvasEvents() {
     const pos = stage?.getRelativePointerPosition()
     if (pos) {
       // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
-      store.addNode(
+      active.board.addNode(
         pos.x - DEFAULT_NODE_WIDTH / 2,
         pos.y - DEFAULT_NODE_HEIGHT / 2,
       )
@@ -50,9 +50,10 @@ export function useCanvasEvents() {
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     // 调试：打印信息
-    console.log('画布偏移:', store.stageX, store.stageY)
-    console.log('画布缩放:', store.stageScale)
-    console.log('所有节点坐标:', [...store.nodes.values()])
+    // console.log('画布偏移:', active.board.stageX, active.board.stageY)
+    // console.log('画布缩放:', active.board.stageScale)
+    // console.log('所有节点坐标:', [...active.board.nodes.values()])
+    console.log('当前白板：', active.board.whiteboardId)
     e.evt.preventDefault()
   }
 

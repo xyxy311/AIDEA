@@ -9,7 +9,7 @@
  * - 拖拽蓝色视口框 → 平移画布（保持缩放不变）
  */
 import { computed, ref, onUnmounted } from 'vue'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { useStageSize } from '@/composables/useStageSize'
 import { DEFAULT_NODE_STYLE, MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
@@ -18,7 +18,7 @@ const MAP_WIDTH = 200
 const MAP_HEIGHT = 140
 const MAP_PADDING = 0.15
 
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 const { stageWidth, stageHeight } = useStageSize()
 const mapRef = ref<HTMLDivElement | null>(null)
 
@@ -39,10 +39,10 @@ interface Rect {
 }
 
 const worldViewport = computed<Rect>(() => {
-  const s = store.stageScale
+  const s = active.board.stageScale
   return {
-    x: -store.stageX / s,
-    y: -store.stageY / s,
+    x: -active.board.stageX / s,
+    y: -active.board.stageY / s,
     width: stageWidth.value / s,
     height: stageHeight.value / s,
   }
@@ -57,7 +57,7 @@ const worldBounds = computed<Rect>(() => {
   let maxX = vp.x + vp.width
   let maxY = vp.y + vp.height
 
-  for (const node of store.nodesArray) {
+  for (const node of active.board.nodesArray) {
     if (node.x < minX) minX = node.x
     if (node.y < minY) minY = node.y
     if (node.x + node.width > maxX) maxX = node.x + node.width
@@ -123,7 +123,7 @@ const viewportStyle = computed(() => {
 // ── 节点缩略 ──
 
 const mapNodes = computed(() =>
-  store.nodesArray.map((node) => ({
+  active.board.nodesArray.map((node) => ({
     id: node.id,
     style: {
       left: `${toMapX(node.x)}px`,
@@ -148,7 +148,7 @@ function handleMapClick(e: MouseEvent): void {
 
 /** 缩放并平移视口以适应所有节点 */
 function fitAllNodes(): void {
-  const nodes = store.nodesArray
+  const nodes = active.board.nodesArray
   if (nodes.length === 0) return
 
   // 计算节点包围盒
@@ -186,9 +186,9 @@ function fitAllNodes(): void {
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
 
-  store.stageScale = clampedScale
-  store.stageX = stageWidth.value / 2 - centerX * clampedScale
-  store.stageY = stageHeight.value / 2 - centerY * clampedScale
+  active.board.stageScale = clampedScale
+  active.board.stageX = stageWidth.value / 2 - centerX * clampedScale
+  active.board.stageY = stageHeight.value / 2 - centerY * clampedScale
 }
 
 // ── 拖拽视口框 → 平移画布 ──
@@ -198,8 +198,8 @@ function handleViewportMouseDown(e: MouseEvent): void {
   isDragging.value = true
   dragStartMouseX = e.clientX
   dragStartMouseY = e.clientY
-  dragStartStageX = store.stageX
-  dragStartStageY = store.stageY
+  dragStartStageX = active.board.stageX
+  dragStartStageY = active.board.stageY
 
   document.addEventListener('mousemove', handleDragMove)
   document.addEventListener('mouseup', handleDragEnd)
@@ -216,8 +216,8 @@ function handleDragMove(e: MouseEvent): void {
   const worldDx = (dx / MAP_WIDTH) * b.width
   const worldDy = (dy / MAP_HEIGHT) * b.height
 
-  store.stageX = dragStartStageX - worldDx * store.stageScale
-  store.stageY = dragStartStageY - worldDy * store.stageScale
+  active.board.stageX = dragStartStageX - worldDx * active.board.stageScale
+  active.board.stageY = dragStartStageY - worldDy * active.board.stageScale
 }
 
 function handleDragEnd(): void {
@@ -231,7 +231,7 @@ function handleDragEnd(): void {
 function handleWheel(e: WheelEvent): void {
   e.preventDefault()
 
-  const oldScale = store.stageScale
+  const oldScale = active.board.stageScale
   const direction = e.deltaY > 0 ? -1 : 1
   const factor = direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
   const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * factor))
@@ -241,12 +241,12 @@ function handleWheel(e: WheelEvent): void {
   // 以当前视口中心为锚点缩放（即缩放时视口中心对应世界坐标不变）
   const vpCenterX = stageWidth.value / 2
   const vpCenterY = stageHeight.value / 2
-  const worldCenterX = (vpCenterX - store.stageX) / oldScale
-  const worldCenterY = (vpCenterY - store.stageY) / oldScale
+  const worldCenterX = (vpCenterX - active.board.stageX) / oldScale
+  const worldCenterY = (vpCenterY - active.board.stageY) / oldScale
 
-  store.stageScale = newScale
-  store.stageX = vpCenterX - worldCenterX * newScale
-  store.stageY = vpCenterY - worldCenterY * newScale
+  active.board.stageScale = newScale
+  active.board.stageX = vpCenterX - worldCenterX * newScale
+  active.board.stageY = vpCenterY - worldCenterY * newScale
 }
 
 onUnmounted(() => {

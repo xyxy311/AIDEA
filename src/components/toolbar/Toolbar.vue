@@ -6,15 +6,15 @@
  * 通过 useWhiteboardStore 直接操作状态。
  */
 import { computed } from 'vue'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { useStageSize } from '@/composables/useStageSize'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 const { stageWidth, stageHeight } = useStageSize()
 
 /** 是否有选中节点（控制删除按钮的禁用状态） */
-const hasSelection = computed(() => store.selectedNodeId !== null)
+const hasSelection = computed(() => active.board.selectedNodeId !== null)
 
 /**
  * 在视口中央创建新节点
@@ -28,20 +28,20 @@ function handleAddNode() {
   const viewportCenterY = stageHeight.value / 2
 
   // 转换为世界坐标：world = (screen - offset) / scale
-  const worldX = (viewportCenterX - store.stageX) / store.stageScale
-  const worldY = (viewportCenterY - store.stageY) / store.stageScale
+  const worldX = (viewportCenterX - active.board.stageX) / active.board.stageScale
+  const worldY = (viewportCenterY - active.board.stageY) / active.board.stageScale
 
   // 节点左上角偏移半个尺寸，使节点中心对齐视口中心
   const nodeX = worldX - DEFAULT_NODE_WIDTH / 2
   const nodeY = worldY - DEFAULT_NODE_HEIGHT / 2
 
-  store.addNode(nodeX, nodeY)
+  active.board.addNode(nodeX, nodeY)
 }
 
 /** 删除选中节点 */
 function handleDeleteNode() {
-  if (store.selectedNodeId) {
-    store.deleteNode(store.selectedNodeId)
+  if (active.board.selectedNodeId) {
+    active.board.deleteNode(active.board.selectedNodeId)
   }
 }
 </script>
@@ -97,7 +97,7 @@ function handleDeleteNode() {
 
     <div class="toolbar-right">
       <span class="node-count">
-        节点：{{ store.nodesArray.length }}
+        节点：{{ active.board.nodesArray.length }}
       </span>
     </div>
   </header>

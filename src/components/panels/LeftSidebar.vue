@@ -14,7 +14,7 @@ import {
   useThemeVars,
 } from 'naive-ui'
 import { AddOutline, TrashOutline, ChevronBack, ChevronForward } from '@vicons/ionicons5'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useProjectStore } from '@/stores/project'
 
 const props = defineProps<{
   collapsed: boolean
@@ -24,7 +24,7 @@ const emit = defineEmits<{
   toggle: []
 }>()
 
-const store = useWhiteboardStore()
+const store = useProjectStore()
 const themeVars = useThemeVars()
 
 const whiteboardList = computed(() => store.whiteboards)

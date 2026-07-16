@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { ref, defineComponent, h, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
@@ -21,42 +21,49 @@ function mountWithShortcuts(isEditing: Ref<boolean>) {
 }
 
 describe('useKeyboardShortcuts', () => {
+  let wrapper: ReturnType<typeof mount> | null = null
+
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
+  // 必须显式 unmount，否则旧组件的 event listener 会污染后续测试
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+  })
+
   it('should delete selected node on Delete key', () => {
-    const store = useWhiteboardStore()
+    const store = useWhiteboardStore('default')
     store.addNode(0, 0)
     expect(store.nodesArray.length).toBe(1)
 
     const isEditing = ref(false)
-    mountWithShortcuts(isEditing)
+    wrapper = mountWithShortcuts(isEditing)
 
-    // Simulate Delete keydown
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
     expect(store.nodesArray.length).toBe(0)
   })
 
   it('should deselect on Escape key', () => {
-    const store = useWhiteboardStore()
+    const store = useWhiteboardStore('default')
     store.addNode(0, 0)
     expect(store.selectedNodeId).not.toBeNull()
 
     const isEditing = ref(false)
-    mountWithShortcuts(isEditing)
+    wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(store.selectedNodeId).toBeNull()
   })
 
   it('should NOT trigger shortcuts when isEditing is true', () => {
-    const store = useWhiteboardStore()
+    const store = useWhiteboardStore('default')
     const id = store.addNode(0, 0)
     expect(store.nodesArray.length).toBe(1)
 
     const isEditing = ref(true)
-    mountWithShortcuts(isEditing)
+    wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
     expect(store.nodesArray.length).toBe(1) // Should NOT delete

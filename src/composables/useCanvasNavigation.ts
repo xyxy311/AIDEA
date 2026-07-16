@@ -1,6 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 /**
@@ -14,7 +14,7 @@ import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
  * 读取当前视口状态来计算"视口中央"的世界坐标。
  */
 export function useCanvasNavigation() {
-  const store = useWhiteboardStore()
+  const active = useActiveWhiteboard()
 
   // ── 空格键处理 ──
 
@@ -24,18 +24,18 @@ export function useCanvasNavigation() {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
     e.preventDefault()
-    store.isPanMode = true
+    active.board.isPanMode = true
   }
 
   function onKeyUp(e: KeyboardEvent): void {
     if (e.key === ' ') {
-      store.isPanMode = false
+      active.board.isPanMode = false
     }
   }
 
   /** 窗口失焦时重置平移模式，避免卡在平移状态 */
   function onBlur(): void {
-    store.isPanMode = false
+    active.board.isPanMode = false
   }
 
   // ── 滚轮缩放（Ctrl + 滚轮） ──
@@ -54,7 +54,7 @@ export function useCanvasNavigation() {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
 
-    const oldScale = store.stageScale
+    const oldScale = active.board.stageScale
     const direction = e.evt.deltaY > 0 ? -1 : 1
     const factor = direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
     const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * factor))
@@ -63,13 +63,13 @@ export function useCanvasNavigation() {
 
     // 计算鼠标指向的"世界坐标点"（不受缩放影响）
     const mousePointTo = {
-      x: (pointer.x - store.stageX) / oldScale,
-      y: (pointer.y - store.stageY) / oldScale,
+      x: (pointer.x - active.board.stageX) / oldScale,
+      y: (pointer.y - active.board.stageY) / oldScale,
     }
 
-    store.stageScale = newScale
-    store.stageX = pointer.x - mousePointTo.x * newScale
-    store.stageY = pointer.y - mousePointTo.y * newScale
+    active.board.stageScale = newScale
+    active.board.stageX = pointer.x - mousePointTo.x * newScale
+    active.board.stageY = pointer.y - mousePointTo.y * newScale
   }
 
   // ── 平移拖拽（Stage dragmove/dragend） ──
@@ -81,8 +81,8 @@ export function useCanvasNavigation() {
    */
   function handleDragMove(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    store.stageX = e.target.x()
-    store.stageY = e.target.y()
+    active.board.stageX = e.target.x()
+    active.board.stageY = e.target.y()
   }
 
   /**
@@ -91,8 +91,8 @@ export function useCanvasNavigation() {
    */
   function handleDragEnd(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    store.stageX = e.target.x()
-    store.stageY = e.target.y()
+    active.board.stageX = e.target.x()
+    active.board.stageY = e.target.y()
   }
 
   // ── 生命周期 ──

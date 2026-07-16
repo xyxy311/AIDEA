@@ -28,7 +28,7 @@ npm run build        # type-check → vite build
 types/        → 纯接口（WhiteboardNode, StageConfig 等）
 constants/    → 设计 token（尺寸、颜色、默认值）
 utils/        → 纯函数（generateId, clampPosition, measureText）
-stores/       → Pinia store（whiteboard.ts — 唯一 store）
+stores/       → Pinia store（whiteboard.ts — 目前的唯一 store）
 composables/  → Vue composables（useStageSize, useKeyboardShortcuts, useCanvasEvents）
 components/   → Vue SFC
   canvas/     → WhiteboardCanvas, WhiteboardNode, NodeTextEditor
@@ -43,7 +43,7 @@ components/   → Vue SFC
 
 ```
 types/                  → 仅仅定义数据结构，不提供方法
-stores/whiteboard.ts    → 唯一 store，管理节点和画布的状态，提供节点操作（添加、删除、移动、选择、修改等等），仅用来进行数据操作，和图形无关  
+stores/whiteboard.ts    → 目前的唯一 store，管理节点和画布的状态，提供节点操作（添加、删除、移动、选择、修改等等），仅用来进行数据操作，和图形无关  
 composables/            → 处理鼠标键盘交互以及导航逻辑等等，直接操作 store
 canvas/WhiteboardCanvas.vue → 连接事件和组件
 ```

@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 
 /**
  * 全局键盘快捷键
@@ -10,21 +10,21 @@ import { useWhiteboardStore } from '@/stores/whiteboard'
  * Escape            — 取消选中
  */
 export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
-  const store = useWhiteboardStore()
+  const active = useActiveWhiteboard()
 
   function onKeydown(e: KeyboardEvent) {
     // 编辑状态下不触发快捷键
     if (isEditing.value) return
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (store.selectedNodeId !== null) {
+      if (active.board.selectedNodeId !== null) {
         e.preventDefault()
-        store.deleteNode(store.selectedNodeId)
+        active.board.deleteNode(active.board.selectedNodeId)
       }
     }
 
     if (e.key === 'Escape') {
-      store.selectNode(null)
+      active.board.selectNode(null)
     }
   }
 

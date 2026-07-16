@@ -10,7 +10,8 @@ describe('useCanvasEvents', () => {
   })
 
   it('should deselect on canvas click when no node is hit', () => {
-    const store = useWhiteboardStore()
+    // 使用 'default' 白板——与 useCanvasEvents 内部的 useActiveWhiteboard 一致
+    const store = useWhiteboardStore('default')
     store.addNode(0, 0)
     expect(store.selectedNodeId).not.toBeNull()
 
@@ -29,7 +30,7 @@ describe('useCanvasEvents', () => {
   })
 
   it('should create a node on double click centered at the clicked position', () => {
-    const store = useWhiteboardStore()
+    const store = useWhiteboardStore('default')
     const { handleStageDblClick } = useCanvasEvents()
 
     // Mock a Konva Stage

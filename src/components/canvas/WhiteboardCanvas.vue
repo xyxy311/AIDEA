@@ -9,7 +9,7 @@
  * 4. 编排节点与编辑器之间的交互
  */
 import { ref, computed } from 'vue'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { useStageSize } from '@/composables/useStageSize'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
@@ -21,7 +21,7 @@ import NodeTextEditor from './NodeTextEditor.vue'
 import OverviewMap from './OverviewMap.vue'
 
 // ── Store ──
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 
 // ── Stage 尺寸 ──
 const { stageWidth, stageHeight } = useStageSize()
@@ -30,11 +30,11 @@ const { stageWidth, stageHeight } = useStageSize()
 const stageConfig = computed(() => ({
   width: stageWidth.value,
   height: stageHeight.value,
-  x: store.stageX,
-  y: store.stageY,
-  scaleX: store.stageScale,
-  scaleY: store.stageScale,
-  draggable: store.isPanMode,
+  x: active.board.stageX,
+  y: active.board.stageY,
+  scaleX: active.board.stageScale,
+  scaleY: active.board.stageScale,
+  draggable: active.board.isPanMode,
 }))
 
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
@@ -42,7 +42,7 @@ const stageContainerRef = ref<HTMLDivElement | null>(null)
 
 // ── 文本编辑状态 ──
 /** 是否正在编辑（用于禁用快捷键） */
-const isEditing = computed(() => store.editingNodeId !== null)
+const isEditing = computed(() => active.board.editingNodeId !== null)
 
 // ── 快捷键（编辑状态下禁用） ──
 useKeyboardShortcuts(isEditing)
@@ -55,25 +55,25 @@ const nav = useCanvasNavigation()
 
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
-  if (!store.editingNodeId) return null
-  return store.nodesArray.find((n) => n.id === store.editingNodeId) ?? null
+  if (!active.board.editingNodeId) return null
+  return active.board.nodesArray.find((n) => n.id === active.board.editingNodeId) ?? null
 })
 
 // ── 编辑操作方法 ──
 
 /** 开始编辑指定节点（用于双击已有节点） */
 function startTextEdit(nodeId: string): void {
-  store.startEditing(nodeId)
+  active.board.startEditing(nodeId)
 }
 
-/** 完成文本编辑（保存）—— store.setNodeText 内部已清除编辑状态 */
+/** 完成文本编辑（保存）—— active.board.setNodeText 内部已清除编辑状态 */
 function finishTextEdit(nodeId: string, text: string): void {
-  store.setNodeText(nodeId, text)
+  active.board.setNodeText(nodeId, text)
 }
 
 /** 取消文本编辑 */
 function cancelTextEdit(): void {
-  store.stopEditing()
+  active.board.stopEditing()
 }
 
 // ── Stage 事件包装 ──
@@ -128,7 +128,7 @@ function handleStageDragEnd(e: unknown): void {
   <div
     ref="stageContainerRef"
     class="canvas-wrapper"
-    :class="{ 'pan-mode': store.isPanMode }"
+    :class="{ 'pan-mode': active.board.isPanMode }"
   >
     <!-- Konva Stage -->
     <v-stage
@@ -153,12 +153,12 @@ function handleStageDragEnd(e: unknown): void {
 
         <!-- 节点列表 -->
         <WhiteboardNode
-          v-for="node in store.nodesArray"
+          v-for="node in active.board.nodesArray"
           :key="node.id"
           :node-id="node.id"
-          :is-selected="node.id === store.selectedNodeId"
-          :is-pan-mode="store.isPanMode"
-          @select="store.selectNode"
+          :is-selected="node.id === active.board.selectedNodeId"
+          :is-pan-mode="active.board.isPanMode"
+          @select="active.board.selectNode"
           @dblclick="startTextEdit"
         />
       </v-layer>
@@ -166,17 +166,17 @@ function handleStageDragEnd(e: unknown): void {
 
     <!-- 文本编辑器覆盖层 -->
     <NodeTextEditor
-      v-if="store.editingNodeId && editingNode"
-      :key="store.editingNodeId"
-      :node-id="store.editingNodeId"
+      v-if="active.board.editingNodeId && editingNode"
+      :key="active.board.editingNodeId"
+      :node-id="active.board.editingNodeId"
       :initial-text="editingNode.text"
       :node-x="editingNode.x"
       :node-y="editingNode.y"
       :node-width="editingNode.width"
       :node-height="editingNode.height"
-      :stage-scale="store.stageScale"
-      :stage-x="store.stageX"
-      :stage-y="store.stageY"
+      :stage-scale="active.board.stageScale"
+      :stage-x="active.board.stageX"
+      :stage-y="active.board.stageY"
       :stage-container="stageContainerRef!"
       @save="finishTextEdit"
       @cancel="cancelTextEdit"

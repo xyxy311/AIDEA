@@ -13,37 +13,37 @@ import {
   NText,
   NDivider,
 } from 'naive-ui'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 
-const store = useWhiteboardStore()
+const active = useActiveWhiteboard()
 
-const node = computed(() => store.selectedNode)
+const node = computed(() => active.board.selectedNode)
 
 const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
-    if (node.value) store.setNodeText(node.value.id, val)
+    if (node.value) active.board.setNodeText(node.value.id, val)
   },
 })
 
 const currentTextColor = computed({
   get: () => node.value?.textColor ?? null,
   set: (val: string | null) => {
-    if (node.value && val) store.setNodeTextColor(node.value.id, val)
+    if (node.value && val) active.board.setNodeTextColor(node.value.id, val)
   },
 })
 
 const currentBgColor = computed({
   get: () => node.value?.backgroundColor ?? null,
   set: (val: string | null) => {
-    if (node.value && val) store.setNodeBackgroundColor(node.value.id, val)
+    if (node.value && val) active.board.setNodeBackgroundColor(node.value.id, val)
   },
 })
 
 const currentBorderColor = computed({
   get: () => node.value?.borderColor ?? null,
   set: (val: string | null) => {
-    if (node.value && val) store.setNodeBorderColor(node.value.id, val)
+    if (node.value && val) active.board.setNodeBorderColor(node.value.id, val)
   },
 })
 

@@ -10,11 +10,11 @@ vi.mock('@vueuse/core', () => ({
 }))
 
 describe('useStageSize', () => {
-  it('should return stage dimensions accounting for toolbar height', () => {
+  it('should return stage dimensions accounting for toolbar and menu bar height', () => {
     const { stageWidth, stageHeight } = useStageSize()
-    // 1280 window width, 720 window height, minus 56px toolbar
+    // 1280 window width, 720 window height, minus 56px toolbar + 28px menu bar
     expect(stageWidth.value).toBe(1280)
-    expect(stageHeight.value).toBe(720 - 56) // 664
+    expect(stageHeight.value).toBe(720 - 56 - 28) // 636
   })
 
   it('should return reactive refs', () => {

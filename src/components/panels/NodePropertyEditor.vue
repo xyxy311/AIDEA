@@ -1,0 +1,117 @@
+<script setup lang="ts">
+/**
+ * NodePropertyEditor — 节点属性编辑面板
+ *
+ * 当选中节点时，可修改节点的文本内容和样式（字体颜色、背景色、边框色）。
+ */
+import { computed } from 'vue'
+import {
+  NInput,
+  NColorPicker,
+  NForm,
+  NFormItem,
+  NText,
+  NDivider,
+} from 'naive-ui'
+import { useWhiteboardStore } from '@/stores/whiteboard'
+
+const store = useWhiteboardStore()
+
+const node = computed(() => store.selectedNode)
+
+const currentText = computed({
+  get: () => node.value?.text ?? '',
+  set: (val: string) => {
+    if (node.value) store.setNodeText(node.value.id, val)
+  },
+})
+
+const currentTextColor = computed({
+  get: () => node.value?.textColor ?? null,
+  set: (val: string | null) => {
+    if (node.value && val) store.setNodeTextColor(node.value.id, val)
+  },
+})
+
+const currentBgColor = computed({
+  get: () => node.value?.backgroundColor ?? null,
+  set: (val: string | null) => {
+    if (node.value && val) store.setNodeBackgroundColor(node.value.id, val)
+  },
+})
+
+const currentBorderColor = computed({
+  get: () => node.value?.borderColor ?? null,
+  set: (val: string | null) => {
+    if (node.value && val) store.setNodeBorderColor(node.value.id, val)
+  },
+})
+
+const colorPickerMode = 'hex' as const
+</script>
+
+<template>
+  <div class="property-editor" v-if="node">
+    <NForm label-placement="top" size="small">
+      <!-- 文本 -->
+      <NFormItem label="文本内容">
+        <NInput
+          v-model:value="currentText"
+          type="textarea"
+          :autosize="{ minRows: 2, maxRows: 5 }"
+          placeholder="输入节点文本"
+        />
+      </NFormItem>
+
+      <NDivider style="margin: 8px 0" />
+
+      <!-- 样式 -->
+      <NText depth="3" style="font-size: 12px; font-weight: 600">外观样式</NText>
+
+      <NFormItem label="字体颜色" style="margin-top: 8px">
+        <NColorPicker
+          v-model:value="currentTextColor"
+          :modes="[colorPickerMode]"
+          :show-alpha="false"
+          size="small"
+        />
+      </NFormItem>
+
+      <NFormItem label="背景颜色">
+        <NColorPicker
+          v-model:value="currentBgColor"
+          :modes="[colorPickerMode]"
+          :show-alpha="false"
+          size="small"
+        />
+      </NFormItem>
+
+      <NFormItem label="边框颜色">
+        <NColorPicker
+          v-model:value="currentBorderColor"
+          :modes="[colorPickerMode]"
+          :show-alpha="false"
+          size="small"
+        />
+      </NFormItem>
+    </NForm>
+  </div>
+
+  <div v-else class="property-empty">
+    <NText depth="3" style="font-size: 13px">选中一个节点以编辑属性</NText>
+  </div>
+</template>
+
+<style scoped>
+.property-editor {
+  padding: 8px 0;
+}
+
+.property-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  text-align: center;
+}
+</style>

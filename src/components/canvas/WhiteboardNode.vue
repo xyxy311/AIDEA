@@ -77,10 +77,9 @@ const rectConfig = computed(() => {
   return {
     width: n.width,
     height: n.height,
-    fill: DEFAULT_NODE_STYLE.backgroundColor,
-    // 始终使用默认边框——选中状态由 Transformer 的蓝色虚线框表示，
-    // 避免 transform 缩放时边框粗细变化造成视觉抖动
-    stroke: DEFAULT_NODE_STYLE.borderColor,
+    // 优先使用节点自定义样式，未设置则回退到全局默认
+    fill: n.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
+    stroke: n.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
     strokeWidth: DEFAULT_NODE_STYLE.borderWidth,
     cornerRadius: DEFAULT_NODE_STYLE.borderRadius,
     shadowColor: DEFAULT_NODE_STYLE.shadowEnabled
@@ -113,7 +112,12 @@ const textConfig = computed(() => {
     verticalAlign: 'middle' as const,
     fontSize: DEFAULT_NODE_STYLE.fontSize,
     fontFamily: DEFAULT_NODE_STYLE.fontFamily,
-    fill: isPlaceholder ? PLACEHOLDER_TEXT_COLOR : DEFAULT_NODE_STYLE.textColor,
+    // 节点自定义字体颜色 > 全局默认；占位符用灰色
+    fill: n.textColor
+      ? n.textColor
+      : isPlaceholder
+        ? PLACEHOLDER_TEXT_COLOR
+        : DEFAULT_NODE_STYLE.textColor,
     padding: 12,
   }
 })

@@ -189,8 +189,8 @@ function handleStageDragEnd(e: unknown): void {
 
 <style scoped>
 .canvas-wrapper {
-  flex: 1;
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
 }
 

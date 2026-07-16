@@ -11,20 +11,22 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "vue": "^3.5",
-    "konva": "^9.3",
-    "vue-konva": "^3",
-    "pinia": "^2.2",
+    "@vicons/ionicons5": "^0.13.0",
     "@vueuse/core": "^12",
-    "nanoid": "^5"
+    "konva": "^9.3",
+    "naive-ui": "^2.44.1",
+    "nanoid": "^5",
+    "pinia": "^2.2",
+    "vue": "^3.5",
+    "vue-konva": "^3"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^5",
+    "@vue/test-utils": "^2",
+    "happy-dom": "^15",
     "typescript": "~5.7",
     "vite": "^6",
-    "@vitejs/plugin-vue": "^5",
-    "vue-tsc": "^2",
     "vitest": "^2",
-    "@vue/test-utils": "^2",
-    "happy-dom": "^15"
+    "vue-tsc": "^2"
   }
 }

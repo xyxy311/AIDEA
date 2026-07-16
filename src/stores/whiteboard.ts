@@ -1,26 +1,25 @@
 import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode, WhiteboardData } from '@/types'
 import {
   DEFAULT_NODE_WIDTH,
   DEFAULT_NODE_HEIGHT,
   DEFAULT_NODE_TEXT,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
+  type PresetStyle,
 } from '@/constants'
 import { generateId } from '@/utils/id'
 
 /**
  * 白板状态管理 Store
  *
- * 使用 shallowRef<Map> 存储节点以提高性能：
- * - Map 提供 O(1) 的增删查操作
- * - shallowRef 避免深度响应式遍历，通过 triggerRef 手动触发更新
- * - 适合频繁的节点位置更新场景
+ * 管理多白板、节点 CRUD、选中/编辑状态、导航状态、以及每个节点的样式属性。
  */
 export const useWhiteboardStore = defineStore('whiteboard', () => {
   // ── State ──
-  /** 节点存储：Map<id, WhiteboardNode>，使用 shallowRef 优化性能 */
+
+  /** 全部节点（跨白板）：Map<id, WhiteboardNode> */
   const nodes = shallowRef<Map<string, WhiteboardNode>>(new Map())
 
   /** 当前选中节点 ID，null 表示无选中 */
@@ -29,43 +28,82 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   /** 当前正在编辑的节点 ID，null 表示无编辑 */
   const editingNodeId = ref<string | null>(null)
 
-  /** 画布视口 X 偏移（平移） */
+  /** 画布视口 X 偏移 */
   const stageX = ref(0)
-
-  /** 画布视口 Y 偏移（平移） */
+  /** 画布视口 Y 偏移 */
   const stageY = ref(0)
-
   /** 画布缩放倍率 */
   const stageScale = ref(1)
-
   /** 是否处于平移模式（空格键按下） */
   const isPanMode = ref(false)
 
+  // ── 多白板 ──
+
+  /** 白板列表 */
+  const whiteboards = ref<WhiteboardData[]>([
+    { id: 'default', name: '白板 1' },
+  ])
+  /** 当前活跃白板 ID */
+  const activeWhiteboardId = ref('default')
+
   // ── Getters ──
-  /** 节点数组（用于 v-for 渲染） */
+
+  /** 当前白板的节点数组（用于 v-for 渲染） */
   const nodesArray = computed<WhiteboardNode[]>(() =>
-    Array.from(nodes.value.values()),
+    Array.from(nodes.value.values()).filter(
+      (n) => n.whiteboardId === activeWhiteboardId.value,
+    ),
   )
 
-  /** 当前选中的节点对象，无选中时返回 null */
+  /** 当前选中的节点对象 */
   const selectedNode = computed<WhiteboardNode | null>(() => {
     if (selectedNodeId.value === null) return null
     return nodes.value.get(selectedNodeId.value) ?? null
   })
 
-  // ── Actions ──
+  /** 当前活跃白板 */
+  const activeWhiteboard = computed<WhiteboardData | undefined>(() =>
+    whiteboards.value.find((w) => w.id === activeWhiteboardId.value),
+  )
 
-  /**
-   * 在指定位置创建新节点
-   * @param x - 节点 x 坐标
-   * @param y - 节点 y 坐标
-   * @param text - 节点文本（可选，默认使用 DEFAULT_NODE_TEXT）
-   * @returns 新节点的唯一 ID
-   */
+  // ── Actions: 白板管理 ──
+
+  function addWhiteboard(name?: string): string {
+    const id = generateId()
+    whiteboards.value.push({ id, name: name ?? `白板 ${whiteboards.value.length + 1}` })
+    return id
+  }
+
+  function removeWhiteboard(id: string): void {
+    if (whiteboards.value.length <= 1) return
+    const idx = whiteboards.value.findIndex((w) => w.id === id)
+    if (idx === -1) return
+    whiteboards.value.splice(idx, 1)
+    // 删除该白板下所有节点
+    for (const [nodeId, node] of nodes.value) {
+      if (node.whiteboardId === id) nodes.value.delete(nodeId)
+    }
+    triggerRef(nodes)
+    // 切换到第一个白板
+    if (activeWhiteboardId.value === id) {
+      activeWhiteboardId.value = whiteboards.value[0]!.id
+    }
+  }
+
+  function switchWhiteboard(id: string): void {
+    if (!whiteboards.value.find((w) => w.id === id)) return
+    activeWhiteboardId.value = id
+    selectedNodeId.value = null
+    editingNodeId.value = null
+  }
+
+  // ── Actions: 节点 CRUD ──
+
   function addNode(x: number, y: number, text?: string): string {
     const id = generateId()
     const node: WhiteboardNode = {
       id,
+      whiteboardId: activeWhiteboardId.value,
       x,
       y,
       width: DEFAULT_NODE_WIDTH,
@@ -76,67 +114,36 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     nodes.value.set(id, node)
     triggerRef(nodes)
 
-    // 新节点自动选中
     selectedNodeId.value = id
-
-    // 新节点自动进入编辑模式
     editingNodeId.value = id
 
     return id
   }
 
-  /**
-   * 删除指定节点
-   * 若该节点处于选中状态，则同时清除选中
-   * @param id - 要删除的节点 ID
-   */
   function deleteNode(id: string): void {
     nodes.value.delete(id)
     triggerRef(nodes)
 
-    // 若删除的是当前选中节点，清除选中状态
     if (selectedNodeId.value === id) {
       selectedNodeId.value = null
     }
-
-    // 若删除的是正在编辑的节点，清除编辑状态
     if (editingNodeId.value === id) {
       editingNodeId.value = null
     }
   }
 
-  /**
-   * 选中或取消选中节点
-   * @param id - 节点 ID，传 null 取消选中
-   */
   function selectNode(id: string | null): void {
     selectedNodeId.value = id
   }
 
-  /**
-   * 移动节点到新位置
-   * @param id - 节点 ID
-   * @param x - 新的 x 坐标
-   * @param y - 新的 y 坐标
-   */
   function moveNode(id: string, x: number, y: number): void {
     const node = nodes.value.get(id)
     if (!node) return
-
     node.x = x
     node.y = y
     triggerRef(nodes)
   }
 
-  /**
-   * 调整节点尺寸（用于 Transformer）
-   * 自动应用最小尺寸约束
-   * @param id - 节点 ID
-   * @param x - 新的 x 坐标
-   * @param y - 新的 y 坐标
-   * @param width - 新的宽度
-   * @param height - 新的高度
-   */
   function resizeNode(
     id: string,
     x: number,
@@ -146,7 +153,6 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
   ): void {
     const node = nodes.value.get(id)
     if (!node) return
-
     node.x = x
     node.y = y
     node.width = Math.max(width, MIN_NODE_WIDTH)
@@ -154,36 +160,63 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     triggerRef(nodes)
   }
 
-  /**
-   * 开始编辑指定节点
-   * @param id - 节点 ID
-   */
+  // ── Actions: 文本编辑 ──
+
   function startEditing(id: string): void {
     editingNodeId.value = id
   }
 
-  /**
-   * 停止编辑（不保存）
-   */
   function stopEditing(): void {
     editingNodeId.value = null
   }
 
-  /**
-   * 设置节点文本内容（用于内联编辑保存）
-   * 保存后自动退出编辑模式
-   * @param id - 节点 ID
-   * @param text - 新的文本内容（允许空字符串）
-   */
   function setNodeText(id: string, text: string): void {
     const node = nodes.value.get(id)
     if (!node) return
-
     node.text = text
     triggerRef(nodes)
-
-    // 保存后退出编辑模式
     editingNodeId.value = null
+  }
+
+  // ── Actions: 节点样式 ──
+
+  function setNodeTextColor(id: string, color: string): void {
+    const node = nodes.value.get(id)
+    if (!node) return
+    node.textColor = color
+    triggerRef(nodes)
+  }
+
+  function setNodeBackgroundColor(id: string, color: string): void {
+    const node = nodes.value.get(id)
+    if (!node) return
+    node.backgroundColor = color
+    triggerRef(nodes)
+  }
+
+  function setNodeBorderColor(id: string, color: string): void {
+    const node = nodes.value.get(id)
+    if (!node) return
+    node.borderColor = color
+    triggerRef(nodes)
+  }
+
+  function applyPresetStyle(id: string, preset: PresetStyle): void {
+    const node = nodes.value.get(id)
+    if (!node) return
+    node.backgroundColor = preset.backgroundColor
+    node.borderColor = preset.borderColor
+    node.textColor = preset.textColor
+    triggerRef(nodes)
+  }
+
+  function resetNodeStyle(id: string): void {
+    const node = nodes.value.get(id)
+    if (!node) return
+    node.backgroundColor = undefined
+    node.borderColor = undefined
+    node.textColor = undefined
+    triggerRef(nodes)
   }
 
   return {
@@ -195,10 +228,16 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     stageY,
     stageScale,
     isPanMode,
+    whiteboards,
+    activeWhiteboardId,
     // Getters
     nodesArray,
     selectedNode,
+    activeWhiteboard,
     // Actions
+    addWhiteboard,
+    removeWhiteboard,
+    switchWhiteboard,
     addNode,
     deleteNode,
     selectNode,
@@ -207,5 +246,10 @@ export const useWhiteboardStore = defineStore('whiteboard', () => {
     setNodeText,
     startEditing,
     stopEditing,
+    setNodeTextColor,
+    setNodeBackgroundColor,
+    setNodeBorderColor,
+    applyPresetStyle,
+    resetNodeStyle,
   }
 })

@@ -15,6 +15,9 @@ export const NODE_BORDER_RADIUS: number = 8
 // ── 工具栏高度 ──
 export const TOOLBAR_HEIGHT: number = 56
 
+// ── 菜单栏高度 ──
+export const MENU_BAR_HEIGHT: number = 28
+
 // ── 节点默认样式（实现 NodeStyle 接口） ──
 export const DEFAULT_NODE_STYLE: NodeStyle = {
   backgroundColor: '#ffffff',
@@ -30,6 +33,25 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   shadowOffsetX: 0,
   shadowOffsetY: 2,
 }
+
+// ── 预设节点样式 ──
+export interface PresetStyle {
+  name: string
+  backgroundColor: string
+  borderColor: string
+  textColor: string
+}
+
+export const PRESET_STYLES: PresetStyle[] = [
+  { name: '默认', backgroundColor: '#ffffff', borderColor: '#d1d5db', textColor: '#1f2937' },
+  { name: '蓝色', backgroundColor: '#eff6ff', borderColor: '#3b82f6', textColor: '#1e40af' },
+  { name: '绿色', backgroundColor: '#f0fdf4', borderColor: '#22c55e', textColor: '#166534' },
+  { name: '黄色', backgroundColor: '#fefce8', borderColor: '#eab308', textColor: '#854d0e' },
+  { name: '红色', backgroundColor: '#fef2f2', borderColor: '#ef4444', textColor: '#991b1b' },
+  { name: '紫色', backgroundColor: '#faf5ff', borderColor: '#a855f7', textColor: '#6b21a8' },
+  { name: '灰色', backgroundColor: '#f9fafb', borderColor: '#6b7280', textColor: '#374151' },
+  { name: '粉色', backgroundColor: '#fdf2f8', borderColor: '#ec4899', textColor: '#9d174d' },
+]
 
 // ── Transformer 配置 ──
 export const TRANSFORMER_ANCHOR_SIZE: number = 8

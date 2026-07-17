@@ -12,7 +12,10 @@ import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
   const active = useActiveWhiteboard()
 
-  function onKeydown(e: KeyboardEvent) {
+  function onKeydown(e: KeyboardEvent) {    
+    // 焦点在输入框或文本域时，不触发快捷键（避免删除/退格误删节点）
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
     // 编辑状态下不触发快捷键
     if (isEditing.value) return
 

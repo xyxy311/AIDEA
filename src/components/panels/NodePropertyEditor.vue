@@ -14,6 +14,7 @@ import {
   NDivider,
 } from 'naive-ui'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { DEFAULT_NODE_STYLE } from '@/constants'
 
 const active = useActiveWhiteboard()
 
@@ -22,26 +23,26 @@ const node = computed(() => active.board.selectedNode)
 const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
-    if (node.value) active.board.setNodeText(node.value.id, val)
+    if (node.value) active.board.updateNodeText(node.value.id, val)
   },
 })
 
 const currentTextColor = computed({
-  get: () => node.value?.textColor ?? null,
+  get: () => node.value?.textColor ?? DEFAULT_NODE_STYLE.textColor,
   set: (val: string | null) => {
     if (node.value && val) active.board.setNodeTextColor(node.value.id, val)
   },
 })
 
 const currentBgColor = computed({
-  get: () => node.value?.backgroundColor ?? null,
+  get: () => node.value?.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
   set: (val: string | null) => {
     if (node.value && val) active.board.setNodeBackgroundColor(node.value.id, val)
   },
 })
 
 const currentBorderColor = computed({
-  get: () => node.value?.borderColor ?? null,
+  get: () => node.value?.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
   set: (val: string | null) => {
     if (node.value && val) active.board.setNodeBorderColor(node.value.id, val)
   },

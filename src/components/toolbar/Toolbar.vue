@@ -49,7 +49,7 @@ function handleDeleteNode() {
 <template>
   <header class="toolbar">
     <div class="toolbar-left">
-      <h1 class="toolbar-title">头脑风暴</h1>
+      <h1 class="toolbar-title">白板</h1>
     </div>
 
     <div class="toolbar-center">

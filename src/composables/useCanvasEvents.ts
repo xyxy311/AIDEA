@@ -53,7 +53,7 @@ export function useCanvasEvents() {
     // console.log('画布偏移:', active.board.stageX, active.board.stageY)
     // console.log('画布缩放:', active.board.stageScale)
     // console.log('所有节点坐标:', [...active.board.nodes.values()])
-    console.log('当前白板：', active.board.whiteboardId)
+    console.log('当前白板：', active.board.whiteboardId, active.board.name)
     e.evt.preventDefault()
   }
 

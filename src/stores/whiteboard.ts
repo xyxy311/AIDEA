@@ -1,6 +1,7 @@
 import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
 import type { WhiteboardNode } from '@/types'
+import { useProjectStore } from '@/stores/project'
 import {
   DEFAULT_NODE_WIDTH,
   DEFAULT_NODE_HEIGHT,
@@ -56,11 +57,23 @@ export function useWhiteboardStore(id: string) {
       Array.from(nodes.value.values()),
     )
 
-    /** 当前选中的节点对象 */
-    const selectedNode = computed<WhiteboardNode | null>(() => {
-      if (selectedNodeId.value === null) return null
-      return nodes.value.get(selectedNodeId.value) ?? null
-    })
+  /** 当前选中的节点对象 */
+  const selectedNode = computed<WhiteboardNode | null>(() => {
+    if (selectedNodeId.value === null) return null
+    const n = nodes.value.get(selectedNodeId.value)
+    // 必须展开为新对象——shallowRef<Map> 配合 triggerRef 时
+    // Map 中对象引用不变，computed 按 === 比较会跳过下游通知
+    return n ? { ...n } : null
+  })
+
+  /**
+   * 白板名称——从项目 store 中读取，保持单一数据源。
+   * 当项目 store 的 renameWhiteboard 更新名称时，此计算属性自动同步。
+   */
+  const name = computed(() => {
+    const project = useProjectStore()
+    return project.whiteboards.find((w) => w.id === whiteboardId)?.name ?? '白板'
+  })
 
     // ── Actions: 节点 CRUD ──
 
@@ -143,6 +156,17 @@ export function useWhiteboardStore(id: string) {
       editingNodeId.value = null
     }
 
+    /**
+     * 更新节点文本（不改变编辑状态）
+     * 供侧边栏属性编辑器使用，与画布内联编辑器（setNodeText）区分。
+     */
+    function updateNodeText(nodeId: string, text: string): void {
+      const node = nodes.value.get(nodeId)
+      if (!node) return
+      node.text = text
+      triggerRef(nodes)
+    }
+
     // ── Actions: 节点样式 ──
 
     function setNodeTextColor(nodeId: string, color: string): void {
@@ -209,6 +233,7 @@ export function useWhiteboardStore(id: string) {
       // Getters
       nodesArray,
       selectedNode,
+      name,
       // Actions
       addNode,
       deleteNode,
@@ -216,6 +241,7 @@ export function useWhiteboardStore(id: string) {
       moveNode,
       resizeNode,
       setNodeText,
+      updateNodeText,
       startEditing,
       stopEditing,
       setNodeTextColor,

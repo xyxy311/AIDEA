@@ -184,6 +184,18 @@ export function useWhiteboardStore(id: string) {
       triggerRef(nodes)
     }
 
+    // ── Actions: 状态重置 ──
+
+    /**
+     * 重置白板交互状态（切换白板时调用）
+     *
+     * 当前仅清除选中和编辑状态，后续可扩展（如重置视口位置等）。
+     */
+    function resetBoardState(): void {
+      selectedNodeId.value = null
+      editingNodeId.value = null
+    }
+
     return {
       // State
       whiteboardId,
@@ -211,6 +223,7 @@ export function useWhiteboardStore(id: string) {
       setNodeBorderColor,
       applyPresetStyle,
       resetNodeStyle,
+      resetBoardState,
     }
   })()
 }

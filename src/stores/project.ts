@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
-import { defineStore } from 'pinia'
+import { defineStore, getActivePinia } from 'pinia'
 import type { WhiteboardData } from '@/types'
 import { generateId } from '@/utils/id'
+import { useWhiteboardStore } from '@/stores/whiteboard'
 
 /**
  * 项目 Store — 管理项目级元数据
@@ -61,11 +62,25 @@ export const useProjectStore = defineStore('project', () => {
     if (activeWhiteboardId.value === id) {
       activeWhiteboardId.value = whiteboards.value[0]!.id
     }
+
+    // 销毁对应的 Pinia store
+    const pinia = getActivePinia()
+    if (pinia) {
+      ;((pinia as unknown) as { _s: Map<string, unknown> })._s.delete(`whiteboard-${id}`)
+    }
   }
 
   function switchWhiteboard(id: string): void {
     if (!whiteboards.value.find((w) => w.id === id)) return
     activeWhiteboardId.value = id
+    // 重置目标白板的交互状态
+    useWhiteboardStore(id).resetBoardState()
+  }
+
+  function renameWhiteboard(id: string, name: string): void {
+    const wb = whiteboards.value.find((w) => w.id === id)
+    if (!wb || !name.trim()) return
+    wb.name = name.trim()
   }
 
   return {
@@ -81,5 +96,6 @@ export const useProjectStore = defineStore('project', () => {
     addWhiteboard,
     removeWhiteboard,
     switchWhiteboard,
+    renameWhiteboard,
   }
 })

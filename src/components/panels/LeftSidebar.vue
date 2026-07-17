@@ -2,21 +2,23 @@
 /**
  * LeftSidebar — 左侧边栏：白板切换
  *
- * 展示当前项目下所有白板列表，支持切换和新增/删除。
+ * 展示当前项目下所有白板列表，支持：
+ * - 单击切换活跃白板
+ * - 双击重命名白板
+ * - 新增 / 删除白板
  */
-import { computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import {
   NButton,
+  NInput,
   NScrollbar,
-  NTag,
   NText,
   NPopconfirm,
-  useThemeVars,
 } from 'naive-ui'
 import { AddOutline, TrashOutline, ChevronBack, ChevronForward } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 
-const props = defineProps<{
+defineProps<{
   collapsed: boolean
 }>()
 
@@ -25,9 +27,11 @@ const emit = defineEmits<{
 }>()
 
 const store = useProjectStore()
-const themeVars = useThemeVars()
-
 const whiteboardList = computed(() => store.whiteboards)
+
+// ── 重命名状态 ──
+const editingWbId = ref<string | null>(null)
+const renameText = ref('')
 
 function handleAdd(): void {
   const id = store.addWhiteboard()
@@ -35,11 +39,36 @@ function handleAdd(): void {
 }
 
 function handleSwitch(id: string): void {
+  if (editingWbId.value) return // 重命名中不切换
   store.switchWhiteboard(id)
 }
 
 function handleRemove(id: string): void {
   store.removeWhiteboard(id)
+}
+
+// ── 双击开始重命名 ──
+function handleDblClick(wbId: string, currentName: string): void {
+  editingWbId.value = wbId
+  renameText.value = currentName
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('.wb-rename-input input')
+    input?.focus()
+    input?.select()
+  })
+}
+
+/** 保存重命名 */
+function finishRename(): void {
+  if (editingWbId.value && renameText.value.trim()) {
+    store.renameWhiteboard(editingWbId.value, renameText.value)
+  }
+  editingWbId.value = null
+}
+
+/** 取消重命名（Escape 键） */
+function cancelRename(): void {
+  editingWbId.value = null
 }
 </script>
 
@@ -47,11 +76,7 @@ function handleRemove(id: string): void {
   <div class="sidebar-left" :class="{ collapsed }">
     <div class="sidebar-header">
       <span v-if="!collapsed" class="sidebar-title">白板列表</span>
-      <NButton
-        size="tiny"
-        quaternary
-        @click="emit('toggle')"
-      >
+      <NButton size="tiny" quaternary @click="emit('toggle')">
         <template #icon>
           <ChevronBack v-if="!collapsed" />
           <ChevronForward v-else />
@@ -73,10 +98,23 @@ function handleRemove(id: string): void {
             v-for="wb in whiteboardList"
             :key="wb.id"
             class="whiteboard-item"
-            :class="{ active: wb.id === store.activeWhiteboardId }"
+            :class="{ active: wb.id === store.activeWhiteboardId && !editingWbId }"
             @click="handleSwitch(wb.id)"
+            @dblclick.stop="handleDblClick(wb.id, wb.name)"
           >
-            <NText class="wb-name">{{ wb.name }}</NText>
+            <!-- 重命名模式 -->
+            <NInput
+              v-if="editingWbId === wb.id"
+              v-model:value="renameText"
+              class="wb-rename-input"
+              size="tiny"
+              @blur="finishRename"
+              @keydown.enter.prevent="finishRename"
+              @keydown.escape.prevent="cancelRename"
+            />
+            <!-- 正常显示 -->
+            <NText v-else class="wb-name">{{ wb.name }}</NText>
+
             <NPopconfirm
               v-if="whiteboardList.length > 1"
               @positive-click="handleRemove(wb.id)"
@@ -147,6 +185,7 @@ function handleRemove(id: string): void {
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
+  gap: 4px;
 }
 
 .whiteboard-item:hover {
@@ -164,6 +203,11 @@ function handleRemove(id: string): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.wb-rename-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .wb-remove-btn {

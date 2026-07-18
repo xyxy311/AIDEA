@@ -73,3 +73,26 @@ export const CANVAS_BACKGROUND_COLOR: string = '#f3f4f6'
 
 // ── 默认节点文本 ──
 export const DEFAULT_NODE_TEXT: string = '新节点'
+
+// ── 连线样式 ──
+
+/** 连线描边颜色 */
+export const CONNECTION_STROKE_COLOR = '#6b7280'
+
+/** 连线描边宽度 */
+export const CONNECTION_STROKE_WIDTH = 2
+
+/** 临时连线（拖拽中）的描边颜色 */
+export const CONNECTION_TEMP_STROKE_COLOR = '#3b82f6'
+
+/** 临时连线的虚线段样式 */
+export const CONNECTION_TEMP_DASH = [6, 4]
+
+/** 连线箭头大小 */
+export const CONNECTION_ARROW_SIZE = 8
+
+/** 选中连线的描边颜色 */
+export const CONNECTION_SELECTED_STROKE_COLOR = '#3b82f6'
+
+/** 选中连线的描边宽度 */
+export const CONNECTION_SELECTED_STROKE_WIDTH = 3

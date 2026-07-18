@@ -32,6 +32,7 @@ const props = defineProps<{
   nodeId: string
   isSelected: boolean
   isPanMode: boolean
+  isShiftHeld: boolean
 }>()
 
 // ── Emits ──
@@ -66,7 +67,8 @@ const groupConfig = computed(() => {
   return {
     x: n.x,
     y: n.y,
-    draggable: !props.isPanMode,
+    name: props.nodeId,
+    draggable: !props.isPanMode && !props.isShiftHeld,
   }
 })
 
@@ -180,6 +182,11 @@ function onDragStart(): void {
   emit('select', props.nodeId)
 }
 
+/** 拖拽中：实时同步位置到 store（使连线端点实时跟随） */
+function onDragMove(e: KonvaEventObject<DragEvent>): void {
+  active.board.moveNode(props.nodeId, e.target.x(), e.target.y())
+}
+
 /** 拖拽结束：同步最终位置到 store */
 function onDragEnd(e: KonvaEventObject<DragEvent>): void {
   const newX: number = e.target.x()
@@ -245,6 +252,7 @@ function onTransformEnd(): void {
     @click="onClick"
     @dblclick="onDblClick"
     @dragstart="onDragStart"
+    @dragmove="onDragMove"
     @dragend="onDragEnd"
   >
     <v-rect ref="rectRef" :config="rectConfig" />

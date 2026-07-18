@@ -37,3 +37,12 @@ export interface WhiteboardData {
   id: string
   name: string
 }
+
+/** 节点之间的连线 */
+export interface Connection {
+  id: string
+  /** 起始节点 ID */
+  fromNodeId: string
+  /** 目标节点 ID */
+  toNodeId: string
+}

@@ -8,14 +8,25 @@
  * 3. 连接所有 composables 到 Store
  * 4. 编排节点与编辑器之间的交互
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { useStageSize } from '@/composables/useStageSize'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
 import { useCanvasNavigation } from '@/composables/useCanvasNavigation'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { CANVAS_BACKGROUND_COLOR } from '@/constants'
+import type { VueKonvaRef } from 'vue-konva'
+import type Konva from 'konva'
+import {
+  CANVAS_BACKGROUND_COLOR,
+  CONNECTION_STROKE_COLOR,
+  CONNECTION_STROKE_WIDTH,
+  CONNECTION_TEMP_STROKE_COLOR,
+  CONNECTION_TEMP_DASH,
+  CONNECTION_ARROW_SIZE,
+  CONNECTION_SELECTED_STROKE_COLOR,
+  CONNECTION_SELECTED_STROKE_WIDTH,
+} from '@/constants'
 import WhiteboardNode from './WhiteboardNode.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
 import OverviewMap from './OverviewMap.vue'
@@ -40,6 +51,15 @@ const stageConfig = computed(() => ({
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
 const stageContainerRef = ref<HTMLDivElement | null>(null)
 
+/** Konva Stage 引用（用于获取底层 Konva 实例） */
+const stageRef = ref<VueKonvaRef<Konva.Stage> | null>(null)
+
+/** Shift 键是否按下 */
+const isShiftHeld = ref(false)
+
+/** 连线拖拽时鼠标位置（临时连线终点） */
+const tempConnEnd = ref<{ x: number; y: number } | null>(null)
+
 // ── 文本编辑状态 ──
 /** 是否正在编辑（用于禁用快捷键） */
 const isEditing = computed(() => active.board.editingNodeId !== null)
@@ -52,6 +72,34 @@ const canvasEvents = useCanvasEvents()
 
 // ── 画布导航（平移 + 缩放） ──
 const nav = useCanvasNavigation()
+
+// ── Shift 键状态追踪（用于连线创建） ──
+function handleWindowKeyDown(e: KeyboardEvent): void {
+  if (e.key === 'Shift' && !e.repeat) {
+    isShiftHeld.value = true
+  }
+}
+
+function handleWindowKeyUp(e: KeyboardEvent): void {
+  if (e.key === 'Shift') {
+    isShiftHeld.value = false
+    // Shift 释放时取消连线创建
+    if (active.board.connectingFrom !== null) {
+      active.board.connectingFrom = null
+      tempConnEnd.value = null
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleWindowKeyDown)
+  window.addEventListener('keyup', handleWindowKeyUp)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleWindowKeyDown)
+  window.removeEventListener('keyup', handleWindowKeyUp)
+})
 
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
@@ -122,16 +170,181 @@ function handleStageDragMove(e: unknown): void {
 function handleStageDragEnd(e: unknown): void {
   nav.handleDragEnd(e as KonvaEventObject<DragEvent>)
 }
+
+// ── 连线创建交互 ──
+
+/**
+ * 从事件目标向上查找所属节点的 ID
+ * 遍历父节点链，找到 name 属性匹配节点 ID 的 Group
+ */
+function findNodeIdFromTarget(target: Konva.Node): string | null {
+  let current: Konva.Node | null = target
+  while (current && current.nodeType !== 'Stage') {
+    const nodeName: string = current.name()
+    if (nodeName && active.board.nodesArray.some((n) => n.id === nodeName)) {
+      return nodeName
+    }
+    current = current.getParent()
+  }
+  return null
+}
+
+/** Stage mousedown: Shift + 点击节点 → 开始连线创建 */
+function handleConnectionMouseDown(e: KonvaEventObject<MouseEvent>): void {
+  if (!isShiftHeld.value) return
+  if (e.target === e.currentTarget) return // 点击空白区域，忽略
+
+  const nodeId = findNodeIdFromTarget(e.target)
+  if (!nodeId) return
+
+  active.board.connectingFrom = nodeId
+
+  const stage = stageRef.value?.getNode()
+  if (stage) {
+    const pos = stage.getRelativePointerPosition()
+    if (pos) {
+      tempConnEnd.value = { x: pos.x, y: pos.y }
+    }
+  }
+}
+
+/** Stage mousemove: 连线拖拽中更新临时终点 */
+function handleConnectionMouseMove(e: KonvaEventObject<MouseEvent>): void {
+  if (active.board.connectingFrom === null) return
+
+  const stage = stageRef.value?.getNode()
+  if (!stage) return
+
+  const pos = stage.getRelativePointerPosition()
+  if (pos) {
+    tempConnEnd.value = { x: pos.x, y: pos.y }
+  }
+}
+
+/** Stage mouseup: 连线拖拽结束 → 创建连线或取消 */
+function handleConnectionMouseUp(e: KonvaEventObject<MouseEvent>): void {
+  if (active.board.connectingFrom === null) return
+
+  const fromNodeId = active.board.connectingFrom
+  active.board.connectingFrom = null
+
+  const stage = stageRef.value?.getNode()
+  if (!stage) {
+    tempConnEnd.value = null
+    return
+  }
+
+  // 获取鼠标位置下的最顶层交点
+  const pointerPos = stage.getRelativePointerPosition()
+  if (!pointerPos) {
+    tempConnEnd.value = null
+    return
+  }
+
+  const intersection = stage.getIntersection(pointerPos)
+  if (!intersection) {
+    tempConnEnd.value = null
+    return
+  }
+
+  const targetNodeId = findNodeIdFromTarget(intersection)
+  if (targetNodeId && targetNodeId !== fromNodeId) {
+    active.board.addConnection(fromNodeId, targetNodeId)
+  }
+
+  tempConnEnd.value = null
+}
+
+// ── 连线渲染配置 ──
+
+/** 连线点击：选中或取消选中 */
+function handleConnectionClick(e: KonvaEventObject<MouseEvent>): void {
+  const connId = e.target.name()
+  if (!connId) return
+
+  if (active.board.selectedConnectionId === connId) {
+    // 已选中 → 取消选中
+    active.board.selectConnection(null)
+  } else {
+    // 未选中 → 选中
+    active.board.selectConnection(connId)
+  }
+}
+
+/** 获取单条连线的 Konva Line 配置（中心到中心 + 箭头） */
+function getConnectionConfig(conn: { id: string; fromNodeId: string; toNodeId: string }) {
+  const fromNode = active.board.nodesArray.find((n) => n.id === conn.fromNodeId)
+  const toNode = active.board.nodesArray.find((n) => n.id === conn.toNodeId)
+  if (!fromNode || !toNode) return { visible: false }
+
+  const isSelected = active.board.selectedConnectionId === conn.id
+  return {
+    points: [
+      fromNode.x + fromNode.width / 2,
+      fromNode.y + fromNode.height / 2,
+      toNode.x + toNode.width / 2,
+      toNode.y + toNode.height / 2,
+    ],
+    stroke: isSelected ? CONNECTION_SELECTED_STROKE_COLOR : CONNECTION_STROKE_COLOR,
+    strokeWidth: isSelected ? CONNECTION_SELECTED_STROKE_WIDTH : CONNECTION_STROKE_WIDTH,
+    pointerLength: CONNECTION_ARROW_SIZE,
+    pointerWidth: CONNECTION_ARROW_SIZE,
+    fill: isSelected ? CONNECTION_SELECTED_STROKE_COLOR : CONNECTION_STROKE_COLOR,
+    name: conn.id,
+    hitStrokeWidth: 10,
+  }
+}
+
+/** 获取临时连线（拖拽中）的 Konva Line 配置 */
+function getTempConnectionConfig() {
+  if (active.board.connectingFrom === null || tempConnEnd.value === null) {
+    return { visible: false }
+  }
+
+  const fromNode = active.board.nodesArray.find(
+    (n) => n.id === active.board.connectingFrom,
+  )
+  if (!fromNode) return { visible: false }
+
+  return {
+    points: [
+      fromNode.x + fromNode.width / 2,
+      fromNode.y + fromNode.height / 2,
+      tempConnEnd.value.x,
+      tempConnEnd.value.y,
+    ],
+    stroke: CONNECTION_TEMP_STROKE_COLOR,
+    strokeWidth: CONNECTION_STROKE_WIDTH,
+    dash: CONNECTION_TEMP_DASH,
+    listening: false,
+    hitStrokeWidth: 0,
+  }
+}
+
+// ── Stage 事件包装（与现有模式保持一致） ──
+
+function handleStageMouseDown(e: unknown): void {
+  handleConnectionMouseDown(e as KonvaEventObject<MouseEvent>)
+}
+
+function handleStageMouseMove(e: unknown): void {
+  handleConnectionMouseMove(e as KonvaEventObject<MouseEvent>)
+}
+
+function handleStageMouseUp(e: unknown): void {
+  handleConnectionMouseUp(e as KonvaEventObject<MouseEvent>)
+}
 </script>
 
 <template>
   <div
     ref="stageContainerRef"
     class="canvas-wrapper"
-    :class="{ 'pan-mode': active.board.isPanMode }"
+    :class="{ 'pan-mode': active.board.isPanMode, 'shift-held': isShiftHeld }"
   >
     <!-- Konva Stage -->
     <v-stage
+      ref="stageRef"
       :config="stageConfig"
       @click="handleStageClick"
       @dblclick="handleStageDblClick"
@@ -139,6 +352,9 @@ function handleStageDragEnd(e: unknown): void {
       @wheel="handleStageWheel"
       @dragmove="handleStageDragMove"
       @dragend="handleStageDragEnd"
+      @mousedown="handleStageMouseDown"
+      @mousemove="handleStageMouseMove"
+      @mouseup="handleStageMouseUp"
     >
       <v-layer>
         <!-- 背景矩形 -->
@@ -151,6 +367,20 @@ function handleStageDragEnd(e: unknown): void {
           }"
         />
 
+        <!-- 连线（可点击选中） -->
+        <v-line
+          v-for="conn in active.board.connectionsArray"
+          :key="conn.id"
+          :config="getConnectionConfig(conn)"
+          @click="handleConnectionClick"
+        />
+
+        <!-- 临时连线（拖拽创建中，虚线） -->
+        <v-line
+          v-if="active.board.connectingFrom !== null"
+          :config="getTempConnectionConfig()"
+        />
+
         <!-- 节点列表 -->
         <WhiteboardNode
           v-for="node in active.board.nodesArray"
@@ -158,6 +388,7 @@ function handleStageDragEnd(e: unknown): void {
           :node-id="node.id"
           :is-selected="node.id === active.board.selectedNodeId"
           :is-pan-mode="active.board.isPanMode"
+          :is-shift-held="isShiftHeld"
           @select="active.board.selectNode"
           @dblclick="startTextEdit"
         />
@@ -200,5 +431,9 @@ function handleStageDragEnd(e: unknown): void {
 
 .canvas-wrapper.pan-mode:active {
   cursor: grabbing;
+}
+
+.canvas-wrapper.shift-held {
+  cursor: crosshair;
 }
 </style>

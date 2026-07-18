@@ -1,6 +1,6 @@
 import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode, Connection } from '@/types'
 import { useProjectStore } from '@/stores/project'
 import {
   DEFAULT_NODE_WIDTH,
@@ -50,6 +50,14 @@ export function useWhiteboardStore(id: string) {
     /** 是否处于平移模式 */
     const isPanMode = ref(false)
 
+    // ===== 连线 =====
+    /** 连线数据 Map */
+    const connections = shallowRef<Map<string, Connection>>(new Map())
+    /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
+    const connectingFrom = ref<string | null>(null)
+    /** 当前选中连线 ID */
+    const selectedConnectionId = ref<string | null>(null)
+
     // ── Getters ──
 
     /** 当前白板的所有节点 */
@@ -73,6 +81,17 @@ export function useWhiteboardStore(id: string) {
   const name = computed(() => {
     const project = useProjectStore()
     return project.whiteboards.find((w) => w.id === whiteboardId)?.name ?? '白板'
+  })
+
+  /** 所有连线（数组形式） */
+  const connectionsArray = computed<Connection[]>(() =>
+    Array.from(connections.value.values()),
+  )
+
+  /** 当前选中连线 */
+  const selectedConnection = computed<Connection | null>(() => {
+    if (selectedConnectionId.value === null) return null
+    return connections.value.get(selectedConnectionId.value) ?? null
   })
 
     // ── Actions: 节点 CRUD ──
@@ -99,6 +118,9 @@ export function useWhiteboardStore(id: string) {
     }
 
     function deleteNode(nodeId: string): void {
+      // 先删除该节点的所有连线
+      deleteNodeConnections(nodeId)
+
       nodes.value.delete(nodeId)
       triggerRef(nodes)
 
@@ -112,6 +134,9 @@ export function useWhiteboardStore(id: string) {
 
     function selectNode(nodeId: string | null): void {
       selectedNodeId.value = nodeId
+      if (nodeId !== null) {
+        selectedConnectionId.value = null
+      }
     }
 
     function moveNode(nodeId: string, x: number, y: number): void {
@@ -208,6 +233,60 @@ export function useWhiteboardStore(id: string) {
       triggerRef(nodes)
     }
 
+    // ===== 连线操作 =====
+
+    /** 添加连线 */
+    function addConnection(fromNodeId: string, toNodeId: string): void {
+      const newConnection: Connection = {
+        id: fromNodeId < toNodeId ? toNodeId + fromNodeId : fromNodeId + toNodeId,
+        fromNodeId,
+        toNodeId,
+      }
+      const map = new Map(connections.value)  // 此处先复制再赋值
+      if (map.has(newConnection.id)) return
+      console.log(newConnection)
+      map.set(newConnection.id, newConnection)
+      connections.value = map
+    }
+
+    /** 删除单条连线 */
+    function deleteConnection(connectionId: string): void {
+      const map = new Map(connections.value)
+      if (map.delete(connectionId)) {
+        connections.value = map
+      }
+    }
+
+    /** 删除指定节点的所有连线（当节点被删除时调用） */
+    function deleteNodeConnections(nodeId: string): void {
+      const map = new Map(connections.value)
+      let changed = false
+      for (const [key, conn] of map) {
+        if (conn.fromNodeId === nodeId || conn.toNodeId === nodeId) {
+          map.delete(key)
+          changed = true
+        }
+      }
+      if (changed) {
+        connections.value = map
+      }
+    }
+
+    /** 获取指定节点的所有连线 */
+    function getNodeConnections(nodeId: string): Connection[] {
+      return connectionsArray.value.filter(
+        (c) => c.fromNodeId === nodeId || c.toNodeId === nodeId,
+      )
+    }
+
+    /** 选中/取消选中连线（与节点选中互斥） */
+    function selectConnection(connectionId: string | null): void {
+      selectedConnectionId.value = connectionId
+      if (connectionId !== null) {
+        selectedNodeId.value = null
+      }
+    }
+
     // ── Actions: 状态重置 ──
 
     /**
@@ -218,6 +297,8 @@ export function useWhiteboardStore(id: string) {
     function resetBoardState(): void {
       selectedNodeId.value = null
       editingNodeId.value = null
+      connectingFrom.value = null
+      selectedConnectionId.value = null
     }
 
     return {
@@ -249,6 +330,17 @@ export function useWhiteboardStore(id: string) {
       setNodeBorderColor,
       applyPresetStyle,
       resetNodeStyle,
+      //   连线
+      connections,
+      connectionsArray,
+      connectingFrom,
+      selectedConnectionId,
+      selectedConnection,
+      selectConnection,
+      addConnection,
+      deleteConnection,
+      deleteNodeConnections,
+      getNodeConnections,
       resetBoardState,
     }
   })()

@@ -20,7 +20,10 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
     if (isEditing.value) return
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (active.board.selectedNodeId !== null) {
+      if (active.board.selectedConnectionId !== null) {
+        e.preventDefault()
+        active.board.deleteConnection(active.board.selectedConnectionId)
+      } else if (active.board.selectedNodeId !== null) {
         e.preventDefault()
         active.board.deleteNode(active.board.selectedNodeId)
       }

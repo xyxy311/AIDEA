@@ -2,13 +2,19 @@
 /**
  * RightSidebar — 右侧边栏
  *
- * 选中节点时显示属性编辑器 + 预设样式。
+ * 选中节点时显示节点属性编辑器 + 预设样式。
+ * 选中连线时显示连线属性编辑器。
  * 支持收起/展开。
  */
+import { computed } from 'vue'
 import { NButton, NScrollbar, NText } from 'naive-ui'
 import { ChevronBack, ChevronForward } from '@vicons/ionicons5'
+import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import NodePropertyEditor from './NodePropertyEditor.vue'
+import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
 import PresetStyles from './PresetStyles.vue'
+
+const active = useActiveWhiteboard()
 
 defineProps<{
   collapsed: boolean
@@ -17,6 +23,17 @@ defineProps<{
 const emit = defineEmits<{
   toggle: []
 }>()
+
+/** 当前是否有任何选中项（节点或连线） */
+const hasSelection = computed(
+  () => active.board.selectedNodeId !== null || active.board.selectedConnectionId !== null,
+)
+
+/** 标题文本 */
+const title = computed(() => {
+  if (active.board.selectedConnectionId !== null) return '连线属性'
+  return '属性'
+})
 </script>
 
 <template>
@@ -28,14 +45,21 @@ const emit = defineEmits<{
           <ChevronBack v-else />
         </template>
       </NButton>
-      <span v-if="!collapsed" class="sidebar-title">属性</span>
+      <span v-if="!collapsed" class="sidebar-title">{{ title }}</span>
     </div>
 
     <template v-if="!collapsed">
       <NScrollbar class="sidebar-scroll">
         <div class="sidebar-content">
-          <NodePropertyEditor />
-          <PresetStyles />
+          <!-- 连线选中 → 连线属性编辑器 -->
+          <ConnectionPropertyEditor
+            v-if="active.board.selectedConnectionId !== null"
+          />
+          <!-- 节点选中或无选中 → 节点属性编辑器 + 预设样式 -->
+          <template v-else>
+            <NodePropertyEditor />
+            <PresetStyles v-if="hasSelection" />
+          </template>
         </div>
       </NScrollbar>
     </template>

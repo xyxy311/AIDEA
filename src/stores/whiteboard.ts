@@ -8,6 +8,10 @@ import {
   DEFAULT_NODE_TEXT,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
+  DEFAULT_LINE_STYLE,
+  CONNECTION_STROKE_COLOR,
+  CONNECTION_STROKE_WIDTH,
+  DEFAULT_CONNECTION_DIRECTED,
   type PresetStyle,
 } from '@/constants'
 import { generateId } from '@/utils/id'
@@ -91,7 +95,10 @@ export function useWhiteboardStore(id: string) {
   /** 当前选中连线 */
   const selectedConnection = computed<Connection | null>(() => {
     if (selectedConnectionId.value === null) return null
-    return connections.value.get(selectedConnectionId.value) ?? null
+    const c = connections.value.get(selectedConnectionId.value)
+    // 必须展开为新对象——shallowRef<Map> 配合 triggerRef 时
+    // Map 中对象引用不变，computed 按 === 比较会跳过下游通知
+    return c ? { ...c } : null
   })
 
     // ── Actions: 节点 CRUD ──
@@ -241,10 +248,13 @@ export function useWhiteboardStore(id: string) {
         id: fromNodeId < toNodeId ? toNodeId + fromNodeId : fromNodeId + toNodeId,
         fromNodeId,
         toNodeId,
+        lineStyle: DEFAULT_LINE_STYLE,
+        strokeWidth: CONNECTION_STROKE_WIDTH,
+        strokeColor: CONNECTION_STROKE_COLOR,
+        directed: DEFAULT_CONNECTION_DIRECTED,
       }
-      const map = new Map(connections.value)  // 此处先复制再赋值
+      const map = new Map(connections.value)
       if (map.has(newConnection.id)) return
-      console.log(newConnection)
       map.set(newConnection.id, newConnection)
       connections.value = map
     }
@@ -285,6 +295,17 @@ export function useWhiteboardStore(id: string) {
       if (connectionId !== null) {
         selectedNodeId.value = null
       }
+    }
+
+    /** 更新连线属性（部分更新） */
+    function updateConnection(
+      connectionId: string,
+      partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>>,
+    ): void {
+      const conn = connections.value.get(connectionId)
+      if (!conn) return
+      Object.assign(conn, partial)
+      triggerRef(connections)
     }
 
     // ── Actions: 状态重置 ──
@@ -341,6 +362,7 @@ export function useWhiteboardStore(id: string) {
       deleteConnection,
       deleteNodeConnections,
       getNodeConnections,
+      updateConnection,
       resetBoardState,
     }
   })()

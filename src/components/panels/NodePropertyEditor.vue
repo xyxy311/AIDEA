@@ -2,7 +2,7 @@
 /**
  * NodePropertyEditor — 节点属性编辑面板
  *
- * 当选中节点时，可修改节点的文本内容和样式（字体颜色、背景色、边框色）。
+ * 当选中节点时，可修改节点的文本内容和外观样式。
  */
 import { computed } from 'vue'
 import {
@@ -66,7 +66,7 @@ const colorPickerMode = 'hex' as const
 
       <NDivider style="margin: 8px 0" />
 
-      <!-- 样式 -->
+      <!-- 外观样式 -->
       <NText depth="3" style="font-size: 12px; font-weight: 600">外观样式</NText>
 
       <NFormItem label="字体颜色" style="margin-top: 8px">

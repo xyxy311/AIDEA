@@ -38,6 +38,9 @@ export interface WhiteboardData {
   name: string
 }
 
+/** 连线线型 */
+export type LineStyle = 'solid' | 'dashed' | 'dotted'
+
 /** 节点之间的连线 */
 export interface Connection {
   id: string
@@ -45,4 +48,12 @@ export interface Connection {
   fromNodeId: string
   /** 目标节点 ID */
   toNodeId: string
+  /** 线型：实线/虚线/点线 */
+  lineStyle: LineStyle
+  /** 连线粗细（px） */
+  strokeWidth: number
+  /** 连线颜色（hex） */
+  strokeColor: string
+  /** 是否有向（箭头） */
+  directed: boolean
 }

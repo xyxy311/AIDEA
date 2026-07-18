@@ -1,4 +1,4 @@
-import type { NodeStyle } from '@/types'
+import type { NodeStyle, LineStyle } from '@/types'
 
 // ── 节点默认尺寸 ──
 export const DEFAULT_NODE_WIDTH: number = 200
@@ -76,11 +76,34 @@ export const DEFAULT_NODE_TEXT: string = '新节点'
 
 // ── 连线样式 ──
 
-/** 连线描边颜色 */
+/** 连线默认线型 */
+export const DEFAULT_LINE_STYLE: LineStyle = 'solid'
+
+/** 连线默认描边颜色 */
 export const CONNECTION_STROKE_COLOR = '#6b7280'
 
-/** 连线描边宽度 */
+/** 连线默认描边宽度 */
 export const CONNECTION_STROKE_WIDTH = 2
+
+/** 连线默认是否有箭头 */
+export const DEFAULT_CONNECTION_DIRECTED = true
+
+/** 连线最大描边宽度 */
+export const CONNECTION_MAX_STROKE_WIDTH = 10
+
+/** 线型选项（用于 UI 下拉） */
+export const LINE_STYLE_OPTIONS: { label: string; value: LineStyle }[] = [
+  { label: '实线', value: 'solid' },
+  { label: '虚线', value: 'dashed' },
+  { label: '点线', value: 'dotted' },
+]
+
+/** 线型 → Konva dash 数组映射 */
+export const LINE_STYLE_DASH_MAP: Record<LineStyle, number[]> = {
+  solid: [],
+  dashed: [10, 6],
+  dotted: [4, 4],
+}
 
 /** 临时连线（拖拽中）的描边颜色 */
 export const CONNECTION_TEMP_STROKE_COLOR = '#3b82f6'

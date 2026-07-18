@@ -19,14 +19,13 @@ import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
 import {
   CANVAS_BACKGROUND_COLOR,
-  CONNECTION_STROKE_COLOR,
-  CONNECTION_STROKE_WIDTH,
   CONNECTION_TEMP_STROKE_COLOR,
   CONNECTION_TEMP_DASH,
   CONNECTION_ARROW_SIZE,
-  CONNECTION_SELECTED_STROKE_COLOR,
-  CONNECTION_SELECTED_STROKE_WIDTH,
+  CONNECTION_STROKE_WIDTH,
+  LINE_STYLE_DASH_MAP,
 } from '@/constants'
+import type { Connection } from '@/types'
 import WhiteboardNode from './WhiteboardNode.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
 import OverviewMap from './OverviewMap.vue'
@@ -271,13 +270,14 @@ function handleConnectionClick(e: KonvaEventObject<MouseEvent>): void {
   }
 }
 
-/** 获取单条连线的 Konva Line 配置（中心到中心 + 箭头） */
-function getConnectionConfig(conn: { id: string; fromNodeId: string; toNodeId: string }) {
+/** 获取单条连线的 Konva Line 配置（中心到中心，根据连线属性渲染样式） */
+function getConnectionConfig(conn: Connection) {
   const fromNode = active.board.nodesArray.find((n) => n.id === conn.fromNodeId)
   const toNode = active.board.nodesArray.find((n) => n.id === conn.toNodeId)
   if (!fromNode || !toNode) return { visible: false }
 
-  const isSelected = active.board.selectedConnectionId === conn.id
+  const dash = LINE_STYLE_DASH_MAP[conn.lineStyle]
+
   return {
     points: [
       fromNode.x + fromNode.width / 2,
@@ -285,13 +285,54 @@ function getConnectionConfig(conn: { id: string; fromNodeId: string; toNodeId: s
       toNode.x + toNode.width / 2,
       toNode.y + toNode.height / 2,
     ],
-    stroke: isSelected ? CONNECTION_SELECTED_STROKE_COLOR : CONNECTION_STROKE_COLOR,
-    strokeWidth: isSelected ? CONNECTION_SELECTED_STROKE_WIDTH : CONNECTION_STROKE_WIDTH,
-    pointerLength: CONNECTION_ARROW_SIZE,
-    pointerWidth: CONNECTION_ARROW_SIZE,
-    fill: isSelected ? CONNECTION_SELECTED_STROKE_COLOR : CONNECTION_STROKE_COLOR,
+    stroke: conn.strokeColor,
+    strokeWidth: conn.strokeWidth,
     name: conn.id,
     hitStrokeWidth: 10,
+    dash: dash.length > 1 ? dash : undefined,
+  }
+}
+
+/** 计算有向连线中点箭头的三角形顶点（尖朝向终点，尺寸随粗细缩放） */
+function getMidArrowConfig(conn: Connection) {
+  const fromNode = active.board.nodesArray.find((n) => n.id === conn.fromNodeId)
+  const toNode = active.board.nodesArray.find((n) => n.id === conn.toNodeId)
+  if (!fromNode || !toNode || !conn.directed) return { visible: false }
+
+  const fx = fromNode.x + fromNode.width / 2
+  const fy = fromNode.y + fromNode.height / 2
+  const tx = toNode.x + toNode.width / 2
+  const ty = toNode.y + toNode.height / 2
+
+  const mx = (fx + tx) / 2
+  const my = (fy + ty) / 2
+
+  const dx = tx - fx
+  const dy = ty - fy
+  const len = Math.sqrt(dx * dx + dy * dy)
+  if (len < 1) return { visible: false }
+
+  const ndx = dx / len
+  const ndy = dy / len
+  const px = -ndy // 垂直方向 X
+  const py = ndx  // 垂直方向 Y
+
+  // 箭头大小根据粗细动态缩放：2px → 8, 每+1px → +2
+  const size = Math.max(CONNECTION_ARROW_SIZE, CONNECTION_ARROW_SIZE + (conn.strokeWidth - 2) * 2)
+  const halfW = size * 0.55
+
+  return {
+    points: [
+      mx + ndx * size, my + ndy * size,
+      mx - ndx * halfW + px * halfW, my - ndy * halfW + py * halfW,
+      mx - ndx * halfW - px * halfW, my - ndy * halfW - py * halfW,
+    ],
+    closed: true,
+    fill: conn.strokeColor,
+    stroke: conn.strokeColor,
+    strokeWidth: 1,
+    listening: false,
+    hitStrokeWidth: 0,
   }
 }
 
@@ -367,13 +408,17 @@ function handleStageMouseUp(e: unknown): void {
           }"
         />
 
-        <!-- 连线（可点击选中） -->
-        <v-line
-          v-for="conn in active.board.connectionsArray"
-          :key="conn.id"
-          :config="getConnectionConfig(conn)"
-          @click="handleConnectionClick"
-        />
+        <!-- 连线主体 + 中点箭头 -->
+        <template v-for="conn in active.board.connectionsArray" :key="conn.id">
+          <v-line
+            :config="getConnectionConfig(conn)"
+            @click="handleConnectionClick"
+          />
+          <v-line
+            v-if="conn.directed"
+            :config="getMidArrowConfig(conn)"
+          />
+        </template>
 
         <!-- 临时连线（拖拽创建中，虚线） -->
         <v-line

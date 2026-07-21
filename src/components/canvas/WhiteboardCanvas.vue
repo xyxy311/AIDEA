@@ -40,11 +40,7 @@ const { stageWidth, stageHeight } = useStageSize()
 const stageConfig = computed(() => ({
   width: stageWidth.value,
   height: stageHeight.value,
-  x: active.board.stageX,
-  y: active.board.stageY,
-  scaleX: active.board.stageScale,
-  scaleY: active.board.stageScale,
-  draggable: active.board.isPanMode,
+
 }))
 
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
@@ -361,6 +357,11 @@ function handleStageMouseUp(e: unknown): void {
     <v-stage
       ref="stageRef"
       :config="stageConfig"
+      :x="active.board.stageX"
+      :y="active.board.stageY"
+      :scaleX="active.board.stageScale"
+      :scaleY="active.board.stageScale"
+      :draggable="active.board.isPanMode"
       @click="handleStageClick"
       @dblclick="handleStageDblClick"
       @contextmenu="handleStageContextMenu"

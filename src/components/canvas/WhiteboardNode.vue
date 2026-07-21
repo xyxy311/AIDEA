@@ -61,15 +61,12 @@ const node = computed(() => {
 // ── Konva 节点配置 ──
 
 /** 节点组的拖拽配置 */
-const groupConfig = computed(() => {
-  const n = node.value
-  if (!n) return {}
-  return {
-    x: n.x,
-    y: n.y,
-    name: props.nodeId,
-    draggable: !props.isPanMode && !props.isShiftHeld,
-  }
+const groupConfig = {
+  name: props.nodeId,
+}
+
+const _draggable = computed(() => {
+  return !props.isPanMode && !props.isShiftHeld
 })
 
 /** 节点背景矩形配置 */
@@ -249,6 +246,9 @@ function onTransformEnd(): void {
 <template>
   <v-group
     :config="groupConfig"
+    :draggable="_draggable"
+    :x="node?.x"
+    :y="node?.y"
     @click="onClick"
     @dblclick="onDblClick"
     @dragstart="onDragStart"

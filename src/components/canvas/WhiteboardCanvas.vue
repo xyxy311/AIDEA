@@ -197,14 +197,6 @@ function handleConnectionMouseDown(e: KonvaEventObject<MouseEvent>): void {
   if (!nodeId) return
 
   active.board.connectingFrom = nodeId
-
-  const stage = stageRef.value?.getNode()
-  if (stage) {
-    const pos = stage.getRelativePointerPosition()
-    if (pos) {
-      tempConnEnd.value = { x: pos.x, y: pos.y }
-    }
-  }
 }
 
 /** Stage mousemove: 连线拖拽中更新临时终点 */
@@ -226,27 +218,9 @@ function handleConnectionMouseUp(e: KonvaEventObject<MouseEvent>): void {
 
   const fromNodeId = active.board.connectingFrom
   active.board.connectingFrom = null
+  const targetNodeId =
+    e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
 
-  const stage = stageRef.value?.getNode()
-  if (!stage) {
-    tempConnEnd.value = null
-    return
-  }
-
-  // 获取鼠标位置下的最顶层交点
-  const pointerPos = stage.getRelativePointerPosition()
-  if (!pointerPos) {
-    tempConnEnd.value = null
-    return
-  }
-
-  const intersection = stage.getIntersection(pointerPos)
-  if (!intersection) {
-    tempConnEnd.value = null
-    return
-  }
-
-  const targetNodeId = findNodeIdFromTarget(intersection)
   if (targetNodeId && targetNodeId !== fromNodeId) {
     active.board.addConnection(fromNodeId, targetNodeId)
   }

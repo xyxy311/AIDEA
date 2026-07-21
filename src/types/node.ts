@@ -1,8 +1,6 @@
 /** 白板节点核心数据 */
 export interface WhiteboardNode {
   id: string
-  /** 所属白板 ID */
-  whiteboardId: string
   x: number
   y: number
   width: number

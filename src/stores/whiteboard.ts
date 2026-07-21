@@ -107,7 +107,6 @@ export function useWhiteboardStore(id: string) {
       const nodeId = generateId()
       const node: WhiteboardNode = {
         id: nodeId,
-        whiteboardId,
         x,
         y,
         width: DEFAULT_NODE_WIDTH,

@@ -3,6 +3,12 @@
 
 # AGENTS.md — 头脑风暴白板 (Vue3 + Konva + Naive UI)
 
+## 项目概况
+
+核心数据结构：节点、连线  
+
+主要功能：通过节点和连线的CURD表达想法，节点可以展开为白板，实现更高的灵活度（待实现）
+
 ## 常用命令
 
 ```
@@ -49,6 +55,8 @@ components/
 `whiteboard.ts` 的 `useWhiteboardStore(id)` 是一个**工厂函数**——每次调用为指定白板创建独立的 Pinia store 实例（`whiteboard-<id>`）。同一 id 多次调用返回同一实例。`project.ts` 管理多个白板的索引。
 
 组件中通常不直接调用 `useWhiteboardStore(id)`，而是通过 `useActiveWhiteboard()`：
+
+此外还设置了预设的`store`，用来存储和操作节点和连线预设
 
 ```typescript
 // composables/useActiveWhiteboard.ts

@@ -1,4 +1,4 @@
-import type { NodeStyle, LineStyle } from '@/types'
+import type { NodeStyle, LineStyle, NodePresetStyle, ConnectionPresetStyle } from '@/types'
 
 // ── 节点默认尺寸 ──
 export const DEFAULT_NODE_WIDTH: number = 200
@@ -119,3 +119,26 @@ export const CONNECTION_SELECTED_STROKE_COLOR = '#3b82f6'
 
 /** 选中连线的描边宽度 */
 export const CONNECTION_SELECTED_STROKE_WIDTH = 3
+
+// ── 预设样式系统 ──
+
+/** 默认节点预设（不含 id，由 store 初始化时分配 id） */
+export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type'>[] = [
+  { name: '默认', backgroundColor: '#ffffff', borderColor: '#d1d5db', textColor: '#1f2937' },
+  { name: '蓝色', backgroundColor: '#eff6ff', borderColor: '#3b82f6', textColor: '#1e40af' },
+  { name: '绿色', backgroundColor: '#f0fdf4', borderColor: '#22c55e', textColor: '#166534' },
+  { name: '黄色', backgroundColor: '#fefce8', borderColor: '#eab308', textColor: '#854d0e' },
+  { name: '红色', backgroundColor: '#fef2f2', borderColor: '#ef4444', textColor: '#991b1b' },
+  { name: '紫色', backgroundColor: '#faf5ff', borderColor: '#a855f7', textColor: '#6b21a8' },
+  { name: '灰色', backgroundColor: '#f9fafb', borderColor: '#6b7280', textColor: '#374151' },
+  { name: '粉色', backgroundColor: '#fdf2f8', borderColor: '#ec4899', textColor: '#9d174d' },
+]
+
+/** 默认连线预设（不含 id，由 store 初始化时分配 id） */
+export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type'>[] = [
+  { name: '默认灰线', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true },
+  { name: '蓝色箭头', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true },
+  { name: '红色虚线', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true },
+  { name: '绿色无箭头', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false },
+  { name: '灰色点线', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false },
+]

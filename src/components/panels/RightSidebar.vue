@@ -3,7 +3,7 @@
  * RightSidebar — 右侧边栏
  *
  * 选中节点时显示节点属性编辑器 + 预设样式。
- * 选中连线时显示连线属性编辑器。
+ * 选中连线时显示连线属性编辑器 + 预设样式。
  * 支持收起/展开。
  */
 import { computed } from 'vue'
@@ -51,10 +51,11 @@ const title = computed(() => {
     <template v-if="!collapsed">
       <NScrollbar class="sidebar-scroll">
         <div class="sidebar-content">
-          <!-- 连线选中 → 连线属性编辑器 -->
-          <ConnectionPropertyEditor
-            v-if="active.board.selectedConnectionId !== null"
-          />
+          <!-- 连线选中 → 连线属性编辑器 + 预设样式 -->
+          <template v-if="active.board.selectedConnectionId !== null">
+            <ConnectionPropertyEditor />
+            <PresetStyles v-if="hasSelection" />
+          </template>
           <!-- 节点选中或无选中 → 节点属性编辑器 + 预设样式 -->
           <template v-else>
             <NodePropertyEditor />

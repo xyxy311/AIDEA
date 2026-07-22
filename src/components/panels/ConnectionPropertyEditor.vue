@@ -15,8 +15,10 @@ import {
   NText,
   NDivider,
   NTag,
+  NButton,
 } from 'naive-ui'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { usePresetsStore } from '@/stores/presets'
 import {
   LINE_STYLE_OPTIONS,
   CONNECTION_MAX_STROKE_WIDTH,
@@ -70,6 +72,19 @@ const directed = computed<boolean | undefined>({
 })
 
 const colorPickerMode = 'hex' as const
+
+const presetsStore = usePresetsStore()
+
+function handleSaveAsPreset(): void {
+  if (!conn.value) return
+  presetsStore.addConnectionPreset({
+    name: '自定义连线',
+    lineStyle: conn.value.lineStyle,
+    strokeWidth: conn.value.strokeWidth,
+    strokeColor: conn.value.strokeColor,
+    directed: conn.value.directed,
+  })
+}
 </script>
 
 <template>
@@ -118,13 +133,23 @@ const colorPickerMode = 'hex' as const
         />
       </NFormItem>
 
-      <NFormItem label="箭头">
+      <NFormItem label="有向">
         <NSwitch
           v-model:value="directed"
           size="small"
         />
       </NFormItem>
     </NForm>
+
+    <NDivider style="margin: 8px 0" />
+    <NButton
+      size="small"
+      quaternary
+      block
+      @click="handleSaveAsPreset"
+    >
+      保存为连线预设
+    </NButton>
   </div>
 
   <div v-else class="property-empty">

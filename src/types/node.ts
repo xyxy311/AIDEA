@@ -55,3 +55,29 @@ export interface Connection {
   /** 是否有向（箭头） */
   directed: boolean
 }
+
+// ===== 预设样式系统 =====
+
+/** 节点预设样式 */
+export interface NodePresetStyle {
+  id: string
+  name: string
+  type: 'node'
+  backgroundColor: string
+  borderColor: string
+  textColor: string
+}
+
+/** 连线预设样式 */
+export interface ConnectionPresetStyle {
+  id: string
+  name: string
+  type: 'connection'
+  lineStyle: LineStyle
+  strokeWidth: number
+  strokeColor: string
+  directed: boolean
+}
+
+/** 预设样式统一类型 */
+export type PresetStyleItem = NodePresetStyle | ConnectionPresetStyle

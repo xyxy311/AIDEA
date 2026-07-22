@@ -1,6 +1,6 @@
 import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { defineStore } from 'pinia'
-import type { WhiteboardNode, Connection } from '@/types'
+import type { WhiteboardNode, Connection, ConnectionPresetStyle } from '@/types'
 import { useProjectStore } from '@/stores/project'
 import {
   DEFAULT_NODE_WIDTH,
@@ -230,6 +230,23 @@ export function useWhiteboardStore(id: string) {
       triggerRef(nodes)
     }
 
+    /**
+     * 应用连线预设样式
+     * 预设覆盖 lineStyle / strokeWidth / strokeColor / directed 四个属性。
+     */
+    function applyConnectionPreset(
+      connectionId: string,
+      preset: Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>,
+    ): void {
+      const conn = connections.value.get(connectionId)
+      if (!conn) return
+      conn.lineStyle = preset.lineStyle
+      conn.strokeWidth = preset.strokeWidth
+      conn.strokeColor = preset.strokeColor
+      conn.directed = preset.directed
+      triggerRef(connections)
+    }
+
     function resetNodeStyle(nodeId: string): void {
       const node = nodes.value.get(nodeId)
       if (!node) return
@@ -362,6 +379,7 @@ export function useWhiteboardStore(id: string) {
       deleteNodeConnections,
       getNodeConnections,
       updateConnection,
+      applyConnectionPreset,
       resetBoardState,
     }
   })()

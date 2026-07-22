@@ -12,8 +12,10 @@ import {
   NFormItem,
   NText,
   NDivider,
+  NButton,
 } from 'naive-ui'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { usePresetsStore } from '@/stores/presets'
 import { DEFAULT_NODE_STYLE } from '@/constants'
 
 const active = useActiveWhiteboard()
@@ -49,6 +51,18 @@ const currentBorderColor = computed({
 })
 
 const colorPickerMode = 'hex' as const
+
+const presetsStore = usePresetsStore()
+
+function handleSaveAsPreset(): void {
+  if (!node.value) return
+  presetsStore.addNodePreset({
+    name: node.value.text || '自定义预设',
+    backgroundColor: node.value.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
+    borderColor: node.value.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
+    textColor: node.value.textColor ?? DEFAULT_NODE_STYLE.textColor,
+  })
+}
 </script>
 
 <template>
@@ -96,6 +110,16 @@ const colorPickerMode = 'hex' as const
         />
       </NFormItem>
     </NForm>
+
+    <NDivider style="margin: 8px 0" />
+    <NButton
+      size="small"
+      quaternary
+      block
+      @click="handleSaveAsPreset"
+    >
+      保存为节点预设
+    </NButton>
   </div>
 
   <div v-else class="property-empty">

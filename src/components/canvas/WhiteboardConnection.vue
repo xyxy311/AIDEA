@@ -11,6 +11,7 @@
  * - 单击 → 选中/取消选中连线（emit click → Canvas 处理 toggle）
  */
 import { computed } from 'vue'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import {
   LINE_STYLE_DASH_MAP,
@@ -27,7 +28,7 @@ const props = defineProps<{
 
 // ── Emits ──
 const emit = defineEmits<{
-  click: [connectionId: string]
+  click: [connectionId: string, ctrlKey?: boolean]
 }>()
 
 // ── Store ──
@@ -137,9 +138,10 @@ const arrowConfig = computed(() => {
 
 // ── 事件处理 ──
 
-/** 单击 → emit 给 Canvas 处理选中/取消选中 */
-function onClick(): void {
-  emit('click', props.connectionId)
+/** 单击 → emit 给 Canvas 处理选中/取消选中（支持 Ctrl 多选） */
+function onClick(e: KonvaEventObject<MouseEvent>): void {
+  const ctrl = e.evt.ctrlKey || e.evt.metaKey
+  emit('click', props.connectionId, ctrl)
 }
 </script>
 

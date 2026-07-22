@@ -38,7 +38,10 @@ function getNodeLabel(nodeId: string): string {
 const lineStyle = computed<LineStyle | undefined>({
   get: () => conn.value?.lineStyle,
   set: (val) => {
-    if (conn.value && val) {
+    if (!conn.value || !val) return
+    if (isMulti.value) {
+      active.board.updateSelectedConnectionsStyle({ lineStyle: val })
+    } else {
       active.board.updateConnection(conn.value.id, { lineStyle: val })
     }
   },
@@ -47,7 +50,10 @@ const lineStyle = computed<LineStyle | undefined>({
 const strokeWidth = computed<number | undefined>({
   get: () => conn.value?.strokeWidth,
   set: (val) => {
-    if (conn.value && val !== undefined) {
+    if (!conn.value || val === undefined) return
+    if (isMulti.value) {
+      active.board.updateSelectedConnectionsStyle({ strokeWidth: val })
+    } else {
       active.board.updateConnection(conn.value.id, { strokeWidth: val })
     }
   },
@@ -56,7 +62,10 @@ const strokeWidth = computed<number | undefined>({
 const strokeColor = computed<string | undefined>({
   get: () => conn.value?.strokeColor,
   set: (val) => {
-    if (conn.value && val) {
+    if (!conn.value || !val) return
+    if (isMulti.value) {
+      active.board.updateSelectedConnectionsStyle({ strokeColor: val })
+    } else {
       active.board.updateConnection(conn.value.id, { strokeColor: val })
     }
   },
@@ -65,11 +74,20 @@ const strokeColor = computed<string | undefined>({
 const directed = computed<boolean | undefined>({
   get: () => conn.value?.directed,
   set: (val) => {
-    if (conn.value && val !== undefined) {
+    if (!conn.value || val === undefined) return
+    if (isMulti.value) {
+      active.board.updateSelectedConnectionsStyle({ directed: val })
+    } else {
       active.board.updateConnection(conn.value.id, { directed: val })
     }
   },
 })
+
+/** 是否多连线选中 */
+const isMulti = computed(() => active.board.hasMultiConnectionSelection)
+
+/** 选中连线数量（用于多选提示） */
+const selectedCount = computed(() => active.board.selectedConnectionIds.size)
 
 const colorPickerMode = 'hex' as const
 
@@ -89,6 +107,13 @@ function handleSaveAsPreset(): void {
 
 <template>
   <div class="property-editor" v-if="conn">
+    <!-- 多选提示 -->
+    <div v-if="isMulti" class="multi-select-hint">
+      <NTag size="small" type="info" :bordered="false">
+        已选中 {{ selectedCount }} 条连线
+      </NTag>
+    </div>
+
     <!-- 连线概览 -->
     <div class="connection-summary">
       <NTag size="small" :bordered="false" type="info">
@@ -181,5 +206,11 @@ function handleSaveAsPreset(): void {
 .arrow-icon {
   color: var(--color-text-3);
   font-weight: 600;
+}
+
+.multi-select-hint {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
 }
 </style>

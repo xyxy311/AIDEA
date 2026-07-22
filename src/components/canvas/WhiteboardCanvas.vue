@@ -101,12 +101,16 @@ function cancelTextEdit(): void {
 
 // ── 连线选中 ──
 
-/** 连线点击：选中或取消选中（由 WhiteboardConnection 的 click emit 触发） */
-function handleConnectionClick(connectionId: string): void {
-  if (active.board.selectedConnectionId === connectionId) {
-    active.board.selectConnection(null)
+/** 连线点击：选中或取消选中（支持 Ctrl 多选） */
+function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
+  if (ctrlKey) {
+    active.board.selectConnection(connectionId, true)
   } else {
-    active.board.selectConnection(connectionId)
+    if (active.board.selectedConnectionId === connectionId) {
+      active.board.selectConnection(null)
+    } else {
+      active.board.selectConnection(connectionId)
+    }
   }
 }
 
@@ -201,7 +205,7 @@ function handleStageMouseUp(e: unknown): void {
           v-for="conn in active.board.connectionsArray"
           :key="conn.id"
           :connection-id="conn.id"
-          :is-selected="conn.id === active.board.selectedConnectionId"
+          :is-selected="active.board.selectedConnectionIds.has(conn.id)"
           @click="handleConnectionClick"
         />
 
@@ -216,10 +220,10 @@ function handleStageMouseUp(e: unknown): void {
           v-for="node in active.board.nodesArray"
           :key="node.id"
           :node-id="node.id"
-          :is-selected="node.id === active.board.selectedNodeId"
+          :is-selected="active.board.selectedNodeIds.has(node.id)"
           :is-pan-mode="active.board.isPanMode"
           :is-shift-held="isShiftHeld"
-          @select="active.board.selectNode"
+          @select="(nodeId: string, ctrlKey?: boolean) => active.board.selectNode(nodeId, ctrlKey)"
           @dblclick="startTextEdit"
         />
       </v-layer>

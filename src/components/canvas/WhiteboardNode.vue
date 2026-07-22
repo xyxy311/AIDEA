@@ -37,7 +37,7 @@ const props = defineProps<{
 
 // ── Emits ──
 const emit = defineEmits<{
-  select: [nodeId: string]
+  select: [nodeId: string, ctrlKey?: boolean]
   dblclick: [nodeId: string]
 }>()
 
@@ -164,9 +164,10 @@ watch(
 
 // ── 事件处理 ──
 
-/** 单击选中 */
-function onClick(): void {
-  emit('select', props.nodeId)
+/** 单击选中（支持 Ctrl 多选） */
+function onClick(e: KonvaEventObject<MouseEvent>): void {
+  const ctrl = e.evt.ctrlKey || e.evt.metaKey
+  emit('select', props.nodeId, ctrl)
 }
 
 /** 双击开始编辑 */
@@ -174,9 +175,16 @@ function onDblClick(): void {
   emit('dblclick', props.nodeId)
 }
 
-/** 拖拽开始：自动选中 */
+/** 拖拽开始：自动选中（支持 Ctrl 多选） */
 function onDragStart(): void {
-  emit('select', props.nodeId)
+  // 拖拽开始时，先检查是否已在多选集合中；若已在则保持多选，不再触发 select
+  const board = active.board
+  if (board.selectedNodeIds.has(props.nodeId)) {
+    // 已在选中集，不改变选择（保持多选状态）
+    return
+  }
+  // 未选中，触发单选（拖拽时不应多选追加，用户体验更好）
+  emit('select', props.nodeId, false)
 }
 
 /** 拖拽中：实时同步位置到 store（使连线端点实时跟随） */

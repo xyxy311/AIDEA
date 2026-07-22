@@ -13,6 +13,7 @@ import {
   NText,
   NDivider,
   NButton,
+  NTag,
 } from 'naive-ui'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { usePresetsStore } from '@/stores/presets'
@@ -22,31 +23,57 @@ const active = useActiveWhiteboard()
 
 const node = computed(() => active.board.selectedNode)
 
+/** 是否多节点选中 */
+const isMulti = computed(() => active.board.hasMultiNodeSelection)
+
+/** 选中节点数量（用于多选提示） */
+const selectedCount = computed(() => active.board.selectedNodeIds.size)
+
 const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
-    if (node.value) active.board.updateNodeText(node.value.id, val)
+    if (!node.value) return
+    if (isMulti.value) {
+      active.board.updateSelectedNodesText(val)
+    } else {
+      active.board.updateNodeText(node.value.id, val)
+    }
   },
 })
 
 const currentTextColor = computed({
   get: () => node.value?.textColor ?? DEFAULT_NODE_STYLE.textColor,
   set: (val: string | null) => {
-    if (node.value && val) active.board.setNodeTextColor(node.value.id, val)
+    if (!node.value || !val) return
+    if (isMulti.value) {
+      active.board.updateSelectedNodesStyle({ textColor: val })
+    } else {
+      active.board.setNodeTextColor(node.value.id, val)
+    }
   },
 })
 
 const currentBgColor = computed({
   get: () => node.value?.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
   set: (val: string | null) => {
-    if (node.value && val) active.board.setNodeBackgroundColor(node.value.id, val)
+    if (!node.value || !val) return
+    if (isMulti.value) {
+      active.board.updateSelectedNodesStyle({ backgroundColor: val })
+    } else {
+      active.board.setNodeBackgroundColor(node.value.id, val)
+    }
   },
 })
 
 const currentBorderColor = computed({
   get: () => node.value?.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
   set: (val: string | null) => {
-    if (node.value && val) active.board.setNodeBorderColor(node.value.id, val)
+    if (!node.value || !val) return
+    if (isMulti.value) {
+      active.board.updateSelectedNodesStyle({ borderColor: val })
+    } else {
+      active.board.setNodeBorderColor(node.value.id, val)
+    }
   },
 })
 
@@ -67,6 +94,13 @@ function handleSaveAsPreset(): void {
 
 <template>
   <div class="property-editor" v-if="node">
+    <!-- 多选提示 -->
+    <div v-if="isMulti" class="multi-select-hint">
+      <NTag size="small" type="info" :bordered="false">
+        已选中 {{ selectedCount }} 个节点
+      </NTag>
+    </div>
+
     <NForm label-placement="top" size="small">
       <!-- 文本 -->
       <NFormItem label="文本内容">
@@ -130,6 +164,12 @@ function handleSaveAsPreset(): void {
 <style scoped>
 .property-editor {
   padding: 8px 0;
+}
+
+.multi-select-hint {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
 }
 
 .property-empty {

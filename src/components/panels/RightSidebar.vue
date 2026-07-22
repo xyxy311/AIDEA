@@ -26,12 +26,12 @@ const emit = defineEmits<{
 
 /** 当前是否有任何选中项（节点或连线） */
 const hasSelection = computed(
-  () => active.board.selectedNodeId !== null || active.board.selectedConnectionId !== null,
+  () => active.board.selectedNodeIds.size > 0 || active.board.selectedConnectionIds.size > 0,
 )
 
 /** 标题文本 */
 const title = computed(() => {
-  if (active.board.selectedConnectionId !== null) return '连线属性'
+  if (active.board.selectedConnectionIds.size > 0) return '连线属性'
   return '属性'
 })
 </script>
@@ -52,7 +52,7 @@ const title = computed(() => {
       <NScrollbar class="sidebar-scroll">
         <div class="sidebar-content">
           <!-- 连线选中 → 连线属性编辑器 + 预设样式 -->
-          <template v-if="active.board.selectedConnectionId !== null">
+          <template v-if="active.board.selectedConnectionIds.size > 0">
             <ConnectionPropertyEditor />
             <PresetStyles v-if="hasSelection" />
           </template>

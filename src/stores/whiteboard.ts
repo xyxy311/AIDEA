@@ -39,8 +39,23 @@ export function useWhiteboardStore(id: string) {
     /** 节点存储：Map<id, WhiteboardNode> */
     const nodes = shallowRef<Map<string, WhiteboardNode>>(new Map())
 
-    /** 当前选中节点 ID */
-    const selectedNodeId = ref<string | null>(null)
+    /** 当前选中的节点 ID 集合（支持多选） */
+    const selectedNodeIds = ref<Set<string>>(new Set())
+
+    /** 当前选中的连线 ID 集合（支持多选） */
+    const selectedConnectionIds = ref<Set<string>>(new Set())
+
+    /** 向后兼容：选中节点集合中的第一个 ID（用于单选场景） */
+    const selectedNodeId = computed<string | null>(() => {
+      const arr = [...selectedNodeIds.value]
+      return arr.length > 0 ? arr[0] : null
+    })
+
+    /** 向后兼容：选中连线集合中的第一个 ID（用于单选场景） */
+    const selectedConnectionId = computed<string | null>(() => {
+      const arr = [...selectedConnectionIds.value]
+      return arr.length > 0 ? arr[0] : null
+    })
 
     /** 当前正在编辑的节点 ID */
     const editingNodeId = ref<string | null>(null)
@@ -59,8 +74,7 @@ export function useWhiteboardStore(id: string) {
     const connections = shallowRef<Map<string, Connection>>(new Map())
     /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
     const connectingFrom = ref<string | null>(null)
-    /** 当前选中连线 ID */
-    const selectedConnectionId = ref<string | null>(null)
+
 
     // ── Getters ──
 
@@ -101,6 +115,32 @@ export function useWhiteboardStore(id: string) {
     return c ? { ...c } : null
   })
 
+  /** 所有选中的节点（展开新对象引用，触发响应式） */
+  const selectedNodes = computed<WhiteboardNode[]>(() => {
+    const result: WhiteboardNode[] = []
+    for (const id of selectedNodeIds.value) {
+      const n = nodes.value.get(id)
+      if (n) result.push({ ...n })
+    }
+    return result
+  })
+
+  /** 所有选中的连线（展开新对象引用，触发响应式） */
+  const selectedConnections = computed<Connection[]>(() => {
+    const result: Connection[] = []
+    for (const id of selectedConnectionIds.value) {
+      const c = connections.value.get(id)
+      if (c) result.push({ ...c })
+    }
+    return result
+  })
+
+  /** 是否有多个节点被选中 */
+  const hasMultiNodeSelection = computed(() => selectedNodeIds.value.size > 1)
+
+  /** 是否有多个连线被选中 */
+  const hasMultiConnectionSelection = computed(() => selectedConnectionIds.value.size > 1)
+
     // ── Actions: 节点 CRUD ──
 
     function addNode(x: number, y: number, text?: string): string {
@@ -117,7 +157,7 @@ export function useWhiteboardStore(id: string) {
       nodes.value.set(nodeId, node)
       triggerRef(nodes)
 
-      selectedNodeId.value = nodeId
+      selectedNodeIds.value = new Set([nodeId])
       editingNodeId.value = nodeId
 
       return nodeId
@@ -130,18 +170,40 @@ export function useWhiteboardStore(id: string) {
       nodes.value.delete(nodeId)
       triggerRef(nodes)
 
-      if (selectedNodeId.value === nodeId) {
-        selectedNodeId.value = null
-      }
+      const newNodeSet = new Set(selectedNodeIds.value)
+      newNodeSet.delete(nodeId)
+      selectedNodeIds.value = newNodeSet
       if (editingNodeId.value === nodeId) {
         editingNodeId.value = null
       }
     }
 
-    function selectNode(nodeId: string | null): void {
-      selectedNodeId.value = nodeId
-      if (nodeId !== null) {
-        selectedConnectionId.value = null
+    /**
+     * 选中 / 取消选中节点
+     * - ctrlKey=false（默认）：单选替换模式，选中的连线全部清除
+     * - ctrlKey=true：在 Set 中 toggle 该节点，连线全部清除
+     * - nodeId=null：清空节点选择
+     * 节点与连线选择互斥——选中节点时总是清空连线选择
+     */
+    function selectNode(nodeId: string | null, ctrlKey?: boolean): void {
+      // 节点与连线互斥：选中节点时总是清空连线选择
+      selectedConnectionIds.value = new Set()
+
+      if (nodeId === null) {
+        selectedNodeIds.value = new Set()
+        return
+      }
+
+      if (ctrlKey) {
+        const newSet = new Set(selectedNodeIds.value)
+        if (newSet.has(nodeId)) {
+          newSet.delete(nodeId)
+        } else {
+          newSet.add(nodeId)
+        }
+        selectedNodeIds.value = newSet
+      } else {
+        selectedNodeIds.value = new Set([nodeId])
       }
     }
 
@@ -305,11 +367,32 @@ export function useWhiteboardStore(id: string) {
       )
     }
 
-    /** 选中/取消选中连线（与节点选中互斥） */
-    function selectConnection(connectionId: string | null): void {
-      selectedConnectionId.value = connectionId
-      if (connectionId !== null) {
-        selectedNodeId.value = null
+    /**
+     * 选中 / 取消选中连线
+     * - ctrlKey=false（默认）：单选替换模式，选中的节点全部清除
+     * - ctrlKey=true：在 Set 中 toggle 该连线，节点全部清除
+     * - connectionId=null：清空连线选择
+     * 节点与连线选择互斥——选中连线时总是清空节点选择
+     */
+    function selectConnection(connectionId: string | null, ctrlKey?: boolean): void {
+      // 节点与连线互斥：选中连线时总是清空节点选择
+      selectedNodeIds.value = new Set()
+
+      if (connectionId === null) {
+        selectedConnectionIds.value = new Set()
+        return
+      }
+
+      if (ctrlKey) {
+        const newSet = new Set(selectedConnectionIds.value)
+        if (newSet.has(connectionId)) {
+          newSet.delete(connectionId)
+        } else {
+          newSet.add(connectionId)
+        }
+        selectedConnectionIds.value = newSet
+      } else {
+        selectedConnectionIds.value = new Set([connectionId])
       }
     }
 
@@ -324,6 +407,66 @@ export function useWhiteboardStore(id: string) {
       triggerRef(connections)
     }
 
+    /**
+     * 清空所有选中（节点和连线）
+     */
+    function clearSelection(): void {
+      selectedNodeIds.value = new Set()
+      selectedConnectionIds.value = new Set()
+    }
+
+    /**
+     * 批量更新所有选中节点的样式属性
+     * 仅修改 selectedNodeIds 中的节点，不影响其他节点
+     */
+    function updateSelectedNodesStyle(partial: {
+      textColor?: string
+      backgroundColor?: string
+      borderColor?: string
+    }): void {
+      for (const id of selectedNodeIds.value) {
+        const node = nodes.value.get(id)
+        if (!node) continue
+        if (partial.textColor !== undefined) node.textColor = partial.textColor
+        if (partial.backgroundColor !== undefined) node.backgroundColor = partial.backgroundColor
+        if (partial.borderColor !== undefined) node.borderColor = partial.borderColor
+      }
+      triggerRef(nodes)
+    }
+
+    /**
+     * 批量更新所有选中连线的样式属性
+     * 仅修改 selectedConnectionIds 中的连线，不影响其他连线
+     */
+    function updateSelectedConnectionsStyle(partial: {
+      lineStyle?: import('@/types').LineStyle
+      strokeWidth?: number
+      strokeColor?: string
+      directed?: boolean
+    }): void {
+      for (const id of selectedConnectionIds.value) {
+        const conn = connections.value.get(id)
+        if (!conn) continue
+        if (partial.lineStyle !== undefined) conn.lineStyle = partial.lineStyle
+        if (partial.strokeWidth !== undefined) conn.strokeWidth = partial.strokeWidth
+        if (partial.strokeColor !== undefined) conn.strokeColor = partial.strokeColor
+        if (partial.directed !== undefined) conn.directed = partial.directed
+      }
+      triggerRef(connections)
+    }
+
+    /**
+     * 批量更新所有选中节点的文本内容
+     */
+    function updateSelectedNodesText(text: string): void {
+      for (const id of selectedNodeIds.value) {
+        const node = nodes.value.get(id)
+        if (!node) continue
+        node.text = text
+      }
+      triggerRef(nodes)
+    }
+
     // ── Actions: 状态重置 ──
 
     /**
@@ -332,10 +475,10 @@ export function useWhiteboardStore(id: string) {
      * 当前仅清除选中和编辑状态，后续可扩展（如重置视口位置等）。
      */
     function resetBoardState(): void {
-      selectedNodeId.value = null
+      selectedNodeIds.value = new Set()
       editingNodeId.value = null
       connectingFrom.value = null
-      selectedConnectionId.value = null
+      selectedConnectionIds.value = new Set()
     }
 
     return {
@@ -343,6 +486,7 @@ export function useWhiteboardStore(id: string) {
       whiteboardId,
       nodes,
       selectedNodeId,
+      selectedNodeIds,
       editingNodeId,
       stageX,
       stageY,
@@ -351,6 +495,10 @@ export function useWhiteboardStore(id: string) {
       // Getters
       nodesArray,
       selectedNode,
+      selectedNodes,
+      selectedConnections,
+      hasMultiNodeSelection,
+      hasMultiConnectionSelection,
       name,
       // Actions
       addNode,
@@ -372,6 +520,7 @@ export function useWhiteboardStore(id: string) {
       connectionsArray,
       connectingFrom,
       selectedConnectionId,
+      selectedConnectionIds,
       selectedConnection,
       selectConnection,
       addConnection,
@@ -380,6 +529,10 @@ export function useWhiteboardStore(id: string) {
       getNodeConnections,
       updateConnection,
       applyConnectionPreset,
+      clearSelection,
+      updateSelectedNodesStyle,
+      updateSelectedConnectionsStyle,
+      updateSelectedNodesText,
       resetBoardState,
     }
   })()

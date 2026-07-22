@@ -20,8 +20,7 @@ export function useCanvasEvents() {
   function handleStageClick(e: KonvaEventObject<MouseEvent>) {
     // Konva 中：点击空白区域时，e.target === e.currentTarget (Stage)
     if (e.target === e.currentTarget) {
-      active.board.selectNode(null)
-      active.board.selectConnection(null)
+      active.board.clearSelection()
     }
   }
 

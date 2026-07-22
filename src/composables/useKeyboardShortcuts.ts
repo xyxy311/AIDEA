@@ -20,17 +20,28 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
     if (isEditing.value) return
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (active.board.selectedConnectionId !== null) {
+      // 先删除所有选中的连线
+      if (active.board.selectedConnectionIds.size > 0) {
         e.preventDefault()
-        active.board.deleteConnection(active.board.selectedConnectionId)
-      } else if (active.board.selectedNodeId !== null) {
+        const connIds = [...active.board.selectedConnectionIds]
+        for (const id of connIds) {
+          active.board.deleteConnection(id)
+        }
+        active.board.clearSelection()
+      }
+      // 再删除所有选中的节点
+      else if (active.board.selectedNodeIds.size > 0) {
         e.preventDefault()
-        active.board.deleteNode(active.board.selectedNodeId)
+        const nodeIds = [...active.board.selectedNodeIds]
+        for (const id of nodeIds) {
+          active.board.deleteNode(id)
+        }
+        active.board.clearSelection()
       }
     }
 
     if (e.key === 'Escape') {
-      active.board.selectNode(null)
+      active.board.clearSelection()
     }
   }
 

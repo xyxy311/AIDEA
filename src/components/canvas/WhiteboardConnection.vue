@@ -36,9 +36,7 @@ const active = useActiveWhiteboard()
 
 // ── Computed: 连线数据 ──
 const connection = computed(() => {
-  const found = active.board.connectionsArray.find(
-    (c) => c.id === props.connectionId,
-  )
+  const found = active.board.connections.get(props.connectionId)
   return found ? { ...found } : undefined
 })
 

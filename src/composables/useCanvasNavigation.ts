@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
@@ -15,6 +15,7 @@ import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
  */
 export function useCanvasNavigation() {
   const active = useActiveWhiteboard()
+  const isPanMode = ref(false)
 
   // ── 空格键处理 ──
 
@@ -24,18 +25,18 @@ export function useCanvasNavigation() {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 
     e.preventDefault()
-    active.board.isPanMode = true
+    isPanMode.value = true
   }
 
   function onKeyUp(e: KeyboardEvent): void {
     if (e.key === ' ') {
-      active.board.isPanMode = false
+      isPanMode.value = false
     }
   }
 
   /** 窗口失焦时重置平移模式，避免卡在平移状态 */
   function onBlur(): void {
-    active.board.isPanMode = false
+    isPanMode.value = false
   }
 
   // ── 滚轮缩放（Ctrl + 滚轮） ──
@@ -110,6 +111,7 @@ export function useCanvasNavigation() {
   })
 
   return {
+    isPanMode,
     handleWheel,
     handleDragMove,
     handleDragEnd,

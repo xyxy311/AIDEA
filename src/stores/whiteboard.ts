@@ -45,18 +45,6 @@ export function useWhiteboardStore(id: string) {
     /** 当前选中的连线 ID 集合（支持多选） */
     const selectedConnectionIds = ref<Set<string>>(new Set())
 
-    /** 向后兼容：选中节点集合中的第一个 ID（用于单选场景） */
-    const selectedNodeId = computed<string | null>(() => {
-      const arr = [...selectedNodeIds.value]
-      return arr.length > 0 ? arr[0] : null
-    })
-
-    /** 向后兼容：选中连线集合中的第一个 ID（用于单选场景） */
-    const selectedConnectionId = computed<string | null>(() => {
-      const arr = [...selectedConnectionIds.value]
-      return arr.length > 0 ? arr[0] : null
-    })
-
     /** 当前正在编辑的节点 ID */
     const editingNodeId = ref<string | null>(null)
 
@@ -66,8 +54,6 @@ export function useWhiteboardStore(id: string) {
     const stageY = ref(0)
     /** 画布缩放倍率 */
     const stageScale = ref(1)
-    /** 是否处于平移模式 */
-    const isPanMode = ref(false)
 
     // ===== 连线 =====
     /** 连线数据 Map */
@@ -83,14 +69,10 @@ export function useWhiteboardStore(id: string) {
       Array.from(nodes.value.values()),
     )
 
-  /** 当前选中的节点对象 */
-  const selectedNode = computed<WhiteboardNode | null>(() => {
-    if (selectedNodeId.value === null) return null
-    const n = nodes.value.get(selectedNodeId.value)
-    // 必须展开为新对象——shallowRef<Map> 配合 triggerRef 时
-    // Map 中对象引用不变，computed 按 === 比较会跳过下游通知
-    return n ? { ...n } : null
-  })
+    /** 当前白板的所有连线 */
+    const connectionsArray = computed<Connection[]>(() =>
+      Array.from(connections.value.values()),
+    )
 
   /**
    * 白板名称——从项目 store 中读取，保持单一数据源。
@@ -101,45 +83,15 @@ export function useWhiteboardStore(id: string) {
     return project.whiteboards.find((w) => w.id === whiteboardId)?.name ?? '白板'
   })
 
-  /** 所有连线（数组形式） */
-  const connectionsArray = computed<Connection[]>(() =>
-    Array.from(connections.value.values()),
-  )
-
-  /** 当前选中连线 */
-  const selectedConnection = computed<Connection | null>(() => {
-    if (selectedConnectionId.value === null) return null
-    const c = connections.value.get(selectedConnectionId.value)
-    // 必须展开为新对象——shallowRef<Map> 配合 triggerRef 时
-    // Map 中对象引用不变，computed 按 === 比较会跳过下游通知
-    return c ? { ...c } : null
+  const selectedNodeId = computed(() => {
+    const ids = Array.from(selectedNodeIds.value)
+    return ids[0] ?? null
   })
 
-  /** 所有选中的节点（展开新对象引用，触发响应式） */
-  const selectedNodes = computed<WhiteboardNode[]>(() => {
-    const result: WhiteboardNode[] = []
-    for (const id of selectedNodeIds.value) {
-      const n = nodes.value.get(id)
-      if (n) result.push({ ...n })
-    }
-    return result
+  const selectedConnectionId = computed(() => {
+    const ids = Array.from(selectedConnectionIds.value)
+    return ids[0] ?? null
   })
-
-  /** 所有选中的连线（展开新对象引用，触发响应式） */
-  const selectedConnections = computed<Connection[]>(() => {
-    const result: Connection[] = []
-    for (const id of selectedConnectionIds.value) {
-      const c = connections.value.get(id)
-      if (c) result.push({ ...c })
-    }
-    return result
-  })
-
-  /** 是否有多个节点被选中 */
-  const hasMultiNodeSelection = computed(() => selectedNodeIds.value.size > 1)
-
-  /** 是否有多个连线被选中 */
-  const hasMultiConnectionSelection = computed(() => selectedConnectionIds.value.size > 1)
 
     // ── Actions: 节点 CRUD ──
 
@@ -360,13 +312,6 @@ export function useWhiteboardStore(id: string) {
       }
     }
 
-    /** 获取指定节点的所有连线 */
-    function getNodeConnections(nodeId: string): Connection[] {
-      return connectionsArray.value.filter(
-        (c) => c.fromNodeId === nodeId || c.toNodeId === nodeId,
-      )
-    }
-
     /**
      * 选中 / 取消选中连线
      * - ctrlKey=false（默认）：单选替换模式，选中的节点全部清除
@@ -484,21 +429,23 @@ export function useWhiteboardStore(id: string) {
     return {
       // State
       whiteboardId,
+
       nodes,
-      selectedNodeId,
       selectedNodeIds,
       editingNodeId,
+      
+      connections,
+      connectingFrom,
+      selectedConnectionIds,
+      
       stageX,
       stageY,
       stageScale,
-      isPanMode,
       // Getters
       nodesArray,
-      selectedNode,
-      selectedNodes,
-      selectedConnections,
-      hasMultiNodeSelection,
-      hasMultiConnectionSelection,
+      connectionsArray,
+      selectedNodeId,
+      selectedConnectionId,
       name,
       // Actions
       addNode,
@@ -515,24 +462,19 @@ export function useWhiteboardStore(id: string) {
       setNodeBorderColor,
       applyPresetStyle,
       resetNodeStyle,
-      //   连线
-      connections,
-      connectionsArray,
-      connectingFrom,
-      selectedConnectionId,
-      selectedConnectionIds,
-      selectedConnection,
+
       selectConnection,
       addConnection,
       deleteConnection,
       deleteNodeConnections,
-      getNodeConnections,
       updateConnection,
       applyConnectionPreset,
       clearSelection,
+
       updateSelectedNodesStyle,
       updateSelectedConnectionsStyle,
       updateSelectedNodesText,
+
       resetBoardState,
     }
   })()

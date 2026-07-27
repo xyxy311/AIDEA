@@ -44,10 +44,12 @@ function getDashArray(style: LineStyle): string {
 // ── 模式判断 ──
 // 连线模式优先于节点模式（同一时间只能选中一种）
 
-const isConnectionMode = computed(() => active.board.selectedConnectionId !== null)
-const isNodeMode = computed(() => !isConnectionMode.value && active.board.selectedNodeId !== null)
+const isConnectionMode = computed(() => active.board.selectedConnectionIds.size !== 0)
+const isNodeMode = computed(() => !isConnectionMode.value && active.board.selectedNodeIds.size !== 0)
 const hasSelection = computed(() => isNodeMode.value || isConnectionMode.value)
 
+const conn = computed(() => active.board.connections.get(active.board.selectedConnectionId))
+const node = computed(() => active.board.nodes.get(active.board.selectedNodeId))
 // ── 当前模式对应的预设列表 ──
 
 const presets = computed<(NodePresetStyle | ConnectionPresetStyle)[]>(() => {
@@ -116,10 +118,10 @@ function onDragLeave(index: number, e: DragEvent): void {
 // ── 点击应用预设 ──
 
 function applyPreset(preset: NodePresetStyle | ConnectionPresetStyle): void {
-  if (isConnectionMode.value && active.board.selectedConnectionId && preset.type === 'connection') {
-    active.board.applyConnectionPreset(active.board.selectedConnectionId, preset)
-  } else if (active.board.selectedNodeId && preset.type === 'node') {
-    active.board.applyPresetStyle(active.board.selectedNodeId, preset)
+  if (isConnectionMode.value && preset.type === 'connection') {
+    active.board.updateSelectedConnectionsStyle(preset)
+  } else if (isNodeMode.value && preset.type === 'node') {
+    active.board.updateSelectedNodesStyle(preset)
   }
 }
 
@@ -191,19 +193,17 @@ function openSaveCurrent(): void {
   formName.value = ''
 
   if (isConnectionMode.value) {
-    const conn = active.board.selectedConnection
-    if (conn) {
-      formLineStyle.value = conn.lineStyle
-      formStrokeWidth.value = conn.strokeWidth
-      formStrokeColor.value = conn.strokeColor
-      formDirected.value = conn.directed
+    if (conn.value) {
+      formLineStyle.value = conn.value.lineStyle
+      formStrokeWidth.value = conn.value.strokeWidth
+      formStrokeColor.value = conn.value.strokeColor
+      formDirected.value = conn.value.directed
     }
   } else {
-    const node = active.board.selectedNode
-    if (node) {
-      formBgColor.value = node.backgroundColor ?? '#ffffff'
-      formBorderColor.value = node.borderColor ?? '#d1d5db'
-      formTextColor.value = node.textColor ?? '#1f2937'
+    if (node.value) {
+      formBgColor.value = node.value.backgroundColor ?? '#ffffff'
+      formBorderColor.value = node.value.borderColor ?? '#d1d5db'
+      formTextColor.value = node.value.textColor ?? '#1f2937'
     }
   }
 

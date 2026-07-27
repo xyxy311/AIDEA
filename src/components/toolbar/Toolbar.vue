@@ -14,7 +14,7 @@ const active = useActiveWhiteboard()
 const { stageWidth, stageHeight } = useStageSize()
 
 /** 是否有选中节点（控制删除按钮的禁用状态） */
-const hasSelection = computed(() => active.board.selectedNodeId !== null)
+const hasSelection = computed(() => active.board.selectedNodeIds.size > 0)
 
 /**
  * 在视口中央创建新节点

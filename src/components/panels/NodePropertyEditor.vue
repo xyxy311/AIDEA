@@ -21,23 +21,18 @@ import { DEFAULT_NODE_STYLE } from '@/constants'
 
 const active = useActiveWhiteboard()
 
-const node = computed(() => active.board.selectedNode)
-
-/** 是否多节点选中 */
-const isMulti = computed(() => active.board.hasMultiNodeSelection)
-
-/** 选中节点数量（用于多选提示） */
+// 选中的节点信息
+const node = computed(() => {
+  const found = active.board.nodes.get(active.board.selectedNodeId)
+  return found ? { ...found } : undefined
+})
 const selectedCount = computed(() => active.board.selectedNodeIds.size)
 
 const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
     if (!node.value) return
-    if (isMulti.value) {
-      active.board.updateSelectedNodesText(val)
-    } else {
-      active.board.updateNodeText(node.value.id, val)
-    }
+    active.board.updateSelectedNodesText(val)
   },
 })
 
@@ -45,11 +40,7 @@ const currentTextColor = computed({
   get: () => node.value?.textColor ?? DEFAULT_NODE_STYLE.textColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    if (isMulti.value) {
-      active.board.updateSelectedNodesStyle({ textColor: val })
-    } else {
-      active.board.setNodeTextColor(node.value.id, val)
-    }
+    active.board.updateSelectedNodesStyle({ textColor: val })
   },
 })
 
@@ -57,11 +48,7 @@ const currentBgColor = computed({
   get: () => node.value?.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    if (isMulti.value) {
-      active.board.updateSelectedNodesStyle({ backgroundColor: val })
-    } else {
-      active.board.setNodeBackgroundColor(node.value.id, val)
-    }
+    active.board.updateSelectedNodesStyle({ backgroundColor: val })
   },
 })
 
@@ -69,11 +56,7 @@ const currentBorderColor = computed({
   get: () => node.value?.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    if (isMulti.value) {
-      active.board.updateSelectedNodesStyle({ borderColor: val })
-    } else {
-      active.board.setNodeBorderColor(node.value.id, val)
-    }
+    active.board.updateSelectedNodesStyle({ borderColor: val }) 
   },
 })
 
@@ -95,7 +78,7 @@ function handleSaveAsPreset(): void {
 <template>
   <div class="property-editor" v-if="node">
     <!-- 多选提示 -->
-    <div v-if="isMulti" class="multi-select-hint">
+    <div class="multi-select-hint">
       <NTag size="small" type="info" :bordered="false">
         已选中 {{ selectedCount }} 个节点
       </NTag>

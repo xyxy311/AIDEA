@@ -31,8 +31,7 @@ import {
 const props = defineProps<{
   nodeId: string
   isSelected: boolean
-  isPanMode: boolean
-  isShiftHeld: boolean
+  draggable: boolean
 }>()
 
 // ── Emits ──
@@ -64,10 +63,6 @@ const node = computed(() => {
 const groupConfig = {
   name: props.nodeId,
 }
-
-const _draggable = computed(() => {
-  return !props.isPanMode && !props.isShiftHeld
-})
 
 /** 节点背景矩形配置 */
 const rectConfig = computed(() => {
@@ -254,7 +249,7 @@ function onTransformEnd(): void {
 <template>
   <v-group
     :config="groupConfig"
-    :draggable="_draggable"
+    :draggable="props.draggable"
     :x="node?.x"
     :y="node?.y"
     @click="onClick"

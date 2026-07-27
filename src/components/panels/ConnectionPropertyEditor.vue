@@ -27,7 +27,12 @@ import type { LineStyle } from '@/types'
 
 const active = useActiveWhiteboard()
 
-const conn = computed(() => active.board.selectedConnection)
+// 选中的连线信息
+const conn = computed(() => {
+  const found = active.board.connections.get(active.board.selectedConnectionId)
+  return found ? { ...found } : undefined
+})
+const selectedCount = computed(() => active.board.selectedConnectionIds.size)
 
 /** 获取连线的两端节点名称 */
 function getNodeLabel(nodeId: string): string {
@@ -39,11 +44,7 @@ const lineStyle = computed<LineStyle | undefined>({
   get: () => conn.value?.lineStyle,
   set: (val) => {
     if (!conn.value || !val) return
-    if (isMulti.value) {
-      active.board.updateSelectedConnectionsStyle({ lineStyle: val })
-    } else {
-      active.board.updateConnection(conn.value.id, { lineStyle: val })
-    }
+    active.board.updateSelectedConnectionsStyle({ lineStyle: val })
   },
 })
 
@@ -51,11 +52,7 @@ const strokeWidth = computed<number | undefined>({
   get: () => conn.value?.strokeWidth,
   set: (val) => {
     if (!conn.value || val === undefined) return
-    if (isMulti.value) {
-      active.board.updateSelectedConnectionsStyle({ strokeWidth: val })
-    } else {
-      active.board.updateConnection(conn.value.id, { strokeWidth: val })
-    }
+    active.board.updateSelectedConnectionsStyle({ strokeWidth: val })
   },
 })
 
@@ -63,11 +60,7 @@ const strokeColor = computed<string | undefined>({
   get: () => conn.value?.strokeColor,
   set: (val) => {
     if (!conn.value || !val) return
-    if (isMulti.value) {
-      active.board.updateSelectedConnectionsStyle({ strokeColor: val })
-    } else {
-      active.board.updateConnection(conn.value.id, { strokeColor: val })
-    }
+    active.board.updateSelectedConnectionsStyle({ strokeColor: val })
   },
 })
 
@@ -75,19 +68,9 @@ const directed = computed<boolean | undefined>({
   get: () => conn.value?.directed,
   set: (val) => {
     if (!conn.value || val === undefined) return
-    if (isMulti.value) {
-      active.board.updateSelectedConnectionsStyle({ directed: val })
-    } else {
-      active.board.updateConnection(conn.value.id, { directed: val })
-    }
+    active.board.updateSelectedConnectionsStyle({ directed: val })
   },
 })
-
-/** 是否多连线选中 */
-const isMulti = computed(() => active.board.hasMultiConnectionSelection)
-
-/** 选中连线数量（用于多选提示） */
-const selectedCount = computed(() => active.board.selectedConnectionIds.size)
 
 const colorPickerMode = 'hex' as const
 
@@ -108,7 +91,7 @@ function handleSaveAsPreset(): void {
 <template>
   <div class="property-editor" v-if="conn">
     <!-- 多选提示 -->
-    <div v-if="isMulti" class="multi-select-hint">
+    <div class="multi-select-hint">
       <NTag size="small" type="info" :bordered="false">
         已选中 {{ selectedCount }} 条连线
       </NTag>

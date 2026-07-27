@@ -106,7 +106,7 @@ function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
   if (ctrlKey) {
     active.board.selectConnection(connectionId, true)
   } else {
-    if (active.board.selectedConnectionId === connectionId) {
+    if (active.board.selectedConnectionIds.has(connectionId)) {
       active.board.selectConnection(null)
     } else {
       active.board.selectConnection(connectionId)
@@ -165,7 +165,7 @@ function handleStageMouseUp(e: unknown): void {
   <div
     ref="stageContainerRef"
     class="canvas-wrapper"
-    :class="{ 'pan-mode': active.board.isPanMode, 'shift-held': isShiftHeld }"
+    :class="{ 'pan-mode': nav.isPanMode.value, 'shift-held': isShiftHeld }"
   >
     <!-- Konva Stage -->
     <v-stage
@@ -175,7 +175,7 @@ function handleStageMouseUp(e: unknown): void {
       :y="active.board.stageY"
       :scaleX="active.board.stageScale"
       :scaleY="active.board.stageScale"
-      :draggable="active.board.isPanMode"
+      :draggable="nav.isPanMode.value"
       @click="handleStageClick"
       @dblclick="handleStageDblClick"
       @contextmenu="handleStageContextMenu"
@@ -202,10 +202,10 @@ function handleStageMouseUp(e: unknown): void {
           每条连线渲染为线段 + 可选箭头（有向时）。
         -->
         <WhiteboardConnection
-          v-for="conn in active.board.connectionsArray"
-          :key="conn.id"
-          :connection-id="conn.id"
-          :is-selected="active.board.selectedConnectionIds.has(conn.id)"
+          v-for="connId in active.board.connections.keys()"
+          :key="connId"
+          :connection-id="connId"
+          :is-selected="active.board.selectedConnectionIds.has(connId)"
           @click="handleConnectionClick"
         />
 
@@ -221,8 +221,7 @@ function handleStageMouseUp(e: unknown): void {
           :key="node.id"
           :node-id="node.id"
           :is-selected="active.board.selectedNodeIds.has(node.id)"
-          :is-pan-mode="active.board.isPanMode"
-          :is-shift-held="isShiftHeld"
+          :draggable="!isShiftHeld && !nav.isPanMode.value"
           @select="(nodeId: string, ctrlKey?: boolean) => active.board.selectNode(nodeId, ctrlKey)"
           @dblclick="startTextEdit"
         />

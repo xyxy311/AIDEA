@@ -27,7 +27,7 @@ export const DEFAULT_NODE_STYLE: NodeStyle = {
   fontSize: 16,
   fontFamily: 'system-ui, -apple-system, sans-serif',
   textColor: '#1f2937',
-  shadowEnabled: true,
+  shadowEnabled: false,
   shadowColor: 'rgba(0, 0, 0, 0.08)',
   shadowBlur: 8,
   shadowOffsetX: 0,

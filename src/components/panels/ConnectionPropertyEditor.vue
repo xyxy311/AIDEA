@@ -28,15 +28,12 @@ import type { LineStyle } from '@/types'
 const active = useActiveWhiteboard()
 
 // 选中的连线信息
-const conn = computed(() => {
-  const found = active.board.connections.get(active.board.selectedConnectionId)
-  return found ? { ...found } : undefined
-})
+const conn = computed(() => active.board.connections.get(active.board.selectedConnectionId))
 const selectedCount = computed(() => active.board.selectedConnectionIds.size)
 
 /** 获取连线的两端节点名称 */
 function getNodeLabel(nodeId: string): string {
-  const node = active.board.nodesArray.find((n) => n.id === nodeId)
+  const node = active.board.nodes.get(nodeId)
   return node ? (node.text || '未命名节点') : nodeId
 }
 

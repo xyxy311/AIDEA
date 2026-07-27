@@ -49,6 +49,7 @@ export function useCanvasEvents() {
    * 处理画布右键菜单事件（阻止浏览器默认菜单）
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
+    e.evt.preventDefault()
     // 调试：打印信息
     // console.log('画布偏移:', active.board.stageX, active.board.stageY)
     // console.log('画布缩放:', active.board.stageScale)
@@ -56,7 +57,6 @@ export function useCanvasEvents() {
     // console.log('当前白板：', active.board.whiteboardId, active.board.name)
     console.log("连线：", [...active.board.connections.values()])
     console.log("节点：", [...active.board.nodes.values()])
-    e.evt.preventDefault()
   }
 
   return {

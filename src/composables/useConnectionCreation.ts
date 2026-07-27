@@ -41,7 +41,7 @@ export function useConnectionCreation() {
     let current: Konva.Node | null = target
     while (current && current.nodeType !== 'Stage') {
       const nodeName: string = current.name()
-      if (nodeName && active.board.nodesArray.some((n) => n.id === nodeName)) {
+      if (nodeName && active.board.nodes.has(nodeName)) {
         return nodeName
       }
       current = current.getParent()
@@ -99,9 +99,7 @@ export function useConnectionCreation() {
       return { visible: false }
     }
 
-    const fromNode = active.board.nodesArray.find(
-      (n) => n.id === active.board.connectingFrom,
-    )
+    const fromNode = active.board.nodes.get(active.board.connectingFrom)
     if (!fromNode) return { visible: false }
 
     return {

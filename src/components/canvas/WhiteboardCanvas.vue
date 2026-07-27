@@ -79,7 +79,7 @@ const nav = useCanvasNavigation()
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
   if (!active.board.editingNodeId) return null
-  return active.board.nodesArray.find((n) => n.id === active.board.editingNodeId) ?? null
+  return active.board.nodes.get(active.board.editingNodeId) ?? null
 })
 
 // ── 编辑操作方法 ──

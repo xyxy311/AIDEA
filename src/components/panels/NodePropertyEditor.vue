@@ -22,10 +22,7 @@ import { DEFAULT_NODE_STYLE } from '@/constants'
 const active = useActiveWhiteboard()
 
 // 选中的节点信息
-const node = computed(() => {
-  const found = active.board.nodes.get(active.board.selectedNodeId)
-  return found ? { ...found } : undefined
-})
+const node = computed(() => active.board.nodes.get(active.board.selectedNodeId))
 const selectedCount = computed(() => active.board.selectedNodeIds.size)
 
 const currentText = computed({

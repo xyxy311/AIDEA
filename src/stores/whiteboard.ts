@@ -1,4 +1,4 @@
-import { ref, computed, shallowRef, triggerRef } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { defineStore } from 'pinia'
 import type { WhiteboardNode, Connection, ConnectionPresetStyle } from '@/types'
 import { useProjectStore } from '@/stores/project'
@@ -37,7 +37,7 @@ export function useWhiteboardStore(id: string) {
     const whiteboardId = id
 
     /** 节点存储：Map<id, WhiteboardNode> */
-    const nodes = shallowRef<Map<string, WhiteboardNode>>(new Map())
+    const nodes = reactive(new Map<string, WhiteboardNode>())
 
     /** 当前选中的节点 ID 集合（支持多选） */
     const selectedNodeIds = ref<Set<string>>(new Set())
@@ -57,7 +57,7 @@ export function useWhiteboardStore(id: string) {
 
     // ===== 连线 =====
     /** 连线数据 Map */
-    const connections = shallowRef<Map<string, Connection>>(new Map())
+    const connections = reactive(new Map<string, Connection>())
     /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
     const connectingFrom = ref<string | null>(null)
 
@@ -66,12 +66,12 @@ export function useWhiteboardStore(id: string) {
 
     /** 当前白板的所有节点 */
     const nodesArray = computed<WhiteboardNode[]>(() =>
-      Array.from(nodes.value.values()),
+      Array.from(nodes.values()),
     )
 
     /** 当前白板的所有连线 */
     const connectionsArray = computed<Connection[]>(() =>
-      Array.from(connections.value.values()),
+      Array.from(connections.values()),
     )
 
   /**
@@ -106,8 +106,7 @@ export function useWhiteboardStore(id: string) {
         text: text ?? DEFAULT_NODE_TEXT,
       }
 
-      nodes.value.set(nodeId, node)
-      triggerRef(nodes)
+      nodes.set(nodeId, node)
 
       selectedNodeIds.value = new Set([nodeId])
       editingNodeId.value = nodeId
@@ -119,8 +118,7 @@ export function useWhiteboardStore(id: string) {
       // 先删除该节点的所有连线
       deleteNodeConnections(nodeId)
 
-      nodes.value.delete(nodeId)
-      triggerRef(nodes)
+      nodes.delete(nodeId)
 
       const newNodeSet = new Set(selectedNodeIds.value)
       newNodeSet.delete(nodeId)
@@ -160,11 +158,10 @@ export function useWhiteboardStore(id: string) {
     }
 
     function moveNode(nodeId: string, x: number, y: number): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.x = x
       node.y = y
-      triggerRef(nodes)
     }
 
     function resizeNode(
@@ -174,13 +171,12 @@ export function useWhiteboardStore(id: string) {
       width: number,
       height: number,
     ): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.x = x
       node.y = y
       node.width = Math.max(width, MIN_NODE_WIDTH)
       node.height = Math.max(height, MIN_NODE_HEIGHT)
-      triggerRef(nodes)
     }
 
     // ── Actions: 文本编辑 ──
@@ -194,10 +190,9 @@ export function useWhiteboardStore(id: string) {
     }
 
     function setNodeText(nodeId: string, text: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.text = text
-      triggerRef(nodes)
       editingNodeId.value = null
     }
 
@@ -206,42 +201,37 @@ export function useWhiteboardStore(id: string) {
      * 供侧边栏属性编辑器使用，与画布内联编辑器（setNodeText）区分。
      */
     function updateNodeText(nodeId: string, text: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.text = text
-      triggerRef(nodes)
     }
 
     // ── Actions: 节点样式 ──
 
     function setNodeTextColor(nodeId: string, color: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.textColor = color
-      triggerRef(nodes)
     }
 
     function setNodeBackgroundColor(nodeId: string, color: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.backgroundColor = color
-      triggerRef(nodes)
     }
 
     function setNodeBorderColor(nodeId: string, color: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.borderColor = color
-      triggerRef(nodes)
     }
 
     function applyPresetStyle(nodeId: string, preset: PresetStyle): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.backgroundColor = preset.backgroundColor
       node.borderColor = preset.borderColor
       node.textColor = preset.textColor
-      triggerRef(nodes)
     }
 
     /**
@@ -252,22 +242,20 @@ export function useWhiteboardStore(id: string) {
       connectionId: string,
       preset: Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>,
     ): void {
-      const conn = connections.value.get(connectionId)
+      const conn = connections.get(connectionId)
       if (!conn) return
       conn.lineStyle = preset.lineStyle
       conn.strokeWidth = preset.strokeWidth
       conn.strokeColor = preset.strokeColor
       conn.directed = preset.directed
-      triggerRef(connections)
     }
 
     function resetNodeStyle(nodeId: string): void {
-      const node = nodes.value.get(nodeId)
+      const node = nodes.get(nodeId)
       if (!node) return
       node.backgroundColor = undefined
       node.borderColor = undefined
       node.textColor = undefined
-      triggerRef(nodes)
     }
 
     // ===== 连线操作 =====
@@ -283,32 +271,25 @@ export function useWhiteboardStore(id: string) {
         strokeColor: CONNECTION_STROKE_COLOR,
         directed: DEFAULT_CONNECTION_DIRECTED,
       }
-      const map = new Map(connections.value)
-      if (map.has(newConnection.id)) return
-      map.set(newConnection.id, newConnection)
-      connections.value = map
+      if (connections.has(newConnection.id)) return
+      connections.set(newConnection.id, newConnection)
     }
 
     /** 删除单条连线 */
     function deleteConnection(connectionId: string): void {
-      const map = new Map(connections.value)
-      if (map.delete(connectionId)) {
-        connections.value = map
-      }
+      connections.delete(connectionId)
     }
 
     /** 删除指定节点的所有连线（当节点被删除时调用） */
     function deleteNodeConnections(nodeId: string): void {
-      const map = new Map(connections.value)
-      let changed = false
-      for (const [key, conn] of map) {
+      const toDelete: string[] = []
+      for (const [key, conn] of connections) {
         if (conn.fromNodeId === nodeId || conn.toNodeId === nodeId) {
-          map.delete(key)
-          changed = true
+          toDelete.push(key)
         }
       }
-      if (changed) {
-        connections.value = map
+      for (const key of toDelete) {
+        connections.delete(key)
       }
     }
 
@@ -346,10 +327,9 @@ export function useWhiteboardStore(id: string) {
       connectionId: string,
       partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>>,
     ): void {
-      const conn = connections.value.get(connectionId)
+      const conn = connections.get(connectionId)
       if (!conn) return
       Object.assign(conn, partial)
-      triggerRef(connections)
     }
 
     /**
@@ -370,13 +350,12 @@ export function useWhiteboardStore(id: string) {
       borderColor?: string
     }): void {
       for (const id of selectedNodeIds.value) {
-        const node = nodes.value.get(id)
+        const node = nodes.get(id)
         if (!node) continue
         if (partial.textColor !== undefined) node.textColor = partial.textColor
         if (partial.backgroundColor !== undefined) node.backgroundColor = partial.backgroundColor
         if (partial.borderColor !== undefined) node.borderColor = partial.borderColor
       }
-      triggerRef(nodes)
     }
 
     /**
@@ -390,14 +369,13 @@ export function useWhiteboardStore(id: string) {
       directed?: boolean
     }): void {
       for (const id of selectedConnectionIds.value) {
-        const conn = connections.value.get(id)
+        const conn = connections.get(id)
         if (!conn) continue
         if (partial.lineStyle !== undefined) conn.lineStyle = partial.lineStyle
         if (partial.strokeWidth !== undefined) conn.strokeWidth = partial.strokeWidth
         if (partial.strokeColor !== undefined) conn.strokeColor = partial.strokeColor
         if (partial.directed !== undefined) conn.directed = partial.directed
       }
-      triggerRef(connections)
     }
 
     /**
@@ -405,11 +383,10 @@ export function useWhiteboardStore(id: string) {
      */
     function updateSelectedNodesText(text: string): void {
       for (const id of selectedNodeIds.value) {
-        const node = nodes.value.get(id)
+        const node = nodes.get(id)
         if (!node) continue
         node.text = text
       }
-      triggerRef(nodes)
     }
 
     // ── Actions: 状态重置 ──

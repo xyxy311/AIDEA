@@ -35,25 +35,20 @@ const emit = defineEmits<{
 const active = useActiveWhiteboard()
 
 // ── Computed: 连线数据 ──
-const connection = computed(() => {
-  const found = active.board.connections.get(props.connectionId)
-  return found ? { ...found } : undefined
-})
+const connection = computed(() => active.board.connections.get(props.connectionId))
 
 // ── Computed: 两端节点 ──
 // 注意：先将 connection.value 赋值给局部变量，避免回调内 TypeScript 窄化失效
 const fromNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  const found = active.board.nodesArray.find((n) => n.id === conn.fromNodeId)
-  return found ? { ...found } : undefined
+  return active.board.nodes.get(conn.fromNodeId)
 })
 
 const toNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  const found = active.board.nodesArray.find((n) => n.id === conn.toNodeId)
-  return found ? { ...found } : undefined
+  return active.board.nodes.get(conn.toNodeId)
 })
 
 // ── 连线主体 Konva 配置 ──

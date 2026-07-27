@@ -47,15 +47,9 @@ const active = useActiveWhiteboard()
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
 const transformerRef = ref<VueKonvaRef<Konva.Transformer> | null>(null)
 
-// ── Computed: 从 store 获取最新节点数据 ──
-// 注意：必须返回新对象引用以触发下游 computed 重新计算
-// shallowRef<Map> 配合 triggerRef 时，Map 中对象引用不变，
-// Vue computed 默认按 === 比较，同引用会被视为"未变化"从而跳过通知
-const node = computed(() => {
-  const found = active.board.nodesArray.find((n) => n.id === props.nodeId)
-  if (!found) return undefined
-  return { ...found }
-})
+// ── Computed: 从 reactive Map 直接获取节点代理 ──
+// reactive Map 的 get 返回 reactive 代理，属性变化自动触发下游 computed
+const node = computed(() => active.board.nodes.get(props.nodeId))
 
 // ── Konva 节点配置 ──
 
@@ -223,8 +217,9 @@ function onTransformEnd(): void {
   const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
 
   // 世界坐标：group 偏移 + rect 在 group 内的偏移
-  const groupX = active.board.nodesArray.find((n) => n.id === props.nodeId)?.x ?? 0
-  const groupY = active.board.nodesArray.find((n) => n.id === props.nodeId)?.y ?? 0
+  const currentNode = active.board.nodes.get(props.nodeId)
+  const groupX = currentNode?.x ?? 0
+  const groupY = currentNode?.y ?? 0
   const worldX = groupX + rect.x()
   const worldY = groupY + rect.y()
 

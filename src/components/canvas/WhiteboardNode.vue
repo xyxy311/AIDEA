@@ -20,6 +20,8 @@ import {
   DEFAULT_NODE_STYLE,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
+  NODE_PADDING,
+  NODE_LINE_HEIGHT,
   PLACEHOLDER_TEXT,
   PLACEHOLDER_TEXT_COLOR,
   TRANSFORMER_ANCHOR_SIZE,
@@ -100,13 +102,16 @@ const textConfig = computed(() => {
     verticalAlign: 'middle' as const,
     fontSize: DEFAULT_NODE_STYLE.fontSize,
     fontFamily: DEFAULT_NODE_STYLE.fontFamily,
+    lineHeight: NODE_LINE_HEIGHT,
+    // 按字符换行，确保中文也能正确断行
+    wrap: 'char' as const,
     // 节点自定义字体颜色 > 全局默认；占位符用灰色
     fill: n.textColor
       ? n.textColor
       : isPlaceholder
         ? PLACEHOLDER_TEXT_COLOR
         : DEFAULT_NODE_STYLE.textColor,
-    padding: 12,
+    padding: NODE_PADDING,
   }
 })
 

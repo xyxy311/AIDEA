@@ -1,2 +1,2 @@
 export { generateId } from './id'
-export { clampPosition, measureText } from './geometry'
+export { clampPosition, measureText, calculateTextContentSize } from './geometry'

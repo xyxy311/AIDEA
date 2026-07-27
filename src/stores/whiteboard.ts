@@ -8,6 +8,9 @@ import {
   DEFAULT_NODE_TEXT,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
+  NODE_PADDING,
+  NODE_LINE_HEIGHT,
+  DEFAULT_NODE_STYLE,
   DEFAULT_LINE_STYLE,
   CONNECTION_STROKE_COLOR,
   CONNECTION_STROKE_WIDTH,
@@ -15,6 +18,7 @@ import {
   type PresetStyle,
 } from '@/constants'
 import { generateId } from '@/utils/id'
+import { calculateTextContentSize } from '@/utils/geometry'
 
 /**
  * 白板 Store 工厂 — 每个白板拥有独立的 store 实例
@@ -177,6 +181,54 @@ export function useWhiteboardStore(id: string) {
       node.y = y
       node.width = Math.max(width, MIN_NODE_WIDTH)
       node.height = Math.max(height, MIN_NODE_HEIGHT)
+      // 确保文字能完整显示（用户缩小后若放不下文字仍会自动调大）
+      fitNodeToText(nodeId)
+    }
+
+    /**
+     * 根据文本内容自动调整节点尺寸（只扩大不缩小）。
+     *
+     * 确保节点能完整显示所有文字：
+     * 1. 保证内容区至少能容纳一个字符（padding 两侧 + 一个字号）
+     * 2. 在当前宽度下模拟按字符换行，计算所需高度
+     * 3. 若某行宽度超出内容区，扩大宽度
+     * 4. 若所需高度超出当前高度，扩大高度
+     */
+    function fitNodeToText(nodeId: string): void {
+      const node = nodes.get(nodeId)
+      if (!node) return
+
+      const { fontSize, fontFamily } = DEFAULT_NODE_STYLE
+      const padding = NODE_PADDING
+      const lineHeight = NODE_LINE_HEIGHT
+
+      // 保证内容区宽度 ≥ 一个字号（否则 Konva Text 内容区为负，渲染异常）
+      const minFitWidth = padding * 2 + fontSize
+      if (node.width < minFitWidth) {
+        node.width = minFitWidth
+      }
+
+      const contentWidth = node.width - padding * 2
+
+      const contentSize = calculateTextContentSize(
+        node.text,
+        fontSize,
+        fontFamily,
+        contentWidth,
+        lineHeight,
+      )
+
+      // 有行比内容区宽（单字符即超宽）-> 扩大宽度
+      if (contentSize.width > contentWidth) {
+        node.width = contentSize.width + padding * 2
+      }
+
+      // 高度不足以容纳所有行 -> 扩大高度（至少能放一行）
+      const minFitHeight = padding * 2 + Math.ceil(fontSize * lineHeight)
+      const requiredHeight = Math.max(contentSize.height + padding * 2, minFitHeight)
+      if (requiredHeight > node.height) {
+        node.height = requiredHeight
+      }
     }
 
     // ── Actions: 文本编辑 ──
@@ -194,6 +246,7 @@ export function useWhiteboardStore(id: string) {
       if (!node) return
       node.text = text
       editingNodeId.value = null
+      fitNodeToText(nodeId)
     }
 
     /**
@@ -204,6 +257,7 @@ export function useWhiteboardStore(id: string) {
       const node = nodes.get(nodeId)
       if (!node) return
       node.text = text
+      fitNodeToText(nodeId)
     }
 
     // ── Actions: 节点样式 ──
@@ -386,6 +440,7 @@ export function useWhiteboardStore(id: string) {
         const node = nodes.get(id)
         if (!node) continue
         node.text = text
+        fitNodeToText(id)
       }
     }
 

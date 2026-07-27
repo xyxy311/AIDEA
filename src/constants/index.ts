@@ -3,11 +3,16 @@ import type { NodeStyle, LineStyle, NodePresetStyle, ConnectionPresetStyle } fro
 // ── 节点默认尺寸 ──
 export const DEFAULT_NODE_WIDTH: number = 200
 export const DEFAULT_NODE_HEIGHT: number = 120
-export const MIN_NODE_WIDTH: number = 150
-export const MIN_NODE_HEIGHT: number = 80
+
+/** Transformer 可调整的最小宽高（px，缩放为 1 时）。无上限。 */
+export const MIN_NODE_WIDTH: number = 20
+export const MIN_NODE_HEIGHT: number = 20
 
 // ── 节点内边距 ──
 export const NODE_PADDING: number = 16
+
+// ── 文本行高倍率 ──
+export const NODE_LINE_HEIGHT: number = 1.5
 
 // ── 节点圆角 ──
 export const NODE_BORDER_RADIUS: number = 8

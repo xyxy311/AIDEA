@@ -12,7 +12,6 @@ import { ChevronBack, ChevronForward } from '@vicons/ionicons5'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import NodePropertyEditor from './NodePropertyEditor.vue'
 import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
-import PresetStyles from './PresetStyles.vue'
 
 const active = useActiveWhiteboard()
 
@@ -23,11 +22,6 @@ defineProps<{
 const emit = defineEmits<{
   toggle: []
 }>()
-
-/** 当前是否有任何选中项（节点或连线） */
-const hasSelection = computed(
-  () => active.board.selectedNodeIds.size > 0 || active.board.selectedConnectionIds.size > 0,
-)
 
 /** 标题文本 */
 const title = computed(() => {
@@ -51,15 +45,13 @@ const title = computed(() => {
     <template v-if="!collapsed">
       <NScrollbar class="sidebar-scroll">
         <div class="sidebar-content">
-          <!-- 连线选中 → 连线属性编辑器 + 预设样式 -->
+          <!-- 连线选中 → 连线属性编辑器（含预设） -->
           <template v-if="active.board.selectedConnectionIds.size > 0">
             <ConnectionPropertyEditor />
-            <PresetStyles v-if="hasSelection" />
           </template>
-          <!-- 节点选中或无选中 → 节点属性编辑器 + 预设样式 -->
+          <!-- 节点选中或无选中 → 节点属性编辑器（含预设） -->
           <template v-else>
             <NodePropertyEditor />
-            <PresetStyles v-if="hasSelection" />
           </template>
         </div>
       </NScrollbar>

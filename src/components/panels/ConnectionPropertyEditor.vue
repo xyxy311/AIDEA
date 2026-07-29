@@ -4,7 +4,8 @@
  *
  * 当选中连线时，可修改该连线的线型、粗细、颜色和箭头开关。
  */
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
+import type { ConnectionPresetStyle, LineStyle } from '@/types'
 import {
   NSelect,
   NSlider,
@@ -16,6 +17,9 @@ import {
   NDivider,
   NTag,
   NButton,
+  NInput,
+  NModal,
+  NPopconfirm,
 } from 'naive-ui'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { usePresetsStore } from '@/stores/presets'
@@ -23,9 +27,9 @@ import {
   LINE_STYLE_OPTIONS,
   CONNECTION_MAX_STROKE_WIDTH,
 } from '@/constants'
-import type { LineStyle } from '@/types'
 
 const active = useActiveWhiteboard()
+const presetsStore = usePresetsStore()
 
 // 选中的连线信息
 const conn = computed(() => active.board.connections.get(active.board.selectedConnectionId))
@@ -71,17 +75,146 @@ const directed = computed<boolean | undefined>({
 
 const colorPickerMode = 'hex' as const
 
-const presetsStore = usePresetsStore()
+// ── 连线预设管理 ──
 
-function handleSaveAsPreset(): void {
-  if (!conn.value) return
-  presetsStore.addConnectionPreset({
-    name: '自定义连线',
-    lineStyle: conn.value.lineStyle,
-    strokeWidth: conn.value.strokeWidth,
-    strokeColor: conn.value.strokeColor,
-    directed: conn.value.directed,
-  })
+/** 获取 SVG dasharray 字符串（用于预览，56px 宽线段需较小 dash） */
+function getDashArray(style: LineStyle): string {
+  if (style === 'solid') return ''
+  if (style === 'dashed') return '6,4'
+  return '2,3'
+}
+
+/** 点击预设行 → 应用到选中连线 */
+function applyPreset(preset: ConnectionPresetStyle): void {
+  active.board.updateSelectedConnectionsStyle(preset)
+}
+
+/** 删除预设 */
+function handleDelete(preset: ConnectionPresetStyle): void {
+  presetsStore.deleteConnectionPreset(preset.id)
+}
+
+// ── 拖拽排序 ──
+
+const draggedIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+
+function onDragStart(index: number, e: DragEvent): void {
+  draggedIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onDragOver(index: number, e: DragEvent): void {
+  e.preventDefault()
+  if (draggedIndex.value === null || draggedIndex.value === index) return
+  dragOverIndex.value = index
+}
+
+function onDrop(index: number, e: DragEvent): void {
+  e.preventDefault()
+  if (draggedIndex.value === null) {
+    dragOverIndex.value = null
+    return
+  }
+  const fromIndex = draggedIndex.value
+  if (fromIndex === index) {
+    dragOverIndex.value = null
+    draggedIndex.value = null
+    return
+  }
+  presetsStore.reorderConnectionPresets(fromIndex, index)
+  dragOverIndex.value = null
+  draggedIndex.value = null
+}
+
+function onDragEnd(): void {
+  draggedIndex.value = null
+  dragOverIndex.value = null
+}
+
+function onDragLeave(index: number, e: DragEvent): void {
+  const target = e.target as HTMLElement
+  const relatedTarget = e.relatedTarget as HTMLElement | null
+  if (!relatedTarget || !target.contains(relatedTarget)) {
+    if (dragOverIndex.value === index) {
+      dragOverIndex.value = null
+    }
+  }
+}
+
+// ── Modal 表单 ──
+
+const showModal = ref(false)
+const modalTitle = ref('')
+const editId = ref<string | null>(null)
+const formName = ref('')
+const formLineStyle = ref<LineStyle>('solid')
+const formStrokeWidth = ref(2)
+const formStrokeColor = ref('#6b7280')
+const formDirected = ref(true)
+
+function resetForm(): void {
+  formName.value = ''
+  formLineStyle.value = 'solid'
+  formStrokeWidth.value = 2
+  formStrokeColor.value = '#6b7280'
+  formDirected.value = true
+}
+
+function openEdit(preset: ConnectionPresetStyle): void {
+  editId.value = preset.id
+  formName.value = preset.name
+  formLineStyle.value = preset.lineStyle
+  formStrokeWidth.value = preset.strokeWidth
+  formStrokeColor.value = preset.strokeColor
+  formDirected.value = preset.directed
+  modalTitle.value = '编辑预设'
+  showModal.value = true
+}
+
+function openCreate(): void {
+  editId.value = null
+  resetForm()
+  modalTitle.value = '新建预设'
+  showModal.value = true
+}
+
+function openSaveCurrent(): void {
+  editId.value = null
+  formName.value = ''
+  if (conn.value) {
+    formLineStyle.value = conn.value.lineStyle
+    formStrokeWidth.value = conn.value.strokeWidth
+    formStrokeColor.value = conn.value.strokeColor
+    formDirected.value = conn.value.directed
+  }
+  modalTitle.value = '保存为预设'
+  showModal.value = true
+}
+
+function handleSave(): void {
+  if (!formName.value.trim()) return
+  if (editId.value) {
+    presetsStore.updateConnectionPreset(editId.value, {
+      name: formName.value.trim(),
+      lineStyle: formLineStyle.value,
+      strokeWidth: formStrokeWidth.value,
+      strokeColor: formStrokeColor.value,
+      directed: formDirected.value,
+    })
+  } else {
+    presetsStore.addConnectionPreset({
+      name: formName.value.trim(),
+      lineStyle: formLineStyle.value,
+      strokeWidth: formStrokeWidth.value,
+      strokeColor: formStrokeColor.value,
+      directed: formDirected.value,
+    })
+  }
+  showModal.value = false
 }
 </script>
 
@@ -146,15 +279,136 @@ function handleSaveAsPreset(): void {
       </NFormItem>
     </NForm>
 
+    <!-- 连线预设管理区 -->
     <NDivider style="margin: 8px 0" />
-    <NButton
-      size="small"
-      quaternary
-      block
-      @click="handleSaveAsPreset"
+    <NText depth="3" class="section-title">连线预设</NText>
+
+    <div class="preset-list">
+      <div
+        v-for="(preset, index) in presetsStore.connectionPresets"
+        :key="preset.id"
+        class="preset-row"
+        :class="{
+          'is-dragging': draggedIndex === index,
+          'is-drag-over': dragOverIndex === index && draggedIndex !== null && draggedIndex !== index,
+        }"
+        @click="applyPreset(preset)"
+        @dragover="onDragOver(index, $event)"
+        @drop="onDrop(index, $event)"
+        @dragenter.prevent="dragOverIndex = index"
+        @dragleave="onDragLeave(index, $event)"
+      >
+        <!-- 拖拽手柄 -->
+        <span
+          class="drag-handle"
+          draggable="true"
+          @dragstart.stop="onDragStart(index, $event)"
+          @click.stop
+        >
+          ⋮⋮
+        </span>
+
+        <!-- 连线预览：56×14 SVG 线段 -->
+        <svg
+          class="connection-preview-svg"
+          width="56"
+          height="14"
+          viewBox="0 0 56 14"
+          @click.stop
+        >
+          <line
+            x1="0"
+            y1="7"
+            x2="48"
+            y2="7"
+            :stroke="preset.strokeColor"
+            :stroke-width="Math.min(preset.strokeWidth, 5)"
+            :stroke-dasharray="getDashArray(preset.lineStyle)"
+            stroke-linecap="round"
+          />
+          <polygon
+            v-if="preset.directed"
+            points="46,3 54,7 46,11"
+            :fill="preset.strokeColor"
+          />
+        </svg>
+
+        <!-- 预设名称 -->
+        <NText class="preset-name" depth="2">{{ preset.name }}</NText>
+
+        <!-- 编辑按钮 -->
+        <NButton
+          size="tiny"
+          quaternary
+          class="action-btn"
+          @click.stop="openEdit(preset)"
+        >
+          ✎
+        </NButton>
+
+        <!-- 删除按钮（带确认） -->
+        <NPopconfirm @positive-click="handleDelete(preset)">
+          <template #trigger>
+            <NButton
+              size="tiny"
+              quaternary
+              class="action-btn"
+              @click.stop
+            >
+              ✕
+            </NButton>
+          </template>
+          确定删除预设「{{ preset.name }}」？
+        </NPopconfirm>
+      </div>
+
+      <!-- 空状态 -->
+      <div v-if="presetsStore.connectionPresets.length === 0" class="preset-empty">
+        <NText depth="3">暂无预设</NText>
+      </div>
+    </div>
+
+    <!-- 底部操作按钮 -->
+    <div class="preset-actions">
+      <NButton size="tiny" @click="openCreate">+ 新建预设</NButton>
+      <NButton size="tiny" @click="openSaveCurrent">保存当前为预设</NButton>
+    </div>
+
+    <!-- 编辑 / 新建 / 保存为预设 Modal -->
+    <NModal
+      v-model:show="showModal"
+      preset="card"
+      :title="modalTitle"
+      style="width: 380px"
     >
-      保存为连线预设
-    </NButton>
+      <NForm label-placement="top" :show-feedback="false">
+        <NFormItem label="名称">
+          <NInput v-model:value="formName" placeholder="预设名称" />
+        </NFormItem>
+        <NFormItem label="线型">
+          <NSelect v-model:value="formLineStyle" :options="LINE_STYLE_OPTIONS" />
+        </NFormItem>
+        <NFormItem label="粗细">
+          <NSlider
+            v-model:value="formStrokeWidth"
+            :min="1"
+            :max="CONNECTION_MAX_STROKE_WIDTH"
+          />
+        </NFormItem>
+        <NFormItem label="颜色">
+          <NColorPicker v-model:value="formStrokeColor" />
+        </NFormItem>
+        <NFormItem label="箭头">
+          <NSwitch v-model:value="formDirected" />
+        </NFormItem>
+      </NForm>
+      <template #footer>
+        <div class="modal-footer">
+          <NButton @click="showModal = false">取消</NButton>
+          <NButton type="primary" @click="handleSave">保存</NButton>
+        </div>
+      </template>
+    </NModal>
   </div>
 
   <div v-else class="property-empty">
@@ -165,6 +419,13 @@ function handleSaveAsPreset(): void {
 <style scoped>
 .property-editor {
   padding: 8px 0;
+}
+
+.section-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0;
 }
 
 .property-empty {
@@ -192,5 +453,107 @@ function handleSaveAsPreset(): void {
   margin-bottom: 12px;
   display: flex;
   align-items: center;
+}
+
+/* ── 预设列表 ── */
+
+.preset-list {
+  max-height: 280px;
+  overflow-y: auto;
+  position: relative;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  gap: 6px;
+  position: relative;
+  user-select: none;
+}
+
+.preset-row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.preset-row.is-dragging {
+  opacity: 0.35;
+}
+
+.preset-row.is-drag-over::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background-color: #3b82f6;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #999;
+  font-size: 14px;
+  letter-spacing: -3px;
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+  user-select: none;
+}
+
+.drag-handle:hover {
+  color: #555;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.connection-preview-svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.preset-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-btn {
+  flex-shrink: 0;
+}
+
+.preset-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 60px;
+}
+
+.preset-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.preset-actions :deep(.n-button) {
+  font-size: 12px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

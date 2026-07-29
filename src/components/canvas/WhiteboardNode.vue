@@ -11,22 +11,17 @@
  * - 双击 → 开始文本编辑（emit dblclick）
  * - Transformer → 调整大小（transformend 时同步尺寸到 store）
  */
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import {
   DEFAULT_NODE_STYLE,
-  MIN_NODE_WIDTH,
-  MIN_NODE_HEIGHT,
   NODE_PADDING,
   NODE_LINE_HEIGHT,
   PLACEHOLDER_TEXT,
   PLACEHOLDER_TEXT_COLOR,
-  TRANSFORMER_ANCHOR_SIZE,
-  TRANSFORMER_BORDER_STROKE,
-  TRANSFORMER_BORDER_DASH,
 } from '@/constants'
 
 // ── Props ──
@@ -47,7 +42,6 @@ const active = useActiveWhiteboard()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
-const transformerRef = ref<VueKonvaRef<Konva.Transformer> | null>(null)
 
 // ── Computed: 从 reactive Map 直接获取节点代理 ──
 // reactive Map 的 get 返回 reactive 代理，属性变化自动触发下游 computed
@@ -115,46 +109,7 @@ const textConfig = computed(() => {
   }
 })
 
-/** Transformer 配置 */
-const transformerConfig = {
-  anchorSize: TRANSFORMER_ANCHOR_SIZE,
-  borderStroke: TRANSFORMER_BORDER_STROKE,
-  borderDash: TRANSFORMER_BORDER_DASH,
-  enabledAnchors: [
-    'top-left',
-    'top-right',
-    'bottom-left',
-    'bottom-right',
-  ] as const,
-  rotateEnabled: false,
-  keepRatio: false,
-  /** 视觉最小尺寸约束：小于最小尺寸时回退到旧尺寸 */
-  boundBoxFunc: (
-    oldBox: { width: number; height: number },
-    newBox: { width: number; height: number },
-  ) => {
-    if (newBox.width < MIN_NODE_WIDTH || newBox.height < MIN_NODE_HEIGHT) {
-      return oldBox
-    }
-    return newBox
-  },
-}
 
-// ── 选中状态变化时重新绑定 Transformer ──
-watch(
-  () => props.isSelected,
-  async (selected) => {
-    if (selected) {
-      await nextTick()
-      const rect = rectRef.value?.getNode()
-      const transformer = transformerRef.value?.getNode()
-      if (transformer && rect) {
-        transformer.nodes([rect])
-        transformer.getLayer()?.batchDraw()
-      }
-    }
-  },
-)
 
 // ── 事件处理 ──
 
@@ -169,81 +124,69 @@ function onDblClick(): void {
   emit('dblclick', props.nodeId)
 }
 
-/** 拖拽开始：自动选中（支持 Ctrl 多选） */
-function onDragStart(): void {
-  // 拖拽开始时，先检查是否已在多选集合中；若已在则保持多选，不再触发 select
+/** 拖拽开始时所有选中节点的初始位置快照（用于多选同步移动） */
+let dragStartPositions: Map<string, { x: number; y: number }> = new Map()
+/** 被拖拽节点在 dragstart 时的位置（用于计算 delta） */
+let draggedStartPos: { x: number; y: number } = { x: 0, y: 0 }
+
+/** 拖拽开始：自动选中（支持 Ctrl 多选），记录多选位置快照 */
+function onDragStart(e: KonvaEventObject<DragEvent>): void {
   const board = active.board
+  // 记录被拖节点起始位置（固定为起点，用于计算总 delta，不在 move 中更新）
+  draggedStartPos = { x: e.target.x(), y: e.target.y() }
+
   if (board.selectedNodeIds.has(props.nodeId)) {
-    // 已在选中集，不改变选择（保持多选状态）
+    // 已在选中集：记录所有选中节点初始位置，保持多选状态
+    dragStartPositions.clear()
+    board.selectedNodeIds.forEach((id) => {
+      const n = board.nodes.get(id)
+      if (n) dragStartPositions.set(id, { x: n.x, y: n.y })
+    })
     return
   }
   // 未选中，触发单选（拖拽时不应多选追加，用户体验更好）
   emit('select', props.nodeId, false)
+  // 单选情况下记录自身位置（统一逻辑）
+  dragStartPositions.clear()
+  dragStartPositions.set(props.nodeId, { x: e.target.x(), y: e.target.y() })
 }
 
-/** 拖拽中：实时同步位置到 store（使连线端点实时跟随） */
+/** 拖拽中：同步被拖节点 + 其他选中节点跟随总 delta */
 function onDragMove(e: KonvaEventObject<DragEvent>): void {
-  active.board.moveNode(props.nodeId, e.target.x(), e.target.y())
+  const board = active.board
+  // 总 delta：当前位置相对拖拽起点的偏移（draggedStartPos 固定为起点，不更新）
+  const deltaX = e.target.x() - draggedStartPos.x
+  const deltaY = e.target.y() - draggedStartPos.y
+
+  // 同步被拖节点位置（使连线端点实时跟随）
+  board.moveNode(props.nodeId, e.target.x(), e.target.y())
+
+  // 同步其他选中节点：从各自初始位置叠加总 delta
+  dragStartPositions.forEach((start, id) => {
+    if (id === props.nodeId) return
+    board.moveNode(id, start.x + deltaX, start.y + deltaY)
+  })
 }
 
-/** 拖拽结束：同步最终位置到 store */
+/** 拖拽结束：最终同步 + 清空快照 */
 function onDragEnd(e: KonvaEventObject<DragEvent>): void {
-  const newX: number = e.target.x()
-  const newY: number = e.target.y()
-  active.board.moveNode(props.nodeId, newX, newY)
+  const board = active.board
+  const deltaX = e.target.x() - draggedStartPos.x
+  const deltaY = e.target.y() - draggedStartPos.y
+
+  board.moveNode(props.nodeId, e.target.x(), e.target.y())
+  dragStartPositions.forEach((start, id) => {
+    if (id === props.nodeId) return
+    board.moveNode(id, start.x + deltaX, start.y + deltaY)
+  })
+
+  dragStartPositions.clear()
 }
 
-/**
- * 变换结束：将 Transform 的效果固化到节点尺寸和位置
- *
- * Konva Transformer 通过修改被附着节点的 scale 和内部偏移实现缩放，
- * 需要将其"烘焙"为 width/height 和组级别的位置（x/y）。
- *
- * 坐标关系：
- *   世界坐标 = group.x + rect.x
- *   视觉尺寸 = rect.width × rect.scaleX
- *
- * 流程：
- *   1. 读取 rect 的当前 scale 和内部偏移
- *   2. 计算视觉尺寸和世界坐标
- *   3. 重置 rect 的 scale=1、内部偏移=0
- *   4. 将视觉尺寸和世界坐标写入 store
- *   5. 重新附着 Transformer
- */
-function onTransformEnd(): void {
-  const rect = rectRef.value?.getNode()
-  if (!rect) return
-
-  const scaleX = rect.scaleX()
-  const scaleY = rect.scaleY()
-
-  // 视觉尺寸 = 原始尺寸 × 缩放因子
-  const newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)
-  const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
-
-  // 世界坐标：group 偏移 + rect 在 group 内的偏移
-  const currentNode = active.board.nodes.get(props.nodeId)
-  const groupX = currentNode?.x ?? 0
-  const groupY = currentNode?.y ?? 0
-  const worldX = groupX + rect.x()
-  const worldY = groupY + rect.y()
-
-  // 重置 rect 至 group 原点，scale 归 1
-  rect.x(0)
-  rect.y(0)
-  rect.scaleX(1)
-  rect.scaleY(1)
-
-  // 写入 store（group 级别的位置 + 新尺寸）
-  active.board.resizeNode(props.nodeId, worldX, worldY, newWidth, newHeight)
-
-  // 重新附着 Transformer，使其适应新尺寸
-  const transformer = transformerRef.value?.getNode()
-  if (transformer) {
-    transformer.nodes([rect])
-    transformer.getLayer()?.batchDraw()
-  }
-}
+defineExpose({
+  /** 返回底层 Konva.Rect 实例，供父组件全局 Transformer 附着 */
+  getRectNode: () => rectRef.value?.getNode() ?? null,
+})
 </script>
 
 <template>
@@ -260,11 +203,5 @@ function onTransformEnd(): void {
   >
     <v-rect ref="rectRef" :config="rectConfig" />
     <v-text :config="textConfig" />
-    <v-transformer
-      v-if="isSelected"
-      ref="transformerRef"
-      :config="transformerConfig"
-      @transformend="onTransformEnd"
-    />
   </v-group>
 </template>

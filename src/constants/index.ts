@@ -64,6 +64,23 @@ export const TRANSFORMER_ANCHOR_CORNER_RADIUS: number = 2
 export const TRANSFORMER_BORDER_STROKE: string = '#3b82f6'
 export const TRANSFORMER_BORDER_DASH: [number, number] = [4, 4]
 
+// ── 框选（Marquee Selection）──
+
+/** 框选矩形填充色（半透明蓝） */
+export const MARQUEE_FILL_COLOR: string = 'rgba(59, 130, 246, 0.15)'
+
+/** 框选矩形描边色 */
+export const MARQUEE_STROKE_COLOR: string = '#3b82f6'
+
+/** 框选矩形虚线样式 */
+export const MARQUEE_STROKE_DASH: number[] = [4, 4]
+
+/** 框选矩形描边宽度 */
+export const MARQUEE_STROKE_WIDTH: number = 1
+
+/** 框选激活阈值（世界坐标 px）：鼠标按下后移动超过此距离才开始框选，避免与单击取消选中冲突 */
+export const MARQUEE_ACTIVATE_THRESHOLD: number = 5
+
 // ── 占位文本 ──
 export const PLACEHOLDER_TEXT: string = '双击编辑'
 export const PLACEHOLDER_TEXT_COLOR: string = '#9ca3af'

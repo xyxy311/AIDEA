@@ -395,6 +395,26 @@ export function useWhiteboardStore(id: string) {
     }
 
     /**
+     * 批量设置选中节点（供框选使用）
+     * - additive=false（默认）：替换当前选中为 ids，并清空连线选中（与 selectNode 互斥语义一致）
+     * - additive=true：将 ids 追加到当前选中节点集合（去重），清空连线选中
+     */
+    function setSelectedNodes(ids: string[], additive?: boolean): void {
+      // 节点与连线互斥：清空连线选中
+      selectedConnectionIds.value = new Set()
+
+      if (additive) {
+        const newSet = new Set(selectedNodeIds.value)
+        for (const id of ids) {
+          newSet.add(id)
+        }
+        selectedNodeIds.value = newSet
+      } else {
+        selectedNodeIds.value = new Set(ids)
+      }
+    }
+
+    /**
      * 批量更新所有选中节点的样式属性
      * 仅修改 selectedNodeIds 中的节点，不影响其他节点
      */
@@ -502,6 +522,7 @@ export function useWhiteboardStore(id: string) {
       updateConnection,
       applyConnectionPreset,
       clearSelection,
+      setSelectedNodes,
 
       updateSelectedNodesStyle,
       updateSelectedConnectionsStyle,

@@ -8,17 +8,25 @@
  * 3. 连接所有 composables 到 Store
  * 4. 编排节点、连线与编辑器之间的交互
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import { useStageSize } from '@/composables/useStageSize'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
 import { useCanvasNavigation } from '@/composables/useCanvasNavigation'
 import { useConnectionCreation } from '@/composables/useConnectionCreation'
+import { useMarqueeSelection } from '@/composables/useMarqueeSelection'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
-import { CANVAS_BACKGROUND_COLOR } from '@/constants'
+import {
+  CANVAS_BACKGROUND_COLOR,
+  MIN_NODE_WIDTH,
+  MIN_NODE_HEIGHT,
+  TRANSFORMER_ANCHOR_SIZE,
+  TRANSFORMER_BORDER_STROKE,
+  TRANSFORMER_BORDER_DASH,
+} from '@/constants'
 import WhiteboardNode from './WhiteboardNode.vue'
 import WhiteboardConnection from './WhiteboardConnection.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
@@ -76,6 +84,119 @@ const canvasEvents = useCanvasEvents()
 // ── 画布导航（平移 + 缩放） ──
 const nav = useCanvasNavigation()
 
+// ── 框选 ──
+const marquee = useMarqueeSelection()
+// 解构响应式属性供模板自动解包
+const { isMarqueeDragging, marqueeRectConfig } = marquee
+
+// ── 全局 Transformer（替代每节点独立 Transformer） ──
+
+/** 全局 Transformer 引用 */
+const transformerRef = ref<VueKonvaRef<Konva.Transformer> | null>(null)
+
+/** 全局 Transformer 配置 */
+const transformerConfig = {
+  anchorSize: TRANSFORMER_ANCHOR_SIZE,
+  borderStroke: TRANSFORMER_BORDER_STROKE,
+  borderDash: TRANSFORMER_BORDER_DASH,
+  enabledAnchors: [
+    'top-left',
+    'top-right',
+    'bottom-left',
+    'bottom-right',
+  ] as const,
+  rotateEnabled: false,
+  keepRatio: false,
+  /**
+   * 禁止越界翻转：拖动柄越过对角线时 newBox 宽高会变负/过小，
+   * 此时回退到 oldBox 阻止翻转。多节点时 box 为整体选择框。
+   */
+  boundBoxFunc: (
+    oldBox: { x: number; y: number; width: number; height: number },
+    newBox: { x: number; y: number; width: number; height: number },
+  ) => {
+    if (newBox.width < MIN_NODE_WIDTH || newBox.height < MIN_NODE_HEIGHT) {
+      return oldBox
+    }
+    return newBox
+  },
+}
+
+/** 收集 WhiteboardNode 组件实例（id -> 实例），用于获取 Konva.Rect 供 Transformer 附着 */
+const nodeInstances = new Map<string, { getRectNode: () => Konva.Rect | null }>()
+
+/** v-for 节点的 ref 函数：挂载时收集实例，卸载时移除 */
+function setNodeRef(id: string, el: unknown): void {
+  if (el && typeof el === 'object' && 'getRectNode' in el) {
+    nodeInstances.set(id, el as { getRectNode: () => Konva.Rect | null })
+  } else {
+    nodeInstances.delete(id)
+  }
+}
+
+/** 根据当前选中节点，收集其 Konva.Rect 并附着到全局 Transformer */
+function attachTransformer(): void {
+  const tr = transformerRef.value?.getNode()
+  if (!tr) return
+  const ids = Array.from(active.board.selectedNodeIds)
+  const rects: Konva.Rect[] = []
+  for (const id of ids) {
+    const inst = nodeInstances.get(id)
+    const rect = inst?.getRectNode?.()
+    if (rect) rects.push(rect)
+  }
+  tr.nodes(rects)
+  tr.getLayer()?.batchDraw()
+}
+
+/** 选中节点变化时重新附着 Transformer（nextTick 确保子组件已渲染） */
+watch(
+  () => Array.from(active.board.selectedNodeIds),
+  async () => {
+    await nextTick()
+    attachTransformer()
+  },
+)
+
+/**
+ * 全局 Transformer 变换结束：遍历所有附着节点，将 scale 烘焙为 width/height
+ *
+ * Konva Transformer resize 时只改节点的 scaleX/scaleY（不改 width/height），
+ * 需在 transformend 时固化：newWidth = rect.width * scaleX，重置 scale=1。
+ * 坐标：rect 在 v-group 内，worldX = node.x(=group.x) + rect.x()（group 内偏移）。
+ */
+function onTransformEnd(): void {
+  const tr = transformerRef.value?.getNode()
+  if (!tr) return
+  const nodes = tr.nodes() // Konva.Rect[]
+  for (const rect of nodes) {
+    const group = rect.getParent()
+    const nodeId = group?.name?.()
+    if (!nodeId) continue
+
+    const scaleX = rect.scaleX()
+    const scaleY = rect.scaleY()
+    const newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)
+    const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
+
+    const node = active.board.nodes.get(nodeId)
+    const worldX = (node?.x ?? 0) + rect.x()
+    const worldY = (node?.y ?? 0) + rect.y()
+
+    // 重置 rect 的 scale 与 group 内偏移
+    rect.x(0)
+    rect.y(0)
+    rect.scaleX(1)
+    rect.scaleY(1)
+
+    // 写入 store（resizeNode 内部会 fitNodeToText）
+    active.board.resizeNode(nodeId, worldX, worldY, newWidth, newHeight)
+  }
+  // 烘焙后重新附着 Transformer 适应新尺寸
+  attachTransformer()
+  tr.getLayer()?.batchDraw()
+}
+
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
   if (!active.board.editingNodeId) return null
@@ -116,8 +237,12 @@ function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
 
 // ── Stage 事件包装 ──
 
-/** 处理画布点击 */
+/** 处理画布点击：框选命中后跳过取消选中（避免清空刚框选的节点） */
 function handleStageClick(e: unknown): void {
+  if (marquee.suppressNextClick.value) {
+    marquee.suppressNextClick.value = false
+    return
+  }
   canvasEvents.handleStageClick(e as KonvaEventObject<MouseEvent>)
 }
 
@@ -146,18 +271,38 @@ function handleStageDragEnd(e: unknown): void {
   nav.handleDragEnd(e as KonvaEventObject<DragEvent>)
 }
 
-// ── 连线创建事件（委托给 useConnectionCreation composable） ──
+// ── 鼠标事件分流：框选 / 连线创建 / 平移 ──
 
+/** mousedown：Shift 走连线创建，PanMode 走平移，其余空白走框选 */
 function handleStageMouseDown(e: unknown): void {
-  connMouseDown(e as KonvaEventObject<MouseEvent>)
+  const ke = e as KonvaEventObject<MouseEvent>
+  if (isShiftHeld.value) {
+    connMouseDown(ke)
+    return
+  }
+  if (nav.isPanMode.value) return
+  marquee.handleMouseDown(ke)
 }
 
+/** mousemove：连线创建模式优先；否则交给框选（框选激活前也需接收 move 以超过阈值激活） */
 function handleStageMouseMove(e: unknown): void {
-  connMouseMove(e as KonvaEventObject<MouseEvent>)
+  const ke = e as KonvaEventObject<MouseEvent>
+  // 连线创建拖拽中（Shift 模式）优先处理临时连线终点
+  if (active.board.connectingFrom !== null) {
+    connMouseMove(ke)
+    return
+  }
+  // 否则交给框选：内部 pendingStart 不存在时 no-op；
+  // 存在时检测阈值并激活。注意不能仅凭 isMarqueeDragging 分流，
+  // 否则激活前 handleMouseMove 永不执行，框选陷入死锁无法启动。
+  marquee.handleMouseMove(ke)
 }
 
+/** mouseup：始终调用 marquee.handleMouseUp（内部判断并清理状态），再走连线收尾 */
 function handleStageMouseUp(e: unknown): void {
-  connMouseUp(e as KonvaEventObject<MouseEvent>)
+  const ke = e as KonvaEventObject<MouseEvent>
+  marquee.handleMouseUp(ke)
+  connMouseUp(ke)
 }
 </script>
 
@@ -219,11 +364,25 @@ function handleStageMouseUp(e: unknown): void {
         <WhiteboardNode
           v-for="node in active.board.nodesArray"
           :key="node.id"
+          :ref="(el: unknown) => setNodeRef(node.id, el)"
           :node-id="node.id"
           :is-selected="active.board.selectedNodeIds.has(node.id)"
           :draggable="!isShiftHeld && !nav.isPanMode.value"
           @select="(nodeId: string, ctrlKey?: boolean) => active.board.selectNode(nodeId, ctrlKey)"
           @dblclick="startTextEdit"
+        />
+
+        <!-- 全局 Transformer：单选/多选统一变换（替代每节点独立 Transformer） -->
+        <v-transformer
+          ref="transformerRef"
+          :config="transformerConfig"
+          @transformend="onTransformEnd"
+        />
+
+        <!-- 框选矩形（listening:false 不参与事件，仅视觉） -->
+        <v-rect
+          v-if="isMarqueeDragging"
+          :config="marqueeRectConfig"
         />
       </v-layer>
     </v-stage>

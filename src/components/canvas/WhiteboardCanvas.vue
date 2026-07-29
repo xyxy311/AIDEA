@@ -16,6 +16,7 @@ import { useCanvasEvents } from '@/composables/useCanvasEvents'
 import { useCanvasNavigation } from '@/composables/useCanvasNavigation'
 import { useConnectionCreation } from '@/composables/useConnectionCreation'
 import { useMarqueeSelection } from '@/composables/useMarqueeSelection'
+import { useNodeDragging } from '@/composables/useNodeDragging'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
@@ -36,40 +37,22 @@ import OverviewMap from './OverviewMap.vue'
 const active = useActiveWhiteboard()
 
 // ── Stage 尺寸 ──
-const { stageWidth, stageHeight } = useStageSize()
+const stage = useStageSize()
 
 /** Konva Stage 配置 */
 const stageConfig = computed(() => ({
-  width: stageWidth.value,
-  height: stageHeight.value,
+  width: stage.stageWidth.value,
+  height: stage.stageHeight.value,
 }))
 
 // ── 连线创建交互 ──
-// 注意：模板中使用的 ref/computed 必须解构到顶层以触发 Vue 模板自动解包
-const {
-  isShiftHeld,
-  tempConnConfig,
-  handleMouseDown: connMouseDown,
-  handleMouseMove: connMouseMove,
-  handleMouseUp: connMouseUp,
-  setup: connSetup,
-  teardown: connTeardown,
-} = useConnectionCreation()
+const conn = useConnectionCreation()
 
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
 const stageContainerRef = ref<HTMLDivElement | null>(null)
 
 /** Konva Stage 引用（用于获取底层 Konva 实例） */
 const stageRef = ref<VueKonvaRef<Konva.Stage> | null>(null)
-
-// ── 生命周期：注册/注销连线创建键盘事件 ──
-onMounted(() => {
-  connSetup()
-})
-
-onUnmounted(() => {
-  connTeardown()
-})
 
 // ── 文本编辑状态 ──
 /** 是否正在编辑（用于禁用快捷键） */
@@ -86,8 +69,9 @@ const nav = useCanvasNavigation()
 
 // ── 框选 ──
 const marquee = useMarqueeSelection()
-// 解构响应式属性供模板自动解包
-const { isMarqueeDragging, marqueeRectConfig } = marquee
+
+// ── 节点拖动 ──
+const nodeDrag = useNodeDragging()
 
 // ── 全局 Transformer（替代每节点独立 Transformer） ──
 
@@ -271,38 +255,43 @@ function handleStageDragEnd(e: unknown): void {
   nav.handleDragEnd(e as KonvaEventObject<DragEvent>)
 }
 
-// ── 鼠标事件分流：框选 / 连线创建 / 平移 ──
+// ── 鼠标事件分流：连线创建 / 节点拖动 / 框选 / 平移 ──
 
-/** mousedown：Shift 走连线创建，PanMode 走平移，其余空白走框选 */
+/** mousedown：Shift 走连线创建，PanMode 走平移，命中节点走拖动，空白走框选 */
 function handleStageMouseDown(e: unknown): void {
   const ke = e as KonvaEventObject<MouseEvent>
-  if (isShiftHeld.value) {
-    connMouseDown(ke)
+  if (conn.isShiftHeld.value) {
+    conn.handleMouseDown(ke)
     return
   }
   if (nav.isPanMode.value) return
+  // 命中节点则由节点拖动接管，否则交给框选
+  if (nodeDrag.handleMouseDown(ke)) return
   marquee.handleMouseDown(ke)
 }
 
-/** mousemove：连线创建模式优先；否则交给框选（框选激活前也需接收 move 以超过阈值激活） */
+/** mousemove：连线创建中优先；节点拖动中优先；否则交给框选（激活前也需接收 move 以超过阈值激活） */
 function handleStageMouseMove(e: unknown): void {
   const ke = e as KonvaEventObject<MouseEvent>
   // 连线创建拖拽中（Shift 模式）优先处理临时连线终点
   if (active.board.connectingFrom !== null) {
-    connMouseMove(ke)
+    conn.handleMouseMove(ke)
     return
   }
-  // 否则交给框选：内部 pendingStart 不存在时 no-op；
-  // 存在时检测阈值并激活。注意不能仅凭 isMarqueeDragging 分流，
-  // 否则激活前 handleMouseMove 永不执行，框选陷入死锁无法启动。
-  marquee.handleMouseMove(ke)
+  // 节点拖动：内部判断 pendingStart 是否存在，不存在时 no-op
+  nodeDrag.handleMouseMove(ke)
+  // 节点拖动激活后不再交给框选（两者 pending 互斥，但显式判断更清晰）
+  if (!nodeDrag.isDragging.value) {
+    marquee.handleMouseMove(ke)
+  }
 }
 
-/** mouseup：始终调用 marquee.handleMouseUp（内部判断并清理状态），再走连线收尾 */
+/** mouseup：三者各自内部判断状态并清理 */
 function handleStageMouseUp(e: unknown): void {
   const ke = e as KonvaEventObject<MouseEvent>
+  nodeDrag.handleMouseUp(ke)
   marquee.handleMouseUp(ke)
-  connMouseUp(ke)
+  conn.handleMouseUp(ke)
 }
 </script>
 
@@ -310,7 +299,7 @@ function handleStageMouseUp(e: unknown): void {
   <div
     ref="stageContainerRef"
     class="canvas-wrapper"
-    :class="{ 'pan-mode': nav.isPanMode.value, 'shift-held': isShiftHeld }"
+    :class="{ 'pan-mode': nav.isPanMode.value, 'shift-held': conn.isShiftHeld.value }"
   >
     <!-- Konva Stage -->
     <v-stage
@@ -335,8 +324,8 @@ function handleStageMouseUp(e: unknown): void {
         <!-- 背景矩形 -->
         <v-rect
           :config="{
-            width: stageWidth,
-            height: stageHeight,
+            width: stage.stageWidth.value,
+            height: stage.stageHeight.value,
             fill: CANVAS_BACKGROUND_COLOR,
             listening: false,
           }"
@@ -357,7 +346,7 @@ function handleStageMouseUp(e: unknown): void {
         <!-- 临时连线（拖拽创建中，虚线） -->
         <v-line
           v-if="active.board.connectingFrom !== null"
-          :config="tempConnConfig"
+          :config="conn.tempConnConfig.value"
         />
 
         <!-- 节点列表（上层，覆盖连线） -->
@@ -367,8 +356,6 @@ function handleStageMouseUp(e: unknown): void {
           :ref="(el: unknown) => setNodeRef(node.id, el)"
           :node-id="node.id"
           :is-selected="active.board.selectedNodeIds.has(node.id)"
-          :draggable="!isShiftHeld && !nav.isPanMode.value"
-          @select="(nodeId: string, ctrlKey?: boolean) => active.board.selectNode(nodeId, ctrlKey)"
           @dblclick="startTextEdit"
         />
 
@@ -381,8 +368,8 @@ function handleStageMouseUp(e: unknown): void {
 
         <!-- 框选矩形（listening:false 不参与事件，仅视觉） -->
         <v-rect
-          v-if="isMarqueeDragging"
-          :config="marqueeRectConfig"
+          v-if="marquee.isMarqueeDragging.value"
+          :config="marquee.marqueeRectConfig.value"
         />
       </v-layer>
     </v-stage>

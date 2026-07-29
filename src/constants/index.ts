@@ -81,6 +81,9 @@ export const MARQUEE_STROKE_WIDTH: number = 1
 /** 框选激活阈值（世界坐标 px）：鼠标按下后移动超过此距离才开始框选，避免与单击取消选中冲突 */
 export const MARQUEE_ACTIVATE_THRESHOLD: number = 5
 
+/** 节点拖动激活阈值（像素，世界坐标），低于此距离视为点击而非拖动 */
+export const NODE_DRAG_THRESHOLD: number = 5
+
 // ── 占位文本 ──
 export const PLACEHOLDER_TEXT: string = '双击编辑'
 export const PLACEHOLDER_TEXT_COLOR: string = '#9ca3af'

@@ -148,6 +148,14 @@ export function useConnectionCreation() {
     window.removeEventListener('keyup', handleWindowKeyUp)
   }
 
+  onMounted(() => {
+    setup()
+  })
+
+  onUnmounted(() => {
+    teardown()
+  })
+
   return {
     isShiftHeld,
     tempConnEnd,

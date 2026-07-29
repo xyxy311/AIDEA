@@ -44,13 +44,17 @@ export const useProjectStore = defineStore('project', () => {
     projectName.value = name
   }
 
-  function addWhiteboard(name?: string): string {
-    const id = generateId()
+  function addWhiteboard(name?: string, id?: string): string {
+    const wbId = id ?? generateId()
+    // 若该 ID 已被占用（例如节点已关联白板后重复创建），直接返回不重复添加
+    if (whiteboards.value.some((w) => w.id === wbId)) {
+      return wbId
+    }
     whiteboards.value.push({
-      id,
+      id: wbId,
       name: name ?? '新白板',
     })
-    return id
+    return wbId
   }
 
   function removeWhiteboard(id: string): void {

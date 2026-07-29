@@ -100,6 +100,8 @@ export function useMarqueeSelection() {
    * 注意：不在此处清空选中，由 click 处理器负责单击取消选中
    */
   function handleMouseDown(e: KonvaEventObject<MouseEvent>): void {
+    // 仅响应左键；右键留给 contextmenu，不启动框选
+    if (e.evt.button !== 0) return
     // 仅响应空白区域（target === currentTarget 即 Stage 本身）
     if (e.target !== e.currentTarget) return
     const pos = getWorldPos(e)

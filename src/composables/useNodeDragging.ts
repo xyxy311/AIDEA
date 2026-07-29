@@ -70,6 +70,8 @@ export function useNodeDragging() {
    * @returns true 表示命中节点（已接管），false 表示非节点（交由框选处理）
    */
   function handleMouseDown(e: KonvaEventObject<MouseEvent>): boolean {
+    // 仅响应左键；右键留给 contextmenu，避免右键点节点被当成 click 触发 selectNode 清空多选
+    if (e.evt.button !== 0) return false
     // 空白区域（Stage 自身），交由框选
     if (e.target === e.currentTarget) return false
 

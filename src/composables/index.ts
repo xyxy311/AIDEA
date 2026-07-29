@@ -1,3 +1,5 @@
 export { useStageSize } from './useStageSize'
 export { useKeyboardShortcuts } from './useKeyboardShortcuts'
 export { useCanvasEvents } from './useCanvasEvents'
+export { useContextMenu, type ContextMenuItem } from './useContextMenu'
+export { useNodeWhiteboardLink } from './useNodeWhiteboardLink'

@@ -99,8 +99,25 @@ export function useWhiteboardStore(id: string) {
 
     // ── Actions: 节点 CRUD ──
 
-    function addNode(x: number, y: number, text?: string): string {
-      const nodeId = generateId()
+    /**
+     * 创建节点
+     *
+     * 默认行为：自动选中新节点并进入编辑态（双击空白创建场景）。
+     * 可通过 options 关闭自动选中/编辑，或指定 id / hasWhiteboard
+     * （用于组合场景：新节点 ID 与新白板 ID 共用）。
+     */
+    function addNode(
+      x: number,
+      y: number,
+      text?: string,
+      options?: {
+        id?: string
+        hasWhiteboard?: boolean
+        select?: boolean
+        edit?: boolean
+      },
+    ): string {
+      const nodeId = options?.id ?? generateId()
       const node: WhiteboardNode = {
         id: nodeId,
         x,
@@ -109,11 +126,18 @@ export function useWhiteboardStore(id: string) {
         height: DEFAULT_NODE_HEIGHT,
         text: text ?? DEFAULT_NODE_TEXT,
       }
+      if (options?.hasWhiteboard) {
+        node.hasWhiteboard = true
+      }
 
       nodes.set(nodeId, node)
 
-      selectedNodeIds.value = new Set([nodeId])
-      editingNodeId.value = nodeId
+      if (options?.select !== false) {
+        selectedNodeIds.value = new Set([nodeId])
+      }
+      if (options?.edit !== false) {
+        editingNodeId.value = nodeId
+      }
 
       return nodeId
     }
@@ -247,6 +271,7 @@ export function useWhiteboardStore(id: string) {
       node.text = text
       editingNodeId.value = null
       fitNodeToText(nodeId)
+      syncLinkedWhiteboardName(nodeId, text)
     }
 
     /**
@@ -258,6 +283,7 @@ export function useWhiteboardStore(id: string) {
       if (!node) return
       node.text = text
       fitNodeToText(nodeId)
+      syncLinkedWhiteboardName(nodeId, text)
     }
 
     // ── Actions: 节点样式 ──
@@ -312,6 +338,36 @@ export function useWhiteboardStore(id: string) {
       node.textColor = undefined
     }
 
+    /**
+     * 设置节点是否关联白板。
+     * 关联后白板 ID === 节点 ID（两者共用同一个 ID 号）。
+     */
+    function setNodeHasWhiteboard(nodeId: string, value: boolean): void {
+      const node = nodes.get(nodeId)
+      if (!node) return
+      node.hasWhiteboard = value
+    }
+
+    /**
+     * 同步关联白板的名称到节点文本。
+     * 节点关联白板后，白板名称与节点文本绑定--
+     * 节点文本变化时，关联白板名称随之更新（单一数据源 = 节点文本）。
+     */
+    function syncLinkedWhiteboardName(nodeId: string, text: string): void {
+      const node = nodes.get(nodeId)
+      if (!node?.hasWhiteboard) return
+      const project = useProjectStore()
+      project.renameWhiteboard(nodeId, text)
+    }
+
+    /**
+     * 导入已有节点（用于组合/复制场景，保留原始 ID 与全部属性）。
+     * 深拷贝以避免与源白板共享引用。
+     */
+    function importNode(node: WhiteboardNode): void {
+      nodes.set(node.id, { ...node })
+    }
+
     // ===== 连线操作 =====
 
     /** 添加连线 */
@@ -332,6 +388,15 @@ export function useWhiteboardStore(id: string) {
     /** 删除单条连线 */
     function deleteConnection(connectionId: string): void {
       connections.delete(connectionId)
+    }
+
+    /**
+     * 导入已有连线（用于组合/复制场景，保留原始 ID 与全部属性）。
+     * 深拷贝以避免与源白板共享引用；ID 已存在时跳过。
+     */
+    function importConnection(conn: Connection): void {
+      if (connections.has(conn.id)) return
+      connections.set(conn.id, { ...conn })
     }
 
     /** 删除指定节点的所有连线（当节点被删除时调用） */
@@ -461,6 +526,7 @@ export function useWhiteboardStore(id: string) {
         if (!node) continue
         node.text = text
         fitNodeToText(id)
+        syncLinkedWhiteboardName(id, text)
       }
     }
 
@@ -496,6 +562,16 @@ export function useWhiteboardStore(id: string) {
       editingNodeId.value = null
       connectingFrom.value = null
       selectedConnectionIds.value = new Set()
+    }
+
+    /**
+     * 设置画布视口（平移 + 缩放）。
+     * 用于组合时将原白板导航信息复制到新白板。
+     */
+    function setViewport(x: number, y: number, scale: number): void {
+      stageX.value = x
+      stageY.value = y
+      stageScale.value = scale
     }
 
     return {
@@ -534,11 +610,14 @@ export function useWhiteboardStore(id: string) {
       setNodeBorderColor,
       applyPresetStyle,
       resetNodeStyle,
+      setNodeHasWhiteboard,
+      importNode,
 
       selectConnection,
       addConnection,
       deleteConnection,
       deleteNodeConnections,
+      importConnection,
       updateConnection,
       applyConnectionPreset,
       clearSelection,
@@ -552,6 +631,7 @@ export function useWhiteboardStore(id: string) {
       deleteSelectedConnections,
 
       resetBoardState,
+      setViewport,
     }
   })()
 }

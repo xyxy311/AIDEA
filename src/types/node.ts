@@ -12,6 +12,12 @@ export interface WhiteboardNode {
   backgroundColor?: string
   /** 边框颜色（undefined = 使用默认值） */
   borderColor?: string
+  /**
+   * 是否关联了白板。
+   * 关联时白板 ID === 节点 ID（两者共用同一个 ID 号）。
+   * 默认 false（undefined 视为 false）。
+   */
+  hasWhiteboard?: boolean
 }
 
 /** 节点视觉样式配置 */

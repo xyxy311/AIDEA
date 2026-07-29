@@ -32,6 +32,8 @@ import WhiteboardNode from './WhiteboardNode.vue'
 import WhiteboardConnection from './WhiteboardConnection.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
 import OverviewMap from './OverviewMap.vue'
+import ContextMenu from './ContextMenu.vue'
+import type { ContextMenuItem } from '@/composables/useContextMenu'
 
 // ── Store ──
 const active = useActiveWhiteboard()
@@ -63,6 +65,7 @@ useKeyboardShortcuts(isEditing)
 
 // ── 画布事件 ──
 const canvasEvents = useCanvasEvents()
+const { contextMenu } = canvasEvents
 
 // ── 画布导航（平移 + 缩放） ──
 const nav = useCanvasNavigation()
@@ -226,11 +229,14 @@ function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
 
 /** 处理画布点击：框选命中后跳过取消选中（避免清空刚框选的节点） */
 function handleStageClick(e: unknown): void {
+  const ke = e as KonvaEventObject<MouseEvent>
+  // 仅响应左键；右键不取消选中（留给 contextmenu 打开菜单），也不消耗 suppressNextClick
+  if (ke.evt.button !== 0) return
   if (marquee.suppressNextClick.value) {
     marquee.suppressNextClick.value = false
     return
   }
-  canvasEvents.handleStageClick(e as KonvaEventObject<MouseEvent>)
+  canvasEvents.handleStageClick(ke)
 }
 
 /** 处理画布双击 */
@@ -241,6 +247,17 @@ function handleStageDblClick(e: unknown): void {
 /** 处理画布右键菜单 */
 function handleStageContextMenu(e: unknown): void {
   canvasEvents.handleStageContextMenu(e as KonvaEventObject<MouseEvent>)
+}
+
+/** 右键菜单选中项：执行其 action 并关闭 */
+function handleContextMenuSelect(item: ContextMenuItem): void {
+  item.action?.()
+  contextMenu.close()
+}
+
+/** 右键菜单关闭 */
+function handleContextMenuClose(): void {
+  contextMenu.close()
 }
 
 /** 处理滚轮缩放（Ctrl + 滚轮） */
@@ -397,6 +414,16 @@ function handleStageMouseUp(e: unknown): void {
 
     <!-- 右下角导航小地图 -->
     <OverviewMap />
+
+    <!-- 右键上下文菜单 -->
+    <ContextMenu
+      :visible="contextMenu.visible.value"
+      :x="contextMenu.x.value"
+      :y="contextMenu.y.value"
+      :items="contextMenu.items.value"
+      @select="handleContextMenuSelect"
+      @close="handleContextMenuClose"
+    />
   </div>
 </template>
 

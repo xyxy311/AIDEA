@@ -54,6 +54,8 @@ export function useConnectionCreation() {
   /** Stage mousedown: Shift + 点击节点 → 开始连线创建 */
   function handleMouseDown(e: KonvaEventObject<MouseEvent>): void {
     if (!isShiftHeld.value) return
+    // 仅响应左键；右键留给 contextmenu
+    if (e.evt.button !== 0) return
     if (e.target === e.currentTarget) return // 点击空白区域，忽略
 
     const nodeId = findNodeIdFromTarget(e.target)

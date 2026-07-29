@@ -23,20 +23,12 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
       // 先删除所有选中的连线
       if (active.board.selectedConnectionIds.size > 0) {
         e.preventDefault()
-        const connIds = [...active.board.selectedConnectionIds]
-        for (const id of connIds) {
-          active.board.deleteConnection(id)
-        }
-        active.board.clearSelection()
+        active.board.deleteSelectedConnections()
       }
       // 再删除所有选中的节点
       else if (active.board.selectedNodeIds.size > 0) {
         e.preventDefault()
-        const nodeIds = [...active.board.selectedNodeIds]
-        for (const id of nodeIds) {
-          active.board.deleteNode(id)
-        }
-        active.board.clearSelection()
+        active.board.deleteSelectedNodes()
       }
     }
 

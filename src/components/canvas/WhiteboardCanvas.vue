@@ -83,6 +83,9 @@ const transformerConfig = {
   anchorSize: TRANSFORMER_ANCHOR_SIZE,
   borderStroke: TRANSFORMER_BORDER_STROKE,
   borderDash: TRANSFORMER_BORDER_DASH,
+  // 配合 rect 的 strokeScaleEnabled:false，计算包围盒时忽略 stroke，
+  // 避免缩放过程中包围盒/锚点因 stroke 宽度偏移
+  ignoreStroke: true,
   enabledAnchors: [
     'top-left',
     'top-right',

@@ -37,13 +37,6 @@ function handleAddNode() {
 
   active.board.addNode(nodeX, nodeY)
 }
-
-/** 删除选中节点 */
-function handleDeleteNode() {
-  if (active.board.selectedNodeId) {
-    active.board.deleteNode(active.board.selectedNodeId)
-  }
-}
 </script>
 
 <template>
@@ -69,29 +62,6 @@ function handleDeleteNode() {
           />
         </svg>
         添加节点
-      </button>
-
-      <button
-        class="btn btn-danger"
-        :disabled="!hasSelection"
-        @click="handleDeleteNode"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          class="btn-icon"
-        >
-          <path
-            d="M3 5h10M5.5 5V3.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V5m-5 3v5m3-5v5"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-        删除
       </button>
     </div>
 
@@ -179,22 +149,6 @@ function handleDeleteNode() {
 
 .btn-primary:active:not(:disabled) {
   background-color: #1d4ed8;
-}
-
-/* ── 危险按钮（删除） ── */
-.btn-danger {
-  background-color: transparent;
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-}
-
-.btn-danger:hover:not(:disabled) {
-  background-color: var(--color-danger);
-  color: #fff;
-}
-
-.btn-danger:active:not(:disabled) {
-  background-color: #dc2626;
 }
 
 /* ── 节点计数 ── */

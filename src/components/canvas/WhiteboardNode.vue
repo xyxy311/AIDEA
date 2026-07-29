@@ -60,6 +60,8 @@ const rectConfig = computed(() => {
     fill: n.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
     stroke: n.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
     strokeWidth: DEFAULT_NODE_STYLE.borderWidth,
+    // 禁止 stroke 随 scaleX/scaleY 缩放，缩放过程中边框线宽保持恒定
+    strokeScaleEnabled: false,
     cornerRadius: DEFAULT_NODE_STYLE.borderRadius,
     shadowColor: DEFAULT_NODE_STYLE.shadowEnabled
       ? DEFAULT_NODE_STYLE.shadowColor

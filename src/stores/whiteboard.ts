@@ -464,6 +464,26 @@ export function useWhiteboardStore(id: string) {
       }
     }
 
+    /**
+     * 批量删除所有选中节点
+     */
+    function deleteSelectedNodes(): void {
+      for (const id of selectedNodeIds.value) {
+        deleteNode(id)
+      }
+      clearSelection()
+    }
+
+    /**
+     * 批量删除所有选中连线
+     */
+    function deleteSelectedConnections(): void {
+      for (const id of selectedConnectionIds.value) {
+        deleteConnection(id)
+      }
+      clearSelection()
+    }
+
     // ── Actions: 状态重置 ──
 
     /**
@@ -527,6 +547,9 @@ export function useWhiteboardStore(id: string) {
       updateSelectedNodesStyle,
       updateSelectedConnectionsStyle,
       updateSelectedNodesText,
+
+      deleteSelectedNodes,
+      deleteSelectedConnections,
 
       resetBoardState,
     }

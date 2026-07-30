@@ -35,7 +35,8 @@ export function useNodeWhiteboardLink() {
     if (!node || node.hasWhiteboard) return
 
     // 白板 ID = 节点 ID（共用同一个 ID 号）；白板名绑定节点文本
-    active.project.addWhiteboard(node.text, nodeId)
+    // parentId = 当前活跃白板（节点所在的白板）
+    active.project.addWhiteboard(node.text, nodeId, active.project.activeWhiteboardId)
     board.setNodeHasWhiteboard(nodeId, true)
   }
 
@@ -93,8 +94,8 @@ export function useNodeWhiteboardLink() {
     const centerX = (minX + maxX) / 2 - DEFAULT_NODE_WIDTH / 2
     const centerY = (minY + maxY) / 2 - DEFAULT_NODE_HEIGHT / 2
 
-    // ── 创建新白板 ──
-    const newBoardId = project.addWhiteboard('组合')
+    // ── 创建新白板（parentId = 当前活跃白板） ──
+    const newBoardId = project.addWhiteboard('组合', undefined, project.activeWhiteboardId)
     const newBoard = useWhiteboardStore(newBoardId)
 
     // ── 复制节点到新白板 ──

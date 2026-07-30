@@ -38,13 +38,19 @@ export const useProjectStore = defineStore('project', () => {
   /** 白板总数 */
   const whiteboardCount = computed(() => whiteboards.value.length)
 
+  /**
+   * 根白板 ID（项目白板）。
+   * 项目白板始终位于列表首位，无父级、不可删除。
+   */
+  const rootWhiteboardId = computed(() => whiteboards.value[0]?.id ?? '')
+
   // ── Actions ──
 
   function setProjectName(name: string): void {
     projectName.value = name
   }
 
-  function addWhiteboard(name?: string, id?: string): string {
+  function addWhiteboard(name?: string, id?: string, parentId?: string): string {
     const wbId = id ?? generateId()
     // 若该 ID 已被占用（例如节点已关联白板后重复创建），直接返回不重复添加
     if (whiteboards.value.some((w) => w.id === wbId)) {
@@ -53,18 +59,21 @@ export const useProjectStore = defineStore('project', () => {
     whiteboards.value.push({
       id: wbId,
       name: name ?? '新白板',
+      parentId,
     })
     return wbId
   }
 
   function removeWhiteboard(id: string): void {
+    // 根白板（项目白板）不可删除
+    if (id === rootWhiteboardId.value) return
     if (whiteboards.value.length <= 1) return
     const idx = whiteboards.value.findIndex((w) => w.id === id)
     if (idx === -1) return
     whiteboards.value.splice(idx, 1)
 
     if (activeWhiteboardId.value === id) {
-      activeWhiteboardId.value = whiteboards.value[0]!.id
+      activeWhiteboardId.value = rootWhiteboardId.value
     }
 
     // 销毁对应的 Pinia store
@@ -95,6 +104,7 @@ export const useProjectStore = defineStore('project', () => {
     // Getters
     activeWhiteboard,
     whiteboardCount,
+    rootWhiteboardId,
     // Actions
     setProjectName,
     addWhiteboard,

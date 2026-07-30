@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
 import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
 import {
   DEFAULT_NODE_STYLE,
@@ -109,8 +110,9 @@ const textConfig = computed(() => {
 
 // ── 事件处理 ──
 
-/** 双击开始编辑 */
-function onDblClick(): void {
+/** 双击开始编辑（仅响应左键；右键双击留给 contextmenu，避免误进入文字编辑） */
+function onDblClick(e: KonvaEventObject<MouseEvent>): void {
+  if (e.evt.button !== 0) return
   emit('dblclick', props.nodeId)
 }
 

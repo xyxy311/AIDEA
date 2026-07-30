@@ -40,6 +40,13 @@ export interface NodeStyle {
 export interface WhiteboardData {
   id: string
   name: string
+  /**
+   * 父白板 ID。
+   * 白板通过节点关联形成父子层级：白板 WB（= 节点 N）的父白板
+   * = 包含节点 N 的那个白板。根/项目白板无此字段。
+   * 存储 parentId 使父子查找 O(1)，无需遍历各白板 store。
+   */
+  parentId?: string
 }
 
 /** 连线线型 */

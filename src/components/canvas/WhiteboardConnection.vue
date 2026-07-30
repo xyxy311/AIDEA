@@ -134,6 +134,9 @@ const arrowConfig = computed(() => {
 /** 单击 → emit 给 Canvas 处理选中/取消选中（支持 Ctrl 多选） */
 function onClick(e: KonvaEventObject<MouseEvent>): void {
   const ctrl = e.evt.ctrlKey || e.evt.metaKey
+  // 仅响应左键
+  if (e.evt.button !== 0) return
+  
   emit('click', props.connectionId, ctrl)
 }
 </script>

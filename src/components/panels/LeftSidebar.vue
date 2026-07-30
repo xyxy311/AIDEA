@@ -29,6 +29,8 @@ import { useWhiteboardTree } from '@/composables/useWhiteboardTree'
 
 defineProps<{
   collapsed: boolean
+  width: number
+  resizing: boolean
 }>()
 
 const emit = defineEmits<{
@@ -104,9 +106,13 @@ function cancelRename(): void {
 </script>
 
 <template>
-  <div class="sidebar-left" :class="{ collapsed }">
+  <div
+    class="sidebar-left"
+    :class="{ collapsed, resizing }"
+    :style="{ width: collapsed ? '36px' : width + 'px' }"
+  >
     <div class="sidebar-header">
-      <span v-if="!collapsed" class="sidebar-title">白板列表</span>
+      <span v-if="!collapsed" class="sidebar-title">白板树</span>
       <NButton size="tiny" quaternary @click="emit('toggle')">
         <template #icon>
           <ChevronBack v-if="!collapsed" />
@@ -137,7 +143,7 @@ function cancelRename(): void {
         </NPopconfirm>
       </div>
 
-      <NScrollbar class="sidebar-scroll">
+      <NScrollbar class="sidebar-scroll" x-scrollable>
         <div class="whiteboard-list">
           <div
             v-for="item in flatTree"
@@ -148,6 +154,21 @@ function cancelRename(): void {
             @click="handleSwitch(item.id)"
             @dblclick.stop="handleDblClick(item.id, item.name)"
           >
+            <!-- ── 缩进竖线（VSCode 风格，depth>0 时渲染）──
+                 使用绝对定位覆盖在 padding 区域内，不影响 flex 布局。 -->
+            <div
+              v-if="item.depth > 0"
+              class="indent-guides"
+              :style="{ width: 12 + item.depth * 16 + 'px' }"
+            >
+              <span
+                v-for="i in item.depth"
+                :key="i"
+                class="indent-line"
+                :class="{ 'indent-line-first': i === 1 }"
+              />
+            </div>
+
             <!-- 展开/收起箭头 -->
             <span
               v-if="item.hasChildren"
@@ -193,7 +214,6 @@ function cancelRename(): void {
 
 <style scoped>
 .sidebar-left {
-  width: 220px;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -203,8 +223,13 @@ function cancelRename(): void {
   overflow: hidden;
 }
 
+/* 拖拽中禁用 transition，避免卡顿/回弹 */
+.sidebar-left.resizing {
+  transition: none !important;
+}
+
 .sidebar-left.collapsed {
-  width: 36px;
+  width: 36px !important; /* !important 覆盖 inline style */
 }
 
 .sidebar-header {
@@ -233,8 +258,11 @@ function cancelRename(): void {
   flex: 1;
 }
 
+/* 横向滚动：列表内容宽度不被容器压缩，溢出时显示横向滚动条 */
 .whiteboard-list {
   padding: 4px;
+  min-width: max-content;
+  white-space: nowrap;
 }
 
 .whiteboard-item {
@@ -245,6 +273,7 @@ function cancelRename(): void {
   cursor: pointer;
   transition: background 0.15s;
   gap: 4px;
+  position: relative; /* 使绝对定位的缩进竖线以此为锚点 */
 }
 
 .whiteboard-item:hover {
@@ -316,5 +345,39 @@ function cancelRename(): void {
 
 .whiteboard-item:hover .wb-remove-btn {
   opacity: 1;
+}
+
+/* ── 缩进竖线（VSCode 风格） ──
+ * 绝对定位覆盖在 padding 区域，不占 flex 流空间。
+ * 每条竖线 16px 宽，左边框 1px 淡色，贯穿行高。
+ */
+
+.indent-guides {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: stretch;
+  pointer-events: none;
+}
+
+.indent-line {
+  display: block;
+  width: 16px;
+  height: 100%;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+/* 首条竖线偏移 12px（与 base padding 对齐） */
+.indent-line-first {
+  margin-left: 12px;
+}
+
+/* active/hover 态下竖线保持可见且协调 */
+.whiteboard-item.active .indent-line,
+.whiteboard-item:hover .indent-line {
+  border-left-color: rgba(128, 128, 128, 0.22);
 }
 </style>

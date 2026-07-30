@@ -115,7 +115,8 @@ export function useNodeWhiteboardLink() {
     newBoard.setViewport(board.stageX, board.stageY, board.stageScale)
 
     // ── 原白板删除选中节点（含相关连线） ──
-    board.deleteSelectedNodes()
+    // 组合时不连带删除选中节点的关联白板（其副本已迁入新白板，需保留关联关系）
+    board.deleteSelectedNodes({ removeLinkedWhiteboard: false })
 
     // ── 中心新建关联节点：ID = 新白板 ID，hasWhiteboard = true ──
     board.addNode(centerX, centerY, '组合', {

@@ -83,6 +83,40 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  /**
+   * 递归删除白板及其所有子白板（销毁 store + 列表项 + 活跃白板回退）。
+   *
+   * 不触碰父白板中的关联节点--节点清理由 whiteboard store 的 deleteNode 负责。
+   * 供「删除节点连带删白板」「右键取消关联」等场景复用。
+   */
+  function removeWhiteboardWithDescendants(wbId: string): void {
+    if (wbId === rootWhiteboardId.value) return
+    if (!whiteboards.value.some((w) => w.id === wbId)) return
+
+    // 收集后代（含自身）
+    const descendants: string[] = []
+    const visited = new Set<string>()
+    function collect(id: string): void {
+      if (visited.has(id)) return
+      visited.add(id)
+      descendants.push(id)
+      for (const w of whiteboards.value) {
+        if (w.parentId === id) collect(w.id)
+      }
+    }
+    collect(wbId)
+
+    // 若活跃白板在被删子树中，先切换到根白板
+    if (descendants.includes(activeWhiteboardId.value)) {
+      switchWhiteboard(rootWhiteboardId.value)
+    }
+
+    // 逐个删除（removeWhiteboard 内部销毁 store 并处理列表）
+    for (const id of descendants) {
+      removeWhiteboard(id)
+    }
+  }
+
   function switchWhiteboard(id: string): void {
     if (!whiteboards.value.find((w) => w.id === id)) return
     activeWhiteboardId.value = id
@@ -109,6 +143,7 @@ export const useProjectStore = defineStore('project', () => {
     setProjectName,
     addWhiteboard,
     removeWhiteboard,
+    removeWhiteboardWithDescendants,
     switchWhiteboard,
     renameWhiteboard,
   }

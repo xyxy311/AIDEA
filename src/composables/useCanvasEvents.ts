@@ -85,6 +85,18 @@ export function useCanvasEvents() {
           label: '进入白板',
           action: () => link.enterLinkedWhiteboard(),
         })
+        if (nodeId) {
+          items.push({
+            key: 'delete-whiteboard',
+            label: '删除关联白板',
+            danger: true,
+            action: () => {
+                // 取消关联：删除白板子树，但保留节点本身
+                active.project.removeWhiteboardWithDescendants(nodeId)
+                active.board.setNodeHasWhiteboard(nodeId, false)
+            },
+          })
+        }
       } else {
         items.push({
           key: 'create-whiteboard',

@@ -142,7 +142,16 @@ export function useWhiteboardStore(id: string) {
       return nodeId
     }
 
-    function deleteNode(nodeId: string): void {
+    function deleteNode(
+      nodeId: string,
+      opts?: { removeLinkedWhiteboard?: boolean },
+    ): void {
+      const removeLinked = opts?.removeLinkedWhiteboard ?? true
+      const node = nodes.get(nodeId)
+      // 若节点关联了白板，连带删除其白板子树（避免孤儿白板）
+      if (removeLinked && node?.hasWhiteboard) {
+        useProjectStore().removeWhiteboardWithDescendants(nodeId)
+      }
       // 先删除该节点的所有连线
       deleteNodeConnections(nodeId)
 
@@ -533,9 +542,11 @@ export function useWhiteboardStore(id: string) {
     /**
      * 批量删除所有选中节点
      */
-    function deleteSelectedNodes(): void {
+    function deleteSelectedNodes(
+      opts?: { removeLinkedWhiteboard?: boolean },
+    ): void {
       for (const id of selectedNodeIds.value) {
-        deleteNode(id)
+        deleteNode(id, opts)
       }
       clearSelection()
     }

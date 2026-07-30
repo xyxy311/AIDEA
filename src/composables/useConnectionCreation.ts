@@ -6,6 +6,8 @@ import {
   CONNECTION_TEMP_STROKE_COLOR,
   CONNECTION_TEMP_DASH,
   CONNECTION_STROKE_WIDTH,
+  DEFAULT_NODE_WIDTH,
+  DEFAULT_NODE_HEIGHT,
 } from '@/constants'
 
 /**
@@ -56,12 +58,25 @@ export function useConnectionCreation() {
     if (!isShiftHeld.value) return
     // 仅响应左键
     if (e.evt.button !== 0) return
-    if (e.target === e.currentTarget) return // 点击空白区域，忽略
 
-    const nodeId = findNodeIdFromTarget(e.target)
-    if (!nodeId) return
+    // 命中已有节点 -> 以其为连线起始
+    const hitNodeId = e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
+    if (hitNodeId) {
+      active.board.connectingFrom = hitNodeId
+      return
+    }
 
-    active.board.connectingFrom = nodeId
+    // 起始位置无节点 -> 在指针处创建节点作为起始（中心对齐光标）
+    const stage = e.target.getStage()
+    const pos = stage?.getRelativePointerPosition()
+    if (!pos) return
+    const newId = active.board.addNode(
+      pos.x - DEFAULT_NODE_WIDTH / 2,
+      pos.y - DEFAULT_NODE_HEIGHT / 2,
+      undefined,
+      { select: false, edit: false },
+    )
+    active.board.connectingFrom = newId
   }
 
   /** Stage mousemove: 连线拖拽中更新临时终点 */
@@ -88,7 +103,25 @@ export function useConnectionCreation() {
       e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
 
     if (targetNodeId && targetNodeId !== fromNodeId) {
+      // 命中已有节点 -> 直接连线
       active.board.addConnection(fromNodeId, targetNodeId)
+    } else if (!targetNodeId) {
+      // 结束位置无节点 -> 在指针处创建节点作为结束，再连线
+      const stage = e.target.getStage()
+      const pos = stage?.getRelativePointerPosition()
+      if (!pos) {
+        tempConnEnd.value = null
+        return
+      }
+      const newId = active.board.addNode(
+        pos.x - DEFAULT_NODE_WIDTH / 2,
+        pos.y - DEFAULT_NODE_HEIGHT / 2,
+        undefined,
+        { select: false, edit: false },
+      )
+      if (newId !== fromNodeId) {
+        active.board.addConnection(fromNodeId, newId)
+      }
     }
 
     tempConnEnd.value = null

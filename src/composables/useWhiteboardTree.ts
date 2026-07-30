@@ -212,23 +212,11 @@ export function useWhiteboardTree() {
     if (wbId === rootWhiteboardId.value) return
     if (!whiteboardExists(wbId)) return
 
-    const descendants = collectDescendants(wbId)
-
-    // 从父白板删除对应节点（连带删除其连线）
+    // 从父白板删除对应节点（deleteNode 内部连带删除其白板子树与相关连线）
     const parentId = findParentWhiteboard(wbId)
     if (parentId) {
       const parentStore = useWhiteboardStore(parentId)
       parentStore.deleteNode(wbId)
-    }
-
-    // 若活跃白板在被删子树中，先切换到根白板
-    if (descendants.includes(project.activeWhiteboardId)) {
-      project.switchWhiteboard(rootWhiteboardId.value)
-    }
-
-    // 逐个删除（removeWhiteboard 内部销毁 store 并处理列表）
-    for (const id of descendants) {
-      project.removeWhiteboard(id)
     }
   }
 

@@ -17,6 +17,8 @@ const active = useActiveWhiteboard()
 
 defineProps<{
   collapsed: boolean
+  width: number
+  resizing: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,7 +33,11 @@ const title = computed(() => {
 </script>
 
 <template>
-  <div class="sidebar-right" :class="{ collapsed }">
+  <div
+    class="sidebar-right"
+    :class="{ collapsed, resizing }"
+    :style="{ width: collapsed ? '36px' : width + 'px' }"
+  >
     <div class="sidebar-header">
       <NButton size="tiny" quaternary @click="emit('toggle')">
         <template #icon>
@@ -61,7 +67,6 @@ const title = computed(() => {
 
 <style scoped>
 .sidebar-right {
-  width: 240px;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
@@ -71,8 +76,13 @@ const title = computed(() => {
   overflow: hidden;
 }
 
+/* 拖拽中禁用 transition */
+.sidebar-right.resizing {
+  transition: none !important;
+}
+
 .sidebar-right.collapsed {
-  width: 36px;
+  width: 36px !important;
 }
 
 .sidebar-header {

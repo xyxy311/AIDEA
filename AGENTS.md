@@ -75,26 +75,10 @@ const { project, board } = useActiveWhiteboard()
 
 ### 数据流
 
-`Toolbar/Canvas 事件 → store actions → shallowRef<Map> 变更 → triggerRef → nodesArray computed → v-for 重渲染`
+`Toolbar/Canvas 事件 → store actions → reactive(new Map())变更 → triggerRef → nodesArray computed → v-for 重渲染`
 
 ## 关键陷阱
 
-### Store 响应式：shallowRef + computed 的引用相等问题
-
-Store 用 `shallowRef<Map>` 存储节点，修改节点属性后调用 `triggerRef(nodes)`。Map 中节点对象**引用不变**，Vue 的 `computed` 默认按 `===` 比较，若返回同一引用则跳过下游通知。
-
-凡是从 `store.nodesArray` / `store.selectedNode` 读取后需要驱动下游渲染的地方，**必须展开为新对象**：
-
-```typescript
-// ❌ 错误 —— 返回同一对象引用，下游 computed 不重新计算
-const node = computed(() => store.nodesArray.find(n => n.id === props.nodeId))
-
-// ✅ 正确 —— 展开为新对象，引用每次不同
-const node = computed(() => {
-  const found = store.nodesArray.find(n => n.id === props.nodeId)
-  return found ? { ...found } : undefined
-})
-```
 
 ### Konva 事件冒泡
 

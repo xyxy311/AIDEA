@@ -54,7 +54,7 @@ export function useConnectionCreation() {
   /** Stage mousedown: Shift + 点击节点 → 开始连线创建 */
   function handleMouseDown(e: KonvaEventObject<MouseEvent>): void {
     if (!isShiftHeld.value) return
-    // 仅响应左键；右键留给 contextmenu
+    // 仅响应左键
     if (e.evt.button !== 0) return
     if (e.target === e.currentTarget) return // 点击空白区域，忽略
 
@@ -80,6 +80,7 @@ export function useConnectionCreation() {
   /** Stage mouseup: 连线拖拽结束 → 创建连线或取消 */
   function handleMouseUp(e: KonvaEventObject<MouseEvent>): void {
     if (active.board.connectingFrom === null) return
+    if (e.evt.button !== 0) return
 
     const fromNodeId = active.board.connectingFrom
     active.board.connectingFrom = null

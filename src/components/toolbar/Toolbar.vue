@@ -37,6 +37,11 @@ function handleAddNode() {
 
   active.board.addNode(nodeX, nodeY)
 }
+
+/** 调试打印当前画布状态 */
+function debugPrint() {
+  console.log('当前画布节点:', active.board.nodesArray)
+}
 </script>
 
 <template>
@@ -62,6 +67,9 @@ function handleAddNode() {
           />
         </svg>
         添加节点
+      </button>
+      <button class="btn btn-primary" @click="debugPrint">
+        调试
       </button>
     </div>
 

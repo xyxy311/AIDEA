@@ -123,13 +123,19 @@ const transformerConfig = {
   },
 }
 
-/** 收集 WhiteboardNode 组件实例（id -> 实例），用于获取 Konva.Rect 供 Transformer 附着 */
-const nodeInstances = new Map<string, { getRectNode: () => Konva.Rect | null }>()
+/** 收集 WhiteboardNode 组件实例（id -> 实例），用于获取 Konva 节点供 Transformer 附着 / 层级调整 */
+const nodeInstances = new Map<
+  string,
+  { getRectNode: () => Konva.Rect | null; getGroupNode: () => Konva.Group | null }
+>()
 
 /** v-for 节点的 ref 函数：挂载时收集实例，卸载时移除 */
 function setNodeRef(id: string, el: unknown): void {
   if (el && typeof el === 'object' && 'getRectNode' in el) {
-    nodeInstances.set(id, el as { getRectNode: () => Konva.Rect | null })
+    nodeInstances.set(
+      id,
+      el as { getRectNode: () => Konva.Rect | null; getGroupNode: () => Konva.Group | null },
+    )
   } else {
     nodeInstances.delete(id)
   }
@@ -147,14 +153,20 @@ function attachTransformer(): void {
     if (rect) rects.push(rect)
   }
   tr.nodes(rects)
+  // 选中节点可能已通过 moveToTop 置顶，确保 Transformer 始终在最上层不被遮挡
+  tr.moveToTop()
   tr.getLayer()?.batchDraw()
 }
 
-/** 选中节点变化时重新附着 Transformer（nextTick 确保子组件已渲染） */
+/** 选中节点变化时：置顶选中节点 + 重新附着 Transformer（nextTick 确保子组件已渲染） */
 watch(
   () => Array.from(active.view.selectedNodeIds),
   async () => {
     await nextTick()
+    // 将选中节点移到节点层顶部，避免被其他节点遮挡
+    for (const id of active.view.selectedNodeIds) {
+      nodeInstances.get(id)?.getGroupNode?.()?.moveToTop()
+    }
     attachTransformer()
   },
 )
@@ -352,6 +364,8 @@ function handleStageMouseUp(e: unknown): void {
       @mousemove="handleStageMouseMove"
       @mouseup="handleStageMouseUp"
     >
+      <!-- 连线层（底层）：独立 layer 确保节点层始终覆盖在连线之上，
+           不受 v-for 列表更新导致的 Konva children 重排影响 -->
       <v-layer>
         <!-- 背景矩形 -->
         <v-rect
@@ -364,8 +378,7 @@ function handleStageMouseUp(e: unknown): void {
         />
 
         <!--
-          连线 - 渲染在节点之前（底层），使节点始终覆盖在连线之上。
-          每条连线渲染为线段 + 可选箭头（有向时）。
+          连线 - 位于独立连线层（底层），每条连线渲染为线段 + 可选箭头（有向时）。
         -->
         <WhiteboardConnection
           v-for="connItem in connectionsArray"
@@ -380,7 +393,10 @@ function handleStageMouseUp(e: unknown): void {
           v-if="active.view.connectingFrom !== null"
           :config="conn.tempConnConfig.value"
         />
+      </v-layer>
 
+      <!-- 节点层（上层）：节点 + Transformer + 框选矩形 -->
+      <v-layer>
         <!-- 节点列表（上层，覆盖连线） -->
         <WhiteboardNode
           v-for="node in nodesArray"

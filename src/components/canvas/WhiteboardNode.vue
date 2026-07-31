@@ -38,6 +38,8 @@ const active = useActiveView()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
+/** 节点组引用（供父组件选中时调用 moveToTop 调整层级） */
+const groupRef = ref<VueKonvaRef<Konva.Group> | null>(null)
 
 // ── Computed: 从 reactive Map 直接获取节点代理 ──
 // reactive Map 的 get 返回 reactive 代理，属性变化自动触发下游 computed
@@ -119,11 +121,14 @@ function onDblClick(e: KonvaEventObject<MouseEvent>): void {
 defineExpose({
   /** 返回底层 Konva.Rect 实例，供父组件全局 Transformer 附着 */
   getRectNode: () => rectRef.value?.getNode() ?? null,
+  /** 返回底层 Konva.Group 实例，供父组件调整层级（选中置顶） */
+  getGroupNode: () => groupRef.value?.getNode() ?? null,
 })
 </script>
 
 <template>
   <v-group
+    ref="groupRef"
     :config="groupConfig"
     :x="node?.x"
     :y="node?.y"

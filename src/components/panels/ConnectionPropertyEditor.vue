@@ -21,23 +21,25 @@ import {
   NModal,
   NPopconfirm,
 } from 'naive-ui'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import { usePresetsStore } from '@/stores/presets'
 import {
   LINE_STYLE_OPTIONS,
   CONNECTION_MAX_STROKE_WIDTH,
 } from '@/constants'
 
-const active = useActiveWhiteboard()
+const active = useActiveView()
 const presetsStore = usePresetsStore()
 
 // 选中的连线信息
-const conn = computed(() => active.board.connections.get(active.board.selectedConnectionId))
-const selectedCount = computed(() => active.board.selectedConnectionIds.size)
+const conn = computed(() =>
+  active.nodeStore.getConnections(active.project.activeViewId).find(c => c.id === active.view.selectedConnectionId)
+)
+const selectedCount = computed(() => active.view.selectedConnectionIds.size)
 
 /** 获取连线的两端节点名称 */
 function getNodeLabel(nodeId: string): string {
-  const node = active.board.nodes.get(nodeId)
+  const node = active.nodeStore.getNode(nodeId)
   return node ? (node.text || '未命名节点') : nodeId
 }
 
@@ -45,7 +47,7 @@ const lineStyle = computed<LineStyle | undefined>({
   get: () => conn.value?.lineStyle,
   set: (val) => {
     if (!conn.value || !val) return
-    active.board.updateSelectedConnectionsStyle({ lineStyle: val })
+    active.updateSelectedConnectionsStyle({ lineStyle: val })
   },
 })
 
@@ -53,7 +55,7 @@ const strokeWidth = computed<number | undefined>({
   get: () => conn.value?.strokeWidth,
   set: (val) => {
     if (!conn.value || val === undefined) return
-    active.board.updateSelectedConnectionsStyle({ strokeWidth: val })
+    active.updateSelectedConnectionsStyle({ strokeWidth: val })
   },
 })
 
@@ -61,7 +63,7 @@ const strokeColor = computed<string | undefined>({
   get: () => conn.value?.strokeColor,
   set: (val) => {
     if (!conn.value || !val) return
-    active.board.updateSelectedConnectionsStyle({ strokeColor: val })
+    active.updateSelectedConnectionsStyle({ strokeColor: val })
   },
 })
 
@@ -69,7 +71,7 @@ const directed = computed<boolean | undefined>({
   get: () => conn.value?.directed,
   set: (val) => {
     if (!conn.value || val === undefined) return
-    active.board.updateSelectedConnectionsStyle({ directed: val })
+    active.updateSelectedConnectionsStyle({ directed: val })
   },
 })
 
@@ -86,7 +88,7 @@ function getDashArray(style: LineStyle): string {
 
 /** 点击预设行 → 应用到选中连线 */
 function applyPreset(preset: ConnectionPresetStyle): void {
-  active.board.updateSelectedConnectionsStyle(preset)
+  active.updateSelectedConnectionsStyle(preset)
 }
 
 /** 删除预设 */

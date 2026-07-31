@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
 
 /**
@@ -24,7 +24,7 @@ import { NODE_DRAG_THRESHOLD } from '@/constants'
  * 坐标系：stage.getRelativePointerPosition() 返回世界坐标，与 node.x/y 同系。
  */
 export function useNodeDragging() {
-  const active = useActiveWhiteboard()
+  const active = useActiveView()
 
   /** 是否正在拖动节点（已超过阈值激活） */
   const isDragging: Ref<boolean> = ref(false)
@@ -48,7 +48,7 @@ export function useNodeDragging() {
     let current: Konva.Node | null = target
     while (current && current.nodeType !== 'Stage') {
       const nodeName: string = current.name()
-      if (nodeName && active.board.nodes.has(nodeName)) {
+      if (nodeName && active.nodeStore.nodes.has(nodeName)) {
         return nodeName
       }
       current = current.getParent()
@@ -104,15 +104,16 @@ export function useNodeDragging() {
       // 激活拖动
       isDragging.value = true
 
-      const board = active.board
+      const view = active.view
+      const nodeStore = active.nodeStore
       // 若被拖节点未选中，单选它（拖动一个未选中节点意味着"我要移动这个节点"）
-      if (!board.selectedNodeIds.has(pendingNodeId)) {
-        board.selectNode(pendingNodeId, false)
+      if (!view.selectedNodeIds.has(pendingNodeId)) {
+        view.selectNode(pendingNodeId, false)
       }
       // 记录所有选中节点初始位置（选中状态可能刚变，需在激活后快照）
       dragStartPositions.clear()
-      board.selectedNodeIds.forEach((id) => {
-        const n = board.nodes.get(id)
+      view.selectedNodeIds.forEach((id) => {
+        const n = nodeStore.getNode(id)
         if (n) dragStartPositions.set(id, { x: n.x, y: n.y })
       })
     }
@@ -120,8 +121,9 @@ export function useNodeDragging() {
     // 按总 delta 同步移动所有选中节点（起点固定不动，保证多选相对位置不变）
     const deltaX = pos.x - pendingStart.x
     const deltaY = pos.y - pendingStart.y
+    const nodeStore = active.nodeStore
     dragStartPositions.forEach((start, id) => {
-      active.board.moveNode(id, start.x + deltaX, start.y + deltaY)
+      nodeStore.moveNode(id, start.x + deltaX, start.y + deltaY)
     })
   }
 
@@ -132,7 +134,7 @@ export function useNodeDragging() {
     if (!isDragging.value) {
       // 纯 click（未超过阈值）：处理选中（单选 / Ctrl toggle）
       const ctrl = e.evt.ctrlKey || e.evt.metaKey
-      active.board.selectNode(pendingNodeId, ctrl)
+      active.view.selectNode(pendingNodeId, ctrl)
     }
 
     // 清理状态

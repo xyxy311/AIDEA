@@ -18,22 +18,22 @@ import {
   NModal,
   NPopconfirm,
 } from 'naive-ui'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import { usePresetsStore } from '@/stores/presets'
 import { DEFAULT_NODE_STYLE } from '@/constants'
 
-const active = useActiveWhiteboard()
+const active = useActiveView()
 const presetsStore = usePresetsStore()
 
 // 选中的节点信息
-const node = computed(() => active.board.nodes.get(active.board.selectedNodeId))
-const selectedCount = computed(() => active.board.selectedNodeIds.size)
+const node = computed(() => active.nodeStore.getNode(active.view.selectedNodeId))
+const selectedCount = computed(() => active.view.selectedNodeIds.size)
 
 const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
     if (!node.value) return
-    active.board.updateSelectedNodesText(val)
+    active.updateSelectedNodesText(val)
   },
 })
 
@@ -41,7 +41,7 @@ const currentTextColor = computed({
   get: () => node.value?.textColor ?? DEFAULT_NODE_STYLE.textColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    active.board.updateSelectedNodesStyle({ textColor: val })
+    active.updateSelectedNodesStyle({ textColor: val })
   },
 })
 
@@ -49,7 +49,7 @@ const currentBgColor = computed({
   get: () => node.value?.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    active.board.updateSelectedNodesStyle({ backgroundColor: val })
+    active.updateSelectedNodesStyle({ backgroundColor: val })
   },
 })
 
@@ -57,7 +57,7 @@ const currentBorderColor = computed({
   get: () => node.value?.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
   set: (val: string | null) => {
     if (!node.value || !val) return
-    active.board.updateSelectedNodesStyle({ borderColor: val })
+    active.updateSelectedNodesStyle({ borderColor: val })
   },
 })
 
@@ -67,7 +67,7 @@ const colorPickerMode = 'hex' as const
 
 /** 点击预设行 → 应用到选中节点 */
 function applyPreset(preset: NodePresetStyle): void {
-  active.board.updateSelectedNodesStyle(preset)
+  active.updateSelectedNodesStyle(preset)
 }
 
 /** 删除预设 */

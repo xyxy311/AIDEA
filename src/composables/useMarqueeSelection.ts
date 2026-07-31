@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import {
   MARQUEE_FILL_COLOR,
   MARQUEE_STROKE_COLOR,
@@ -43,7 +43,7 @@ const INVISIBLE_CONFIG = { visible: false } as const
  * 无法追踪其变化，框选框将不会随鼠标实时更新。
  */
 export function useMarqueeSelection() {
-  const active = useActiveWhiteboard()
+  const active = useActiveView()
 
   /** 是否正在框选（已超过阈值激活） */
   const isMarqueeDragging: Ref<boolean> = ref(false)
@@ -143,9 +143,9 @@ export function useMarqueeSelection() {
         height: Math.abs(currentPoint.value.y - startPoint.value.y),
       }
 
-      // AABB 命中检测：框选矩形与节点矩形相交则选中
+      // AABB 命中检测：框选矩形与节点矩形相交则选中（仅检测当前视图的子节点）
       const hitIds: string[] = []
-      for (const node of active.board.nodesArray) {
+      for (const node of active.nodeStore.childrenOf(active.project.activeViewId)) {
         if (
           selBox.x < node.x + node.width &&
           selBox.x + selBox.width > node.x &&
@@ -158,7 +158,7 @@ export function useMarqueeSelection() {
 
       // Ctrl/Cmd 追加到现有选中；否则替换
       const additive = e.evt.ctrlKey || e.evt.metaKey
-      active.board.setSelectedNodes(hitIds, additive)
+      active.view.setSelectedNodes(hitIds, additive)
     }
 
     // 清空状态（无论是否激活框选，mouseup 都要重置 pendingStart）

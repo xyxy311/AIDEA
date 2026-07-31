@@ -1,20 +1,20 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 /**
  * 画布导航（平移 + 缩放）
  *
  * 提供无限画布的平移和缩放能力：
- * - 按住空格键 + 鼠标拖拽 → 平移画布
- * - Ctrl + 滚轮 → 缩放画布（以鼠标位置为中心）
+ * - 按住空格键 + 鼠标拖拽 -> 平移画布
+ * - Ctrl + 滚轮 -> 缩放画布（以鼠标位置为中心）
  *
- * 导航状态存储在 Pinia store 中，以便 Toolbar 等组件
+ * 导航状态存储在当前视图的 viewStore 中，以便 Toolbar 等组件
  * 读取当前视口状态来计算"视口中央"的世界坐标。
  */
 export function useCanvasNavigation() {
-  const active = useActiveWhiteboard()
+  const active = useActiveView()
   const isPanMode = ref(false)
 
   // ── 空格键处理 ──
@@ -55,7 +55,8 @@ export function useCanvasNavigation() {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
 
-    const oldScale = active.board.stageScale
+    const view = active.view
+    const oldScale = view.stageScale
     const direction = e.evt.deltaY > 0 ? -1 : 1
     const factor = direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
     const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * factor))
@@ -64,13 +65,13 @@ export function useCanvasNavigation() {
 
     // 计算鼠标指向的"世界坐标点"（不受缩放影响）
     const mousePointTo = {
-      x: (pointer.x - active.board.stageX) / oldScale,
-      y: (pointer.y - active.board.stageY) / oldScale,
+      x: (pointer.x - view.stageX) / oldScale,
+      y: (pointer.y - view.stageY) / oldScale,
     }
 
-    active.board.stageScale = newScale
-    active.board.stageX = pointer.x - mousePointTo.x * newScale
-    active.board.stageY = pointer.y - mousePointTo.y * newScale
+    view.stageScale = newScale
+    view.stageX = pointer.x - mousePointTo.x * newScale
+    view.stageY = pointer.y - mousePointTo.y * newScale
   }
 
   // ── 平移拖拽（Stage dragmove/dragend） ──
@@ -82,8 +83,8 @@ export function useCanvasNavigation() {
    */
   function handleDragMove(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    active.board.stageX = e.target.x()
-    active.board.stageY = e.target.y()
+    active.view.stageX = e.target.x()
+    active.view.stageY = e.target.y()
   }
 
   /**
@@ -92,8 +93,8 @@ export function useCanvasNavigation() {
    */
   function handleDragEnd(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    active.board.stageX = e.target.x()
-    active.board.stageY = e.target.y()
+    active.view.stageX = e.target.x()
+    active.view.stageY = e.target.y()
   }
 
   // ── 生命周期 ──

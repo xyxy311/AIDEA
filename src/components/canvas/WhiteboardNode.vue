@@ -13,7 +13,7 @@ import { ref, computed } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import {
   DEFAULT_NODE_STYLE,
   NODE_PADDING,
@@ -34,14 +34,14 @@ const emit = defineEmits<{
 }>()
 
 // ── Store ──
-const active = useActiveWhiteboard()
+const active = useActiveView()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
 
 // ── Computed: 从 reactive Map 直接获取节点代理 ──
 // reactive Map 的 get 返回 reactive 代理，属性变化自动触发下游 computed
-const node = computed(() => active.board.nodes.get(props.nodeId))
+const node = computed(() => active.nodeStore.getNode(props.nodeId))
 
 // ── Konva 节点配置 ──
 

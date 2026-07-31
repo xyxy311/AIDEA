@@ -1,6 +1,13 @@
 /** 白板节点核心数据 */
 export interface WhiteboardNode {
   id: string
+  /**
+   * 父节点 ID。
+   * null = 根/项目节点（全局唯一，无父级；其几何与样式属性无意义，
+   * 因为它不会被绘制在任何父级视图中）。
+   * 通过 parentId 构建节点树：子节点 = parentId 指向本节点的节点。
+   */
+  parentId: string | null
   x: number
   y: number
   width: number
@@ -13,11 +20,14 @@ export interface WhiteboardNode {
   /** 边框颜色（undefined = 使用默认值） */
   borderColor?: string
   /**
-   * 是否关联了白板。
-   * 关联时白板 ID === 节点 ID（两者共用同一个 ID 号）。
-   * 默认 false（undefined 视为 false）。
+   * 本节点子级之间的连线集合。
+   *
+   * 连线表示同级关系（因果、时间等），非父子关系。
+   * 每条连线的两端（fromNodeId / toNodeId）均为本节点的直接子节点。
+   * 连线归属父节点（而非全局独立存储），使组合/移动子树时
+   * 连线随父节点自然迁移，且撤销重做只需快照单一节点 Map。
    */
-  hasWhiteboard?: boolean
+  connections: Connection[]
 }
 
 /** 节点视觉样式配置 */
@@ -36,28 +46,15 @@ export interface NodeStyle {
   shadowOffsetY: number
 }
 
-/** 白板（项目中的页面/视图） */
-export interface WhiteboardData {
-  id: string
-  name: string
-  /**
-   * 父白板 ID。
-   * 白板通过节点关联形成父子层级：白板 WB（= 节点 N）的父白板
-   * = 包含节点 N 的那个白板。根/项目白板无此字段。
-   * 存储 parentId 使父子查找 O(1)，无需遍历各白板 store。
-   */
-  parentId?: string
-}
-
 /** 连线线型 */
 export type LineStyle = 'solid' | 'dashed' | 'dotted'
 
-/** 节点之间的连线 */
+/** 节点之间的连线（同级关系） */
 export interface Connection {
   id: string
-  /** 起始节点 ID */
+  /** 起始节点 ID（须为持有该连线的父节点的直接子节点） */
   fromNodeId: string
-  /** 目标节点 ID */
+  /** 目标节点 ID（须为持有该连线的父节点的直接子节点） */
   toNodeId: string
   /** 线型：实线/虚线/点线 */
   lineStyle: LineStyle

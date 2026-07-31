@@ -7,9 +7,12 @@
  * 2. 管理内联文本编辑器的生命周期（editingNodeId 状态）
  * 3. 连接所有 composables 到 Store
  * 4. 编排节点、连线与编辑器之间的交互
+ *
+ * 数据源：nodeStore（全局节点树 + 连线）+ viewStore（当前视图的视口/选中/编辑）。
+ * 当前视图渲染的是 activeViewId 节点的直接子节点与它们之间的连线。
  */
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { ref, computed, watch, nextTick } from 'vue'
+import { useActiveView } from '@/composables/useActiveView'
 import { useStageSize } from '@/composables/useStageSize'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
@@ -36,7 +39,7 @@ import ContextMenu from './ContextMenu.vue'
 import type { ContextMenuItem } from '@/composables/useContextMenu'
 
 // ── Store ──
-const active = useActiveWhiteboard()
+const active = useActiveView()
 
 // ── Stage 尺寸 ──
 const stage = useStageSize()
@@ -58,7 +61,7 @@ const stageRef = ref<VueKonvaRef<Konva.Stage> | null>(null)
 
 // ── 文本编辑状态 ──
 /** 是否正在编辑（用于禁用快捷键） */
-const isEditing = computed(() => active.board.editingNodeId !== null)
+const isEditing = computed(() => active.view.editingNodeId !== null)
 
 // ── 快捷键（编辑状态下禁用） ──
 useKeyboardShortcuts(isEditing)
@@ -75,6 +78,14 @@ const marquee = useMarqueeSelection()
 
 // ── 节点拖动 ──
 const nodeDrag = useNodeDragging()
+
+// ── 当前视图数据（computed，保持响应式）──
+
+/** 当前视图（activeViewId 节点）的直接子节点 */
+const nodesArray = computed(() => active.nodeStore.childrenOf(active.project.activeViewId))
+
+/** 当前视图的连线（activeViewId 节点的 connections） */
+const connectionsArray = computed(() => active.nodeStore.getConnections(active.project.activeViewId))
 
 // ── 全局 Transformer（替代每节点独立 Transformer） ──
 
@@ -128,7 +139,7 @@ function setNodeRef(id: string, el: unknown): void {
 function attachTransformer(): void {
   const tr = transformerRef.value?.getNode()
   if (!tr) return
-  const ids = Array.from(active.board.selectedNodeIds)
+  const ids = Array.from(active.view.selectedNodeIds)
   const rects: Konva.Rect[] = []
   for (const id of ids) {
     const inst = nodeInstances.get(id)
@@ -141,7 +152,7 @@ function attachTransformer(): void {
 
 /** 选中节点变化时重新附着 Transformer（nextTick 确保子组件已渲染） */
 watch(
-  () => Array.from(active.board.selectedNodeIds),
+  () => Array.from(active.view.selectedNodeIds),
   async () => {
     await nextTick()
     attachTransformer()
@@ -169,7 +180,7 @@ function onTransformEnd(): void {
     const newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)
     const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
 
-    const node = active.board.nodes.get(nodeId)
+    const node = active.nodeStore.getNode(nodeId)
     const worldX = (node?.x ?? 0) + rect.x()
     const worldY = (node?.y ?? 0) + rect.y()
 
@@ -180,7 +191,7 @@ function onTransformEnd(): void {
     rect.scaleY(1)
 
     // 写入 store（resizeNode 内部会 fitNodeToText）
-    active.board.resizeNode(nodeId, worldX, worldY, newWidth, newHeight)
+    active.nodeStore.resizeNode(nodeId, worldX, worldY, newWidth, newHeight)
   }
   // 烘焙后重新附着 Transformer 适应新尺寸
   attachTransformer()
@@ -189,25 +200,26 @@ function onTransformEnd(): void {
 
 // ── 编辑中的节点数据（传递给 NodeTextEditor） ──
 const editingNode = computed(() => {
-  if (!active.board.editingNodeId) return null
-  return active.board.nodes.get(active.board.editingNodeId) ?? null
+  if (!active.view.editingNodeId) return null
+  return active.nodeStore.getNode(active.view.editingNodeId) ?? null
 })
 
 // ── 编辑操作方法 ──
 
 /** 开始编辑指定节点（用于双击已有节点） */
 function startTextEdit(nodeId: string): void {
-  active.board.startEditing(nodeId)
+  active.view.startEditing(nodeId)
 }
 
-/** 完成文本编辑（保存）—— active.board.setNodeText 内部已清除编辑状态 */
+/** 完成文本编辑（保存）-- setNodeText 仅改数据，需手动清除编辑态 */
 function finishTextEdit(nodeId: string, text: string): void {
-  active.board.setNodeText(nodeId, text)
+  active.nodeStore.setNodeText(nodeId, text)
+  active.view.stopEditing()
 }
 
 /** 取消文本编辑 */
 function cancelTextEdit(): void {
-  active.board.stopEditing()
+  active.view.stopEditing()
 }
 
 // ── 连线选中 ──
@@ -215,12 +227,12 @@ function cancelTextEdit(): void {
 /** 连线点击：选中或取消选中（支持 Ctrl 多选） */
 function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
   if (ctrlKey) {
-    active.board.selectConnection(connectionId, true)
+    active.view.selectConnection(connectionId, true)
   } else {
-    if (active.board.selectedConnectionIds.has(connectionId)) {
-      active.board.selectConnection(null)
+    if (active.view.selectedConnectionIds.has(connectionId)) {
+      active.view.selectConnection(null)
     } else {
-      active.board.selectConnection(connectionId)
+      active.view.selectConnection(connectionId)
     }
   }
 }
@@ -294,7 +306,7 @@ function handleStageMouseDown(e: unknown): void {
 function handleStageMouseMove(e: unknown): void {
   const ke = e as KonvaEventObject<MouseEvent>
   // 连线创建拖拽中（Shift 模式）优先处理临时连线终点
-  if (active.board.connectingFrom !== null) {
+  if (active.view.connectingFrom !== null) {
     conn.handleMouseMove(ke)
     return
   }
@@ -325,10 +337,10 @@ function handleStageMouseUp(e: unknown): void {
     <v-stage
       ref="stageRef"
       :config="stageConfig"
-      :x="active.board.stageX"
-      :y="active.board.stageY"
-      :scaleX="active.board.stageScale"
-      :scaleY="active.board.stageScale"
+      :x="active.view.stageX"
+      :y="active.view.stageY"
+      :scaleX="active.view.stageScale"
+      :scaleY="active.view.stageScale"
       :draggable="nav.isPanMode.value"
       @click="handleStageClick"
       @dblclick="handleStageDblClick"
@@ -352,30 +364,30 @@ function handleStageMouseUp(e: unknown): void {
         />
 
         <!--
-          连线 — 渲染在节点之前（底层），使节点始终覆盖在连线之上。
+          连线 - 渲染在节点之前（底层），使节点始终覆盖在连线之上。
           每条连线渲染为线段 + 可选箭头（有向时）。
         -->
         <WhiteboardConnection
-          v-for="connId in active.board.connections.keys()"
-          :key="connId"
-          :connection-id="connId"
-          :is-selected="active.board.selectedConnectionIds.has(connId)"
+          v-for="connItem in connectionsArray"
+          :key="connItem.id"
+          :connection-id="connItem.id"
+          :is-selected="active.view.selectedConnectionIds.has(connItem.id)"
           @click="handleConnectionClick"
         />
 
         <!-- 临时连线（拖拽创建中，虚线） -->
         <v-line
-          v-if="active.board.connectingFrom !== null"
+          v-if="active.view.connectingFrom !== null"
           :config="conn.tempConnConfig.value"
         />
 
         <!-- 节点列表（上层，覆盖连线） -->
         <WhiteboardNode
-          v-for="node in active.board.nodesArray"
+          v-for="node in nodesArray"
           :key="node.id"
           :ref="(el: unknown) => setNodeRef(node.id, el)"
           :node-id="node.id"
-          :is-selected="active.board.selectedNodeIds.has(node.id)"
+          :is-selected="active.view.selectedNodeIds.has(node.id)"
           @dblclick="startTextEdit"
         />
 
@@ -396,17 +408,17 @@ function handleStageMouseUp(e: unknown): void {
 
     <!-- 文本编辑器覆盖层 -->
     <NodeTextEditor
-      v-if="active.board.editingNodeId && editingNode"
-      :key="active.board.editingNodeId"
-      :node-id="active.board.editingNodeId"
+      v-if="active.view.editingNodeId && editingNode"
+      :key="active.view.editingNodeId"
+      :node-id="active.view.editingNodeId"
       :initial-text="editingNode.text"
       :node-x="editingNode.x"
       :node-y="editingNode.y"
       :node-width="editingNode.width"
       :node-height="editingNode.height"
-      :stage-scale="active.board.stageScale"
-      :stage-x="active.board.stageX"
-      :stage-y="active.board.stageY"
+      :stage-scale="active.view.stageScale"
+      :stage-x="active.view.stageX"
+      :stage-y="active.view.stageY"
       :stage-container="stageContainerRef!"
       @save="finishTextEdit"
       @cancel="cancelTextEdit"

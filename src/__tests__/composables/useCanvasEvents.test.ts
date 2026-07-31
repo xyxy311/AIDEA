@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
+import { useViewStore } from '@/stores/view'
+import { useProjectStore } from '@/stores/project'
 import type { KonvaEventObject } from 'konva/lib/Node'
 
 describe('useCanvasEvents', () => {
@@ -10,10 +12,14 @@ describe('useCanvasEvents', () => {
   })
 
   it('should deselect on canvas click when no node is hit', () => {
-    // 使用 'default' 白板——与 useCanvasEvents 内部的 useActiveWhiteboard 一致
-    const store = useWhiteboardStore('default')
-    store.addNode(0, 0)
-    expect(store.selectedNodeId).not.toBeNull()
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore(project.activeViewId)
+
+    // 在当前视图（根节点）下创建一个节点并选中
+    const id = nodeStore.addNode(project.activeViewId, 0, 0)
+    view.selectNode(id)
+    expect(view.selectedNodeId).not.toBeNull()
 
     const { handleStageClick } = useCanvasEvents()
 
@@ -26,11 +32,12 @@ describe('useCanvasEvents', () => {
     } as unknown as KonvaEventObject<MouseEvent>
 
     handleStageClick(mockEvent)
-    expect(store.selectedNodeId).toBeNull()
+    expect(view.selectedNodeId).toBeNull()
   })
 
   it('should create a node on double click centered at the clicked position', () => {
-    const store = useWhiteboardStore('default')
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
     const { handleStageDblClick } = useCanvasEvents()
 
     // Mock a Konva Stage
@@ -51,10 +58,11 @@ describe('useCanvasEvents', () => {
     } as unknown as KonvaEventObject<MouseEvent>
 
     handleStageDblClick(mockEvent)
-    expect(store.nodesArray.length).toBe(1)
-    const node = store.nodesArray[0]
+    const children = nodeStore.childrenOf(project.activeViewId)
+    expect(children.length).toBe(1)
+    const node = children[0]
     // 节点左上角应偏移半个节点尺寸，使节点中心对齐鼠标位置
-    // DEFAULT_NODE_WIDTH=200 → 300-100=200, DEFAULT_NODE_HEIGHT=120 → 200-60=140
+    // DEFAULT_NODE_WIDTH=200 -> 300-100=200, DEFAULT_NODE_HEIGHT=120 -> 200-60=140
     expect(node.x).toBe(200)
     expect(node.y).toBe(140)
   })

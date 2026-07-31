@@ -1,150 +1,106 @@
 import { ref, computed } from 'vue'
 import { defineStore, getActivePinia } from 'pinia'
-import type { WhiteboardData } from '@/types'
-import { generateId } from '@/utils/id'
-import { useWhiteboardStore } from '@/stores/whiteboard'
+import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
+import { useViewStore } from '@/stores/view'
 
 /**
- * 项目 Store — 管理项目级元数据
+ * 项目 Store - 管理项目级导航与元数据
  *
  * 职责：
- * - 项目名称
- * - 白板列表（索引、名称）
- * - 当前活跃白板 ID
+ * - 当前活跃视图 ID（查看哪个节点的子级）
+ * - 项目名（根节点 text 的单一数据源派生）
+ * - 节点树展开状态（左侧导航树的全局展开 / 收起）
+ * - viewStore 实例的生命周期（销毁）
  *
- * 不存储具体节点或导航状态——这些属于每个白板自己的 store。
+ * 不存储节点 / 连线数据（归 nodeStore），不存储视口 / 选中（归 viewStore）。
  */
 export const useProjectStore = defineStore('project', () => {
-  // ── State ──
+  const nodeStore = useNodeStore()
 
-  /** 项目名称 */
-  const projectName = ref('未命名项目')
+  // ── 活跃视图 ──
 
-  /** 白板列表 */
-  const whiteboards = ref<WhiteboardData[]>([
-    { id: 'default', name: '新白板' },
-  ])
+  /** 当前活跃视图 ID（查看哪个节点的子级），初始为根节点 */
+  const activeViewId = ref<string>(ROOT_NODE_ID)
 
-  /** 当前活跃白板 ID */
-  const activeWhiteboardId = ref('default')
+  /** 根视图 ID（项目节点，不可删除） */
+  const rootViewId = computed(() => ROOT_NODE_ID)
 
-  // ── Getters ──
+  // ── 项目名（根节点 text 单一数据源）──
 
-  /** 当前活跃白板对象 */
-  const activeWhiteboard = computed<WhiteboardData | undefined>(() =>
-    whiteboards.value.find((w) => w.id === activeWhiteboardId.value),
-  )
+  /** 项目名 = 根节点 text */
+  const projectName = computed(() => nodeStore.rootNode?.text ?? '未命名项目')
 
-  /** 白板总数 */
-  const whiteboardCount = computed(() => whiteboards.value.length)
+  /** 设置项目名 = 修改根节点 text */
+  function setProjectName(name: string): void {
+    nodeStore.setNodeText(ROOT_NODE_ID, name)
+  }
+
+  // ── 树展开状态（全局导航态）──
+
+  /** 展开的节点 ID 集合（根节点默认展开） */
+  const expandedIds = ref<Set<string>>(new Set([ROOT_NODE_ID]))
+
+  /** 切换展开 / 收起 */
+  function toggleExpand(id: string): void {
+    const next = new Set(expandedIds.value)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    expandedIds.value = next
+  }
+
+  /** 展开（不切换收起） */
+  function expand(id: string): void {
+    if (expandedIds.value.has(id)) return
+    const next = new Set(expandedIds.value)
+    next.add(id)
+    expandedIds.value = next
+  }
+
+  // ── 视图切换 ──
 
   /**
-   * 根白板 ID（项目白板）。
-   * 项目白板始终位于列表首位，无父级、不可删除。
+   * 切换活跃视图到指定节点。
+   * 仅当该节点存在时切换，并重置目标视图的交互状态。
    */
-  const rootWhiteboardId = computed(() => whiteboards.value[0]?.id ?? '')
-
-  // ── Actions ──
-
-  function setProjectName(name: string): void {
-    projectName.value = name
+  function switchView(id: string): void {
+    if (!nodeStore.nodes.has(id)) return
+    activeViewId.value = id
+    useViewStore(id).resetViewState()
   }
 
-  function addWhiteboard(name?: string, id?: string, parentId?: string): string {
-    const wbId = id ?? generateId()
-    // 若该 ID 已被占用（例如节点已关联白板后重复创建），直接返回不重复添加
-    if (whiteboards.value.some((w) => w.id === wbId)) {
-      return wbId
-    }
-    whiteboards.value.push({
-      id: wbId,
-      name: name ?? '新白板',
-      parentId,
-    })
-    return wbId
-  }
+  // ── viewStore 实例销毁 ──
 
-  function removeWhiteboard(id: string): void {
-    // 根白板（项目白板）不可删除
-    if (id === rootWhiteboardId.value) return
-    if (whiteboards.value.length <= 1) return
-    const idx = whiteboards.value.findIndex((w) => w.id === id)
-    if (idx === -1) return
-    whiteboards.value.splice(idx, 1)
-
-    if (activeWhiteboardId.value === id) {
-      activeWhiteboardId.value = rootWhiteboardId.value
-    }
-
-    // 销毁对应的 Pinia store
+  /**
+   * 销毁指定视图对应的 viewStore 实例（从 Pinia 内部 Map 中删除）。
+   * 节点被删除时，其对应的视图 store 应一并销毁以释放内存。
+   */
+  function destroyView(id: string): void {
     const pinia = getActivePinia()
     if (pinia) {
-      ;((pinia as unknown) as { _s: Map<string, unknown> })._s.delete(`whiteboard-${id}`)
+      ;((pinia as unknown) as { _s: Map<string, unknown> })._s.delete(`view-${id}`)
     }
   }
 
-  /**
-   * 递归删除白板及其所有子白板（销毁 store + 列表项 + 活跃白板回退）。
-   *
-   * 不触碰父白板中的关联节点--节点清理由 whiteboard store 的 deleteNode 负责。
-   * 供「删除节点连带删白板」「右键取消关联」等场景复用。
-   */
-  function removeWhiteboardWithDescendants(wbId: string): void {
-    if (wbId === rootWhiteboardId.value) return
-    if (!whiteboards.value.some((w) => w.id === wbId)) return
-
-    // 收集后代（含自身）
-    const descendants: string[] = []
-    const visited = new Set<string>()
-    function collect(id: string): void {
-      if (visited.has(id)) return
-      visited.add(id)
-      descendants.push(id)
-      for (const w of whiteboards.value) {
-        if (w.parentId === id) collect(w.id)
-      }
-    }
-    collect(wbId)
-
-    // 若活跃白板在被删子树中，先切换到根白板
-    if (descendants.includes(activeWhiteboardId.value)) {
-      switchWhiteboard(rootWhiteboardId.value)
-    }
-
-    // 逐个删除（removeWhiteboard 内部销毁 store 并处理列表）
-    for (const id of descendants) {
-      removeWhiteboard(id)
-    }
-  }
-
-  function switchWhiteboard(id: string): void {
-    if (!whiteboards.value.find((w) => w.id === id)) return
-    activeWhiteboardId.value = id
-    // 重置目标白板的交互状态
-    useWhiteboardStore(id).resetBoardState()
-  }
-
-  function renameWhiteboard(id: string, name: string): void {
-    const wb = whiteboards.value.find((w) => w.id === id)
-    if (!wb || !name.trim()) return
-    wb.name = name.trim()
+  /** 批量销毁视图 store 实例 */
+  function destroyViews(ids: string[]): void {
+    for (const id of ids) destroyView(id)
   }
 
   return {
-    // State
+    // 活跃视图
+    activeViewId,
+    rootViewId,
+    // 项目名
     projectName,
-    whiteboards,
-    activeWhiteboardId,
-    // Getters
-    activeWhiteboard,
-    whiteboardCount,
-    rootWhiteboardId,
-    // Actions
     setProjectName,
-    addWhiteboard,
-    removeWhiteboard,
-    removeWhiteboardWithDescendants,
-    switchWhiteboard,
-    renameWhiteboard,
+    // 树展开
+    expandedIds,
+    toggleExpand,
+    expand,
+    // 视图切换
+    switchView,
+    // viewStore 生命周期
+    destroyView,
+    destroyViews,
   }
 })

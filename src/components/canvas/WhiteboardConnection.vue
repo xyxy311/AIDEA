@@ -12,7 +12,7 @@
  */
 import { computed } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import {
   LINE_STYLE_DASH_MAP,
   CONNECTION_ARROW_SIZE,
@@ -32,23 +32,26 @@ const emit = defineEmits<{
 }>()
 
 // ── Store ──
-const active = useActiveWhiteboard()
+const active = useActiveView()
 
 // ── Computed: 连线数据 ──
-const connection = computed(() => active.board.connections.get(props.connectionId))
+// 从当前视图的连接数组中查找该连线
+const connection = computed(() =>
+  active.nodeStore.getConnections(active.project.activeViewId).find(c => c.id === props.connectionId)
+)
 
 // ── Computed: 两端节点 ──
 // 注意：先将 connection.value 赋值给局部变量，避免回调内 TypeScript 窄化失效
 const fromNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  return active.board.nodes.get(conn.fromNodeId)
+  return active.nodeStore.getNode(conn.fromNodeId)
 })
 
 const toNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  return active.board.nodes.get(conn.toNodeId)
+  return active.nodeStore.getNode(conn.toNodeId)
 })
 
 // ── 连线主体 Konva 配置 ──

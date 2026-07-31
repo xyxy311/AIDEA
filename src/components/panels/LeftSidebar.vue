@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
- * LeftSidebar - 左侧边栏：树形白板列表
+ * LeftSidebar - 左侧边栏：节点树导航
  *
- * 展示树形白板结构（类似文件浏览器的文件夹树），支持：
+ * 展示节点树结构（基于 nodeStore 的 parentId 构建），支持：
  * - 展开/收起子树
- * - 单击切换活跃白板
- * - 双击重命名白板（同步更新父白板中的关联节点文本）
- * - 在当前活跃白板下新建子白板
- * - 递归删除白板（含所有子白板）
+ * - 单击切换活跃视图（查看该节点的子级）
+ * - 双击重命名节点（根节点重命名即改项目名）
+ * - 在当前活跃视图下新建子节点
+ * - 递归删除节点（含所有子节点）
+ *
+ * 叶子节点（无子节点且非根）颜色减淡，提示其不可展开。
  */
 import { ref, nextTick } from 'vue'
 import {
@@ -22,10 +24,9 @@ import {
   ChevronBack,
   ChevronForward,
   ChevronDown,
-  DocumentOutline,
 } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
-import { useWhiteboardTree } from '@/composables/useWhiteboardTree'
+import { useNodeTree } from '@/composables/useNodeTree'
 
 defineProps<{
   collapsed: boolean
@@ -40,47 +41,47 @@ const emit = defineEmits<{
 const project = useProjectStore()
 const {
   flatTree,
-  rootWhiteboardId,
+  rootViewId,
   toggleExpand,
-  addSubWhiteboard,
-  deleteWhiteboardRecursive,
-  renameWhiteboard,
-} = useWhiteboardTree()
+  addSubNode,
+  deleteNodeRecursive,
+  renameNode,
+} = useNodeTree()
 
 // ── 重命名状态 ──
-const editingWbId = ref<string | null>(null)
+const editingNodeId = ref<string | null>(null)
 const renameText = ref('')
 
 // ── 工具栏操作 ──
 
-/** 在活跃白板下新建子白板并切换到新白板 */
+/** 在活跃视图下新建子节点并进入编辑态 */
 function handleAdd(): void {
-  addSubWhiteboard(project.activeWhiteboardId)
+  addSubNode(project.activeViewId)
 }
 
-/** 递归删除当前活跃白板 */
+/** 递归删除当前活跃节点（含子树） */
 function handleDeleteActive(): void {
-  deleteWhiteboardRecursive(project.activeWhiteboardId)
+  deleteNodeRecursive(project.activeViewId)
 }
 
-// ── 白板项操作 ──
+// ── 节点项操作 ──
 
 function handleSwitch(id: string): void {
-  if (editingWbId.value) return // 重命名中不切换
-  project.switchWhiteboard(id)
+  if (editingNodeId.value) return // 重命名中不切换
+  project.switchView(id)
 }
 
 function handleRemove(id: string): void {
-  deleteWhiteboardRecursive(id)
+  deleteNodeRecursive(id)
 }
 
 // ── 双击开始重命名 ──
 
-function handleDblClick(wbId: string, currentName: string): void {
-  editingWbId.value = wbId
+function handleDblClick(nodeId: string, currentName: string): void {
+  editingNodeId.value = nodeId
   renameText.value = currentName
   nextTick(() => {
-    const input = document.querySelector<HTMLInputElement>('.wb-rename-input input')
+    const input = document.querySelector<HTMLInputElement>('.node-rename-input input')
     input?.focus()
     input?.select()
   })
@@ -88,20 +89,18 @@ function handleDblClick(wbId: string, currentName: string): void {
 
 /**
  * 保存重命名。
- * 通过 renameWhiteboard 同步更新父白板中的关联节点文本--
- * 节点文本是单一数据源，更新后会自动同步白板名。
- * 根白板无关联节点，直接重命名白板名。
+ * 更新节点文本（单一数据源）；根节点文本即项目名。
  */
 function finishRename(): void {
-  if (editingWbId.value && renameText.value.trim()) {
-    renameWhiteboard(editingWbId.value, renameText.value)
+  if (editingNodeId.value && renameText.value.trim()) {
+    renameNode(editingNodeId.value, renameText.value)
   }
-  editingWbId.value = null
+  editingNodeId.value = null
 }
 
 /** 取消重命名（Escape 键） */
 function cancelRename(): void {
-  editingWbId.value = null
+  editingNodeId.value = null
 }
 </script>
 
@@ -112,7 +111,7 @@ function cancelRename(): void {
     :style="{ width: collapsed ? '36px' : width + 'px' }"
   >
     <div class="sidebar-header">
-      <span v-if="!collapsed" class="sidebar-title">白板树</span>
+      <span v-if="!collapsed" class="sidebar-title">节点树</span>
       <NButton size="tiny" quaternary @click="emit('toggle')">
         <template #icon>
           <ChevronBack v-if="!collapsed" />
@@ -125,7 +124,7 @@ function cancelRename(): void {
       <div class="sidebar-toolbar">
         <NButton size="small" quaternary @click="handleAdd">
           <template #icon><AddOutline /></template>
-          新建子白板
+          新建子节点
         </NButton>
         <NPopconfirm @positive-click="handleDeleteActive">
           <template #trigger>
@@ -133,23 +132,26 @@ function cancelRename(): void {
               size="small"
               quaternary
               type="error"
-              :disabled="project.activeWhiteboardId === rootWhiteboardId"
+              :disabled="project.activeViewId === rootViewId"
             >
               <template #icon><TrashOutline /></template>
               删除
             </NButton>
           </template>
-          确定删除当前白板及其所有子白板？
+          确定删除当前节点及其所有子节点？
         </NPopconfirm>
       </div>
 
       <NScrollbar class="sidebar-scroll" x-scrollable>
-        <div class="whiteboard-list">
+        <div class="node-list">
           <div
             v-for="item in flatTree"
             :key="item.id"
-            class="whiteboard-item"
-            :class="{ active: item.id === project.activeWhiteboardId && !editingWbId }"
+            class="node-item"
+            :class="{
+              active: item.id === project.activeViewId && !editingNodeId,
+              leaf: !item.hasChildren && !item.isRoot,
+            }"
             :style="{ paddingLeft: 12 + item.depth * 16 + 'px' }"
             @click="handleSwitch(item.id)"
             @dblclick.stop="handleDblClick(item.id, item.name)"
@@ -182,28 +184,28 @@ function cancelRename(): void {
 
             <!-- 重命名模式 -->
             <NInput
-              v-if="editingWbId === item.id"
+              v-if="editingNodeId === item.id"
               v-model:value="renameText"
-              class="wb-rename-input"
+              class="node-rename-input"
               size="tiny"
               @blur="finishRename"
               @keydown.enter.prevent="finishRename"
               @keydown.escape.prevent="cancelRename"
             />
             <!-- 正常显示（原生 span：避免 NText 在 flex 布局下 min-width:0 导致文字被裁剪） -->
-            <span v-else class="wb-name">{{ item.name }}</span>
+            <span v-else class="node-name">{{ item.name }}</span>
 
-            <!-- 删除按钮（根白板不显示） -->
+            <!-- 删除按钮（根节点不显示） -->
             <NPopconfirm
               v-if="!item.isRoot"
               @positive-click="handleRemove(item.id)"
             >
               <template #trigger>
-                <NButton size="tiny" quaternary type="error" class="wb-remove-btn">
+                <NButton size="tiny" quaternary type="error" class="node-remove-btn">
                   <template #icon><TrashOutline /></template>
                 </NButton>
               </template>
-              确定删除此白板及其所有子白板？
+              确定删除此节点及其所有子节点？
             </NPopconfirm>
           </div>
         </div>
@@ -259,13 +261,13 @@ function cancelRename(): void {
 }
 
 /* 横向滚动：列表内容宽度不被容器压缩，溢出时显示横向滚动条 */
-.whiteboard-list {
+.node-list {
   padding: 4px;
   min-width: max-content;
   white-space: nowrap;
 }
 
-.whiteboard-item {
+.node-item {
   display: flex;
   align-items: center;
   padding: 6px 12px;
@@ -276,13 +278,22 @@ function cancelRename(): void {
   position: relative; /* 使绝对定位的缩进竖线以此为锚点 */
 }
 
-.whiteboard-item:hover {
+.node-item:hover {
   background: var(--color-bg);
 }
 
-.whiteboard-item.active {
+.node-item.active {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
+}
+
+/* 叶子节点（无子节点且非根）颜色减淡 */
+.node-item.leaf {
+  opacity: 0.55;
+}
+
+.node-item.leaf:hover {
+  opacity: 0.85;
 }
 
 /* ── 展开箭头 ── */
@@ -315,13 +326,9 @@ function cancelRename(): void {
   opacity: 0.6;
 }
 
-.whiteboard-item.active .wb-icon {
-  opacity: 0.8;
-}
+/* ── 节点名称 ── */
 
-/* ── 白板名称 ── */
-
-.wb-name {
+.node-name {
   font-size: 13px;
   flex: 1;
   min-width: 0;
@@ -331,23 +338,23 @@ function cancelRename(): void {
   color: var(--color-text);
 }
 
-.wb-rename-input {
+.node-rename-input {
   flex: 1;
   min-width: 0;
 }
 
 /* ── 删除按钮（hover 显示） ── */
 
-.wb-remove-btn {
+.node-remove-btn {
   opacity: 0;
   transition: opacity 0.15s;
 }
 
-.whiteboard-item:hover .wb-remove-btn {
+.node-item:hover .node-remove-btn {
   opacity: 1;
 }
 
-/* ── 缩进竖线（VSCode 风格） ──
+/* ── 缩进竖线（VSCode 风格）──
  * 绝对定位覆盖在 padding 区域，不占 flex 流空间。
  * 每条竖线 16px 宽，左边框 1px 淡色，贯穿行高。
  */
@@ -376,8 +383,8 @@ function cancelRename(): void {
 }
 
 /* active/hover 态下竖线保持可见且协调 */
-.whiteboard-item.active .indent-line,
-.whiteboard-item:hover .indent-line {
+.node-item.active .indent-line,
+.node-item:hover .indent-line {
   border-left-color: rgba(128, 128, 128, 0.22);
 }
 </style>

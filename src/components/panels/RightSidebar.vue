@@ -9,11 +9,11 @@
 import { computed } from 'vue'
 import { NButton, NScrollbar, NText } from 'naive-ui'
 import { ChevronBack, ChevronForward } from '@vicons/ionicons5'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import NodePropertyEditor from './NodePropertyEditor.vue'
 import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
 
-const active = useActiveWhiteboard()
+const active = useActiveView()
 
 defineProps<{
   collapsed: boolean
@@ -27,8 +27,8 @@ const emit = defineEmits<{
 
 /** 标题文本 */
 const title = computed(() => {
-  if (active.board.selectedConnectionIds.size > 0) return '连线属性'
-  return '属性'
+  if (active.view.selectedConnectionIds.size > 0) return '连线属性'
+  return '节点属性'
 })
 </script>
 
@@ -52,7 +52,7 @@ const title = computed(() => {
       <NScrollbar class="sidebar-scroll">
         <div class="sidebar-content">
           <!-- 连线选中 → 连线属性编辑器（含预设） -->
-          <template v-if="active.board.selectedConnectionIds.size > 0">
+          <template v-if="active.view.selectedConnectionIds.size > 0">
             <ConnectionPropertyEditor />
           </template>
           <!-- 节点选中或无选中 → 节点属性编辑器（含预设） -->

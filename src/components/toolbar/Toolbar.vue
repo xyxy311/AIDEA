@@ -6,15 +6,15 @@
  * 通过 useWhiteboardStore 直接操作状态。
  */
 import { computed } from 'vue'
-import { useActiveWhiteboard } from '@/composables/useActiveWhiteboard'
+import { useActiveView } from '@/composables/useActiveView'
 import { useStageSize } from '@/composables/useStageSize'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
-const active = useActiveWhiteboard()
+const active = useActiveView()
 const { stageWidth, stageHeight } = useStageSize()
 
-/** 是否有选中节点（控制删除按钮的禁用状态） */
-const hasSelection = computed(() => active.board.selectedNodeIds.size > 0)
+/** 当前视图的节点列表 */
+const nodes = computed(() => active.nodeStore.childrenOf(active.project.activeViewId))
 
 /**
  * 在视口中央创建新节点
@@ -28,19 +28,21 @@ function handleAddNode() {
   const viewportCenterY = stageHeight.value / 2
 
   // 转换为世界坐标：world = (screen - offset) / scale
-  const worldX = (viewportCenterX - active.board.stageX) / active.board.stageScale
-  const worldY = (viewportCenterY - active.board.stageY) / active.board.stageScale
+  const worldX = (viewportCenterX - active.view.stageX) / active.view.stageScale
+  const worldY = (viewportCenterY - active.view.stageY) / active.view.stageScale
 
   // 节点左上角偏移半个尺寸，使节点中心对齐视口中心
   const nodeX = worldX - DEFAULT_NODE_WIDTH / 2
   const nodeY = worldY - DEFAULT_NODE_HEIGHT / 2
 
-  active.board.addNode(nodeX, nodeY)
+  const id = active.nodeStore.addNode(active.project.activeViewId, nodeX, nodeY)
+  active.view.selectNode(id)
+  active.view.startEditing(id)
 }
 
 /** 调试打印当前画布状态 */
 function debugPrint() {
-  console.log('当前画布节点:', active.board.nodesArray)
+  console.log('当前画布节点:', nodes.value)
 }
 </script>
 
@@ -75,7 +77,7 @@ function debugPrint() {
 
     <div class="toolbar-right">
       <span class="node-count">
-        节点：{{ active.board.nodesArray.length }}
+        节点：{{ nodes.length }}
       </span>
     </div>
   </header>

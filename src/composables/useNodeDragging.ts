@@ -3,6 +3,7 @@ import type { Ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { useActiveView } from '@/composables/useActiveView'
+import { useCommands } from '@/composables/useCommands'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
 
 /**
@@ -25,6 +26,7 @@ import { NODE_DRAG_THRESHOLD } from '@/constants'
  */
 export function useNodeDragging() {
   const active = useActiveView()
+  const commands = useCommands()
 
   /** 是否正在拖动节点（已超过阈值激活） */
   const isDragging: Ref<boolean> = ref(false)
@@ -127,7 +129,7 @@ export function useNodeDragging() {
     })
   }
 
-  /** mouseup：纯 click 处理选中；拖动结束仅清理状态 */
+  /** mouseup：纯 click 处理选中；拖动结束提交移动命令到历史栈 */
   function handleMouseUp(e: KonvaEventObject<MouseEvent>): void {
     if (!pendingNodeId) return // 非节点拖动，不处理
 
@@ -135,6 +137,31 @@ export function useNodeDragging() {
       // 纯 click（未超过阈值）：处理选中（单选 / Ctrl toggle）
       const ctrl = e.evt.ctrlKey || e.evt.metaKey
       active.view.selectNode(pendingNodeId, ctrl)
+    } else {
+      // 拖拽结束：提交移动命令到历史栈
+      const nodeStore = active.nodeStore
+      const positions: Array<{
+        id: string
+        oldX: number
+        oldY: number
+        newX: number
+        newY: number
+      }> = []
+      dragStartPositions.forEach((start, id) => {
+        const n = nodeStore.getNode(id)
+        if (n && (n.x !== start.x || n.y !== start.y)) {
+          positions.push({
+            id,
+            oldX: start.x,
+            oldY: start.y,
+            newX: n.x,
+            newY: n.y,
+          })
+        }
+      })
+      if (positions.length > 0) {
+        commands.commitNodeMove(positions)
+      }
     }
 
     // 清理状态

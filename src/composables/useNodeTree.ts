@@ -3,6 +3,7 @@ import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
 import { DEFAULT_NODE_TEXT } from '@/constants'
 import { useViewStore } from '@/stores/view'
+import { useCommands } from '@/composables/useCommands'
 
 /** 节点树节点 */
 export interface NodeTreeNode {
@@ -41,6 +42,7 @@ export interface FlatNodeItem {
 export function useNodeTree() {
   const project = useProjectStore()
   const nodeStore = useNodeStore()
+  const commands = useCommands()
 
   /** 根节点 ID（项目节点） */
   const rootViewId = computed(() => project.rootViewId)
@@ -121,7 +123,7 @@ export function useNodeTree() {
 
     const count = nodeStore.childrenOf(parentViewId).length
     const offset = 80 + (count % 6) * 24
-    const newId = nodeStore.addNode(parentViewId, offset, offset, DEFAULT_NODE_TEXT)
+    const newId = commands.createNode(parentViewId, offset, offset, DEFAULT_NODE_TEXT)
 
     // 展开父节点，使新子节点在树中可见
     project.expand(parentViewId)
@@ -130,25 +132,13 @@ export function useNodeTree() {
 
   /**
    * 递归删除节点及其整个子树。
-   *
-   * 1. 根节点不可删除
-   * 2. 收集所有后代（含自身）
-   * 3. 销毁对应 viewStore 实例
-   * 4. 若活跃视图在被删子树中，切回根视图
-   * 5. nodeStore 删除数据（含连线清理）
+   * 委托命令层完成：捕获子树、删除、视图协调、入栈。
+   * 根节点不可删除。
    */
   function deleteNodeRecursive(nodeId: string): void {
     if (nodeId === project.rootViewId) return
     if (!nodeExists(nodeId)) return
-
-    const descendants = nodeStore.descendantsOf(nodeId)
-    project.destroyViews(descendants)
-
-    if (descendants.includes(project.activeViewId)) {
-      project.switchView(project.rootViewId)
-    }
-
-    nodeStore.deleteNode(nodeId)
+    commands.deleteNodes([nodeId])
   }
 
   /** 查找节点的父节点 ID（根节点返回 null） */
@@ -163,12 +153,12 @@ export function useNodeTree() {
 
   /**
    * 重命名节点（更新节点文本，单一数据源）。
-   * 根节点文本即项目名。
+   * 根节点文本即项目名。通过命令层入历史栈。
    */
   function renameNode(nodeId: string, name: string): void {
     const trimmed = name.trim()
     if (!trimmed) return
-    nodeStore.updateNodeText(nodeId, trimmed)
+    commands.updateNodeText(nodeId, trimmed)
   }
 
   return {

@@ -1,17 +1,20 @@
 <script setup lang="ts">
 /**
- * MenuBar — 顶部菜单栏
+ * MenuBar - 顶部菜单栏
  *
  * 文件菜单：新建项目、保存、导出
  * 编辑菜单：撤销、重做、设置
  */
-import { h, type Component } from 'vue'
+import { h, computed, type Component } from 'vue'
 import { NDropdown, NButton, type DropdownOption } from 'naive-ui'
 import { AddOutline, SaveOutline, ArrowUndoOutline, ArrowRedoOutline, SettingsOutline } from '@vicons/ionicons5'
+import { useCommands } from '@/composables/useCommands'
 
 const emit = defineEmits<{
   openSettings: []
 }>()
+
+const commands = useCommands()
 
 function renderIcon(icon: Component) {
   return () => h(icon)
@@ -23,16 +26,25 @@ const fileOptions: DropdownOption[] = [
   { label: '保存', key: 'save', icon: renderIcon(SaveOutline) },
 ]
 
-const editOptions: DropdownOption[] = [
-  { label: '撤销', key: 'undo', icon: renderIcon(ArrowUndoOutline) },
-  { label: '重做', key: 'redo', icon: renderIcon(ArrowRedoOutline) },
+// 动态生成 editOptions：canUndo/canRedo 控制禁用状态
+const editOptions = computed<DropdownOption[]>(() => [
+  { label: '撤销', key: 'undo', icon: renderIcon(ArrowUndoOutline), disabled: !commands.canUndo.value },
+  { label: '重做', key: 'redo', icon: renderIcon(ArrowRedoOutline), disabled: !commands.canRedo.value },
   { type: 'divider', key: 'd2' },
   { label: '设置', key: 'settings', icon: renderIcon(SettingsOutline) },
-]
+])
 
 function handleSelect(key: string): void {
   if (key === 'settings') {
     emit('openSettings')
+    return
+  }
+  if (key === 'undo') {
+    commands.undo()
+    return
+  }
+  if (key === 'redo') {
+    commands.redo()
     return
   }
   // 预留：其他功能暂不实现

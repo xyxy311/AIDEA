@@ -7,10 +7,12 @@
  */
 import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
+import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 const active = useActiveView()
+const commands = useCommands()
 const { stageWidth, stageHeight } = useStageSize()
 
 /** 当前视图的节点列表 */
@@ -35,7 +37,7 @@ function handleAddNode() {
   const nodeX = worldX - DEFAULT_NODE_WIDTH / 2
   const nodeY = worldY - DEFAULT_NODE_HEIGHT / 2
 
-  const id = active.nodeStore.addNode(active.project.activeViewId, nodeX, nodeY)
+  const id = commands.createNode(active.project.activeViewId, nodeX, nodeY)
   active.view.selectNode(id)
   active.view.startEditing(id)
 }

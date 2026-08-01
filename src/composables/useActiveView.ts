@@ -1,6 +1,7 @@
 import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
+import { useCommands } from '@/composables/useCommands'
 
 /**
  * 快捷访问当前活跃视图的 composable
@@ -17,6 +18,7 @@ import { useViewStore } from '@/stores/view'
  *
  * 另提供若干跨 store 编排方法（选中 <-> 数据），封装"对选中项的操作"，
  * 使组件调用方式接近原 board API，减少迁移改动。
+ * 所有写操作通过命令层（useCommands）执行，自动入历史栈。
  *
  * 用法：
  *   const active = useActiveView()
@@ -27,31 +29,32 @@ import { useViewStore } from '@/stores/view'
 export function useActiveView() {
   const project = useProjectStore()
   const nodeStore = useNodeStore()
+  const commands = useCommands()
 
   /** 获取当前活跃视图 store（每次调用取最新 activeViewId） */
   function view() {
     return useViewStore(project.activeViewId)
   }
 
-  // ── 编排：选中项 <-> 数据 ──
+  // ── 编排：选中项 <-> 数据（委托命令层，自动入历史栈）──
 
   /** 更新当前节点名称 */
   function updateNodeName(name: string): void {
-    nodeStore.setNodeText(project.activeViewId, name)
+    commands.setNodeText(project.activeViewId, name)
   }
-  
+
   /** 批量更新选中节点样式 */
   function updateSelectedNodesStyle(partial: {
     textColor?: string
     backgroundColor?: string
     borderColor?: string
   }): void {
-    nodeStore.updateNodesStyle(Array.from(view().selectedNodeIds), partial)
+    commands.updateNodesStyle(Array.from(view().selectedNodeIds), partial)
   }
 
   /** 批量更新选中节点文本 */
   function updateSelectedNodesText(text: string): void {
-    nodeStore.updateNodesText(Array.from(view().selectedNodeIds), text)
+    commands.updateNodesText(Array.from(view().selectedNodeIds), text)
   }
 
   /** 批量更新选中连线样式 */
@@ -61,7 +64,7 @@ export function useActiveView() {
     strokeColor?: string
     directed?: boolean
   }): void {
-    nodeStore.updateConnectionsStyle(
+    commands.updateConnectionsStyle(
       project.activeViewId,
       Array.from(view().selectedConnectionIds),
       partial,
@@ -70,29 +73,13 @@ export function useActiveView() {
 
   /**
    * 删除所有选中节点（含各自子树）。
-   *
-   * 编排：收集后代 -> 销毁对应 viewStore -> 活跃视图回退 -> 删数据 -> 清选中。
+   * 视图协调（销毁 viewStore、活跃视图回退）已由命令层 + history store 处理。
    */
   function deleteSelectedNodes(): void {
     const v = view()
     const ids = Array.from(v.selectedNodeIds)
     if (ids.length === 0) return
-
-    // 收集所有后代（含自身），用于销毁 viewStore
-    const allDesc = new Set<string>()
-    for (const id of ids) {
-      for (const d of nodeStore.descendantsOf(id)) allDesc.add(d)
-    }
-
-    // 销毁被删子树的 viewStore
-    project.destroyViews(Array.from(allDesc))
-
-    // 若活跃视图在被删子树中，切回根视图
-    if (allDesc.has(project.activeViewId)) {
-      project.switchView(project.rootViewId)
-    }
-
-    nodeStore.deleteNodes(ids)
+    commands.deleteNodes(ids)
     v.clearSelection()
   }
 
@@ -100,7 +87,8 @@ export function useActiveView() {
   function deleteSelectedConnections(): void {
     const v = view()
     const ids = Array.from(v.selectedConnectionIds)
-    nodeStore.deleteConnections(project.activeViewId, ids)
+    if (ids.length === 0) return
+    commands.deleteConnections(project.activeViewId, ids)
     v.clearSelection()
   }
 

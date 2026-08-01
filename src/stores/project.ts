@@ -86,6 +86,25 @@ export const useProjectStore = defineStore('project', () => {
     for (const id of ids) destroyView(id)
   }
 
+  /**
+   * 清理 expandedIds 中已不存在的节点。
+   * 供 history store 在 undo/redo 后调用。
+   */
+  function pruneExpanded(existingIds: Set<string>): void {
+    let changed = false
+    const next = new Set<string>()
+    for (const id of expandedIds.value) {
+      if (existingIds.has(id)) {
+        next.add(id)
+      } else {
+        changed = true
+      }
+    }
+    if (changed) {
+      expandedIds.value = next
+    }
+  }
+
   return {
     // 活跃视图
     activeViewId,
@@ -102,5 +121,6 @@ export const useProjectStore = defineStore('project', () => {
     // viewStore 生命周期
     destroyView,
     destroyViews,
+    pruneExpanded,
   }
 })

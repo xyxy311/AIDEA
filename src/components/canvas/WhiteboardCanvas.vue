@@ -13,6 +13,7 @@
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
+import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
@@ -40,6 +41,7 @@ import type { ContextMenuItem } from '@/composables/useContextMenu'
 
 // ── Store ──
 const active = useActiveView()
+const commands = useCommands()
 
 // ── Stage 尺寸 ──
 const stage = useStageSize()
@@ -193,6 +195,14 @@ function onTransformEnd(): void {
     const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
 
     const node = active.nodeStore.getNode(nodeId)
+    // 捕获 resize 前的旧状态（用于 undo）
+    const oldState = {
+      x: node?.x ?? 0,
+      y: node?.y ?? 0,
+      width: node?.width ?? 0,
+      height: node?.height ?? 0,
+    }
+
     const worldX = (node?.x ?? 0) + rect.x()
     const worldY = (node?.y ?? 0) + rect.y()
 
@@ -204,6 +214,16 @@ function onTransformEnd(): void {
 
     // 写入 store（resizeNode 内部会 fitNodeToText）
     active.nodeStore.resizeNode(nodeId, worldX, worldY, newWidth, newHeight)
+
+    // 捕获 resize 后的新状态，提交命令到历史栈
+    const newNode = active.nodeStore.getNode(nodeId)
+    const newState = {
+      x: newNode?.x ?? 0,
+      y: newNode?.y ?? 0,
+      width: newNode?.width ?? 0,
+      height: newNode?.height ?? 0,
+    }
+    commands.commitNodeResize(nodeId, oldState, newState)
   }
   // 烘焙后重新附着 Transformer 适应新尺寸
   attachTransformer()
@@ -223,9 +243,9 @@ function startTextEdit(nodeId: string): void {
   active.view.startEditing(nodeId)
 }
 
-/** 完成文本编辑（保存）-- setNodeText 仅改数据，需手动清除编辑态 */
+/** 完成文本编辑（保存）-- 通过命令层 setNodeText 入历史栈，再清除编辑态 */
 function finishTextEdit(nodeId: string, text: string): void {
-  active.nodeStore.setNodeText(nodeId, text)
+  commands.setNodeText(nodeId, text)
   active.view.stopEditing()
 }
 

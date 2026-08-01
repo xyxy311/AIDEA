@@ -1,5 +1,6 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useActiveView } from '@/composables/useActiveView'
+import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
@@ -20,6 +21,7 @@ export function useCanvasEvents() {
   const active = useActiveView()
   const contextMenu = useContextMenu()
   const link = useNodeViewLink()
+  const commands = useCommands()
 
   /**
    * 处理画布点击事件
@@ -48,7 +50,7 @@ export function useCanvasEvents() {
     const pos = stage?.getRelativePointerPosition()
     if (pos) {
       // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
-      const newId = active.nodeStore.addNode(
+      const newId = commands.createNode(
         active.project.activeViewId,
         pos.x - DEFAULT_NODE_WIDTH / 2,
         pos.y - DEFAULT_NODE_HEIGHT / 2,

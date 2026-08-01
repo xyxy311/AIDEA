@@ -2,6 +2,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { useActiveView } from '@/composables/useActiveView'
+import { useCommands } from '@/composables/useCommands'
 import {
   CONNECTION_TEMP_STROKE_COLOR,
   CONNECTION_TEMP_DASH,
@@ -26,12 +27,16 @@ import {
  */
 export function useConnectionCreation() {
   const active = useActiveView()
+  const commands = useCommands()
 
   /** Shift 键是否按下 */
   const isShiftHeld = ref(false)
 
   /** 连线拖拽时鼠标位置（临时连线终点） */
   const tempConnEnd = ref<{ x: number; y: number } | null>(null)
+
+  /** 标记起始节点是否为本次新建（用于 batch 合并） */
+  let startNodeCreated = false
 
   // ── 辅助函数 ──
 
@@ -60,12 +65,12 @@ export function useConnectionCreation() {
     if (e.evt.button !== 0) return
 
     const view = active.view
-    const nodeStore = active.nodeStore
 
     // 命中已有节点 -> 以其为连线起始
     const hitNodeId = e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
     if (hitNodeId) {
       view.connectingFrom = hitNodeId
+      startNodeCreated = false
       return
     }
 
@@ -73,12 +78,15 @@ export function useConnectionCreation() {
     const stage = e.target.getStage()
     const pos = stage?.getRelativePointerPosition()
     if (!pos) return
-    const newId = nodeStore.addNode(
+    // 开启 batch，起始节点入 batch（后续 mouseup 时合并为单条历史）
+    commands.beginBatch()
+    const newId = commands.createNode(
       active.project.activeViewId,
       pos.x - DEFAULT_NODE_WIDTH / 2,
       pos.y - DEFAULT_NODE_HEIGHT / 2,
     )
     view.connectingFrom = newId
+    startNodeCreated = true
   }
 
   /** Stage mousemove: 连线拖拽中更新临时终点 */
@@ -97,7 +105,6 @@ export function useConnectionCreation() {
   /** Stage mouseup: 连线拖拽结束 -> 创建连线或取消 */
   function handleMouseUp(e: KonvaEventObject<MouseEvent>): void {
     const view = active.view
-    const nodeStore = active.nodeStore
     const project = active.project
 
     if (view.connectingFrom === null) return
@@ -108,27 +115,37 @@ export function useConnectionCreation() {
     const targetNodeId =
       e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
 
+    // 若起始节点不是新建的（batch 未开启），确保 batch 开启以合并本次操作
+    if (!startNodeCreated) {
+      commands.beginBatch()
+    }
+
     if (targetNodeId && targetNodeId !== fromNodeId) {
       // 命中已有节点 -> 直接连线
-      nodeStore.addConnection(project.activeViewId, fromNodeId, targetNodeId)
+      commands.addConnection(project.activeViewId, fromNodeId, targetNodeId)
     } else if (!targetNodeId) {
       // 结束位置无节点 -> 在指针处创建节点作为结束，再连线
       const stage = e.target.getStage()
       const pos = stage?.getRelativePointerPosition()
       if (!pos) {
         tempConnEnd.value = null
+        commands.rollbackBatch()
+        startNodeCreated = false
         return
       }
-      const newId = nodeStore.addNode(
+      const newId = commands.createNode(
         project.activeViewId,
         pos.x - DEFAULT_NODE_WIDTH / 2,
         pos.y - DEFAULT_NODE_HEIGHT / 2,
       )
       if (newId !== fromNodeId) {
-        nodeStore.addConnection(project.activeViewId, fromNodeId, newId)
+        commands.addConnection(project.activeViewId, fromNodeId, newId)
       }
     }
 
+    // 提交复合命令（创建节点 + 创建连线合并为单条历史）
+    commands.commitBatch()
+    startNodeCreated = false
     tempConnEnd.value = null
   }
 
@@ -172,6 +189,11 @@ export function useConnectionCreation() {
       isShiftHeld.value = false
       // Shift 释放时取消连线创建
       if (active.view.connectingFrom !== null) {
+        // 若起始节点是新建的且操作未完成，回滚 batch（丢弃历史，不删已创建节点）
+        if (startNodeCreated) {
+          commands.rollbackBatch()
+          startNodeCreated = false
+        }
         active.view.connectingFrom = null
         tempConnEnd.value = null
       }

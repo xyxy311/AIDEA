@@ -11,7 +11,7 @@
  *
  * 叶子节点（无子节点且非根）颜色减淡，提示其不可展开。
  */
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed, watch } from 'vue'
 import {
   NButton,
   NInput,
@@ -27,6 +27,8 @@ import {
 } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import { useNodeTree } from '@/composables/useNodeTree'
+import { useActiveView } from '@/composables/useActiveView'
+import { useNodeStore } from '@/stores/node'
 
 defineProps<{
   collapsed: boolean
@@ -47,6 +49,25 @@ const {
   deleteNodeRecursive,
   renameNode,
 } = useNodeTree()
+
+const active = useActiveView()
+const nodeStore = useNodeStore()
+
+/** 画布中选中的节点 ID 集合（来自当前活跃视图） */
+const selectedSet = computed(() => active.view.selectedNodeIds)
+
+/**
+ * 画布选中变化时，自动展开选中节点的所有祖先，
+ * 使选中节点在节点树中立即可见。
+ */
+watch(selectedSet, (ids) => {
+  for (const id of ids) {
+    if (!nodeStore.nodes.has(id)) continue
+    for (const ancestorId of nodeStore.pathToRoot(id)) {
+      project.expand(ancestorId)
+    }
+  }
+})
 
 // ── 重命名状态 ──
 const editingNodeId = ref<string | null>(null)
@@ -150,6 +171,7 @@ function cancelRename(): void {
             class="node-item"
             :class="{
               active: item.id === project.activeViewId && !editingNodeId,
+              selected: selectedSet.has(item.id),
               leaf: !item.hasChildren && !item.isRoot,
             }"
             :style="{ paddingLeft: 12 + item.depth * 16 + 'px' }"
@@ -285,6 +307,11 @@ function cancelRename(): void {
 .node-item.active {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
+}
+
+/* 画布选中节点：无填充圆角矩形框（与画布 Transformer 选中色一致） */
+.node-item.selected {
+  box-shadow: inset 0 0 0 2px #3b82f6;
 }
 
 /* 叶子节点（无子节点且非根）颜色减淡 */

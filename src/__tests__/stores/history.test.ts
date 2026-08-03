@@ -4,6 +4,7 @@ import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import { useCommands } from '@/composables/useCommands'
+import { DEFAULT_NODE_STYLE } from '@/constants'
 
 describe('history store', () => {
   beforeEach(() => {
@@ -215,26 +216,26 @@ describe('history store', () => {
     })
   })
 
-  describe('节点样式（undefined 默认值）', () => {
-    it('更新样式应生效，undo 应恢复 undefined', () => {
+  describe('节点样式（默认值）', () => {
+    it('更新样式应生效，undo 应恢复默认值', () => {
       const nodeStore = useNodeStore()
       const history = useHistoryStore()
       const commands = useCommands()
 
       const id = commands.createNode(ROOT_NODE_ID, 0, 0, '样式节点')
-      // 新建节点的样式字段为 undefined
-      expect(nodeStore.getNode(id)?.textColor).toBeUndefined()
-      expect(nodeStore.getNode(id)?.backgroundColor).toBeUndefined()
+      // 新建节点的样式字段为默认值（非 undefined）
+      expect(nodeStore.getNode(id)?.textColor).toBe(DEFAULT_NODE_STYLE.textColor)
+      expect(nodeStore.getNode(id)?.backgroundColor).toBe(DEFAULT_NODE_STYLE.backgroundColor)
 
-      // 更新样式 — 不应抛错
+      // 更新样式 - 不应抛错
       commands.updateNodesStyle([id], { textColor: '#ff0000', backgroundColor: '#00ff00' })
       expect(nodeStore.getNode(id)?.textColor).toBe('#ff0000')
       expect(nodeStore.getNode(id)?.backgroundColor).toBe('#00ff00')
 
-      // undo 应恢复为 undefined
+      // undo 应恢复为默认值
       history.undo()
-      expect(nodeStore.getNode(id)?.textColor).toBeUndefined()
-      expect(nodeStore.getNode(id)?.backgroundColor).toBeUndefined()
+      expect(nodeStore.getNode(id)?.textColor).toBe(DEFAULT_NODE_STYLE.textColor)
+      expect(nodeStore.getNode(id)?.backgroundColor).toBe(DEFAULT_NODE_STYLE.backgroundColor)
 
       // redo 应恢复样式
       history.redo()

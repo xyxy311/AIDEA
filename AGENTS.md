@@ -54,7 +54,7 @@ composables/  -> Vue composables（交互逻辑，编排 nodeStore + viewStore�
   useActiveView.ts -> 快捷访问活跃视图（project + nodeStore + view getter + 编排方法，委托命令层）
   useCommands.ts   -> 命令层：所有数据写操作的统一入口（捕获旧值 -> nodeStore -> pushCommand）
   useNodeTree.ts   -> 节点树导航（树构建/扁平化/新建子节点/递归删除/重命名）
-  useNodeViewLink.ts -> 进入子视图 / 组合 / 清空子级
+  useNodeViewLink.ts -> 进入子视图/父视图 / 组合 / 清空子级
 components/
   canvas/     -> WhiteboardCanvas, WhiteboardNode, WhiteboardConnection, NodeTextEditor, OverviewMap
   toolbar/    -> Toolbar

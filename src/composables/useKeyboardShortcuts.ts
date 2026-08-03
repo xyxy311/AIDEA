@@ -2,6 +2,7 @@ import { onMounted, onUnmounted, type Ref } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useCommands } from '@/composables/useCommands'
+import { useProjectStore } from '@/stores/project'
 
 /**
  * 全局键盘快捷键
@@ -69,6 +70,11 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
         e.preventDefault()
         link.enterNodeView()
       }
+    }
+
+    if (e.key === 'q' && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault()
+      link.enterParentNodeView()
     }
 
     // Ctrl/Cmd + G：选中多个节点时组合

@@ -13,12 +13,12 @@ export interface WhiteboardNode {
   width: number
   height: number
   text: string
-  /** 字体颜色（undefined = 使用默认值） */
-  textColor?: string
-  /** 背景颜色（undefined = 使用默认值） */
-  backgroundColor?: string
-  /** 边框颜色（undefined = 使用默认值） */
-  borderColor?: string
+  /** 字体颜色（始终有值，默认值由工厂函数 createNode 填充） */
+  textColor: string
+  /** 背景颜色（始终有值，默认值由工厂函数 createNode 填充） */
+  backgroundColor: string
+  /** 边框颜色（始终有值，默认值由工厂函数 createNode 填充） */
+  borderColor: string
   /**
    * 本节点子级之间的连线集合。
    *

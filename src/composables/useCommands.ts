@@ -442,12 +442,21 @@ export function useCommands() {
       id,
       parentId: nodeStore.getNode(id)?.parentId ?? null,
     }))
-    // 内部连线（两端均在选中集合）
     const idSet = new Set(ids)
+    // 内部连线（两端均在选中集合）-- 迁移到容器
     const internalConns = nodeStore
       .getConnections(currentViewId)
       .filter((c) => idSet.has(c.fromNodeId) && idSet.has(c.toNodeId))
-    const capturedConns = internalConns.map((c) => deepClone(c))
+    const capturedInternalConns = internalConns.map((c) => deepClone(c))
+    // 外部连线（仅一端在选中集合）-- reparent 后不再是同级关系，需删除
+    const externalConns = nodeStore
+      .getConnections(currentViewId)
+      .filter(
+        (c) =>
+          (idSet.has(c.fromNodeId) || idSet.has(c.toNodeId)) &&
+          !(idSet.has(c.fromNodeId) && idSet.has(c.toNodeId)),
+      )
+    const capturedExternalConns = externalConns.map((c) => deepClone(c))
 
     // ── 执行 ──
     // 计算包围盒中心
@@ -471,9 +480,15 @@ export function useCommands() {
     const containerNode = captureNodeFull(nodeStore, containerId)
 
     // 迁移内部连线
-    const internalConnIds = capturedConns.map((c) => c.id)
+    const internalConnIds = capturedInternalConns.map((c) => c.id)
     if (internalConnIds.length > 0) {
       nodeStore.moveConnections(currentViewId, containerId, internalConnIds)
+    }
+
+    // 删除外部连线（reparent 后选中节点不再是原视图直接子节点，外部连线失效）
+    const externalConnIds = capturedExternalConns.map((c) => c.id)
+    if (externalConnIds.length > 0) {
+      nodeStore.deleteConnections(currentViewId, externalConnIds)
     }
 
     // reparent
@@ -492,15 +507,23 @@ export function useCommands() {
       })),
     ]
     const connChanges: ConnectionChange[] = [
-      ...capturedConns.map((c) => ({
+      // 内部连线：从原视图删除 + 加到容器
+      ...capturedInternalConns.map((c) => ({
         type: 'remove' as const,
         parentId: currentViewId,
         connectionId: c.id,
         connection: deepClone(c),
       })),
-      ...capturedConns.map((c) => ({
+      ...capturedInternalConns.map((c) => ({
         type: 'add' as const,
         parentId: containerId,
+        connectionId: c.id,
+        connection: deepClone(c),
+      })),
+      // 外部连线：从原视图删除
+      ...capturedExternalConns.map((c) => ({
+        type: 'remove' as const,
+        parentId: currentViewId,
         connectionId: c.id,
         connection: deepClone(c),
       })),

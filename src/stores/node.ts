@@ -2,21 +2,15 @@ import { computed, reactive } from 'vue'
 import { defineStore } from 'pinia'
 import type { WhiteboardNode, Connection, ConnectionPresetStyle } from '@/types'
 import {
-  DEFAULT_NODE_WIDTH,
-  DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_TEXT,
+  DEFAULT_NODE_STYLE,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
   NODE_PADDING,
   NODE_LINE_HEIGHT,
-  DEFAULT_NODE_STYLE,
-  DEFAULT_LINE_STYLE,
-  CONNECTION_STROKE_COLOR,
-  CONNECTION_STROKE_WIDTH,
-  DEFAULT_CONNECTION_DIRECTED,
   type PresetStyle,
 } from '@/constants'
 import { generateId } from '@/utils/id'
+import { createNode, createConnection } from '@/utils/factory'
 import { calculateTextContentSize } from '@/utils/geometry'
 
 /** 根/项目节点 ID（全局唯一，parentId === null） */
@@ -44,16 +38,14 @@ export const useNodeStore = defineStore('node', () => {
   // ── 初始化根节点 ──
 
   if (!nodes.has(ROOT_NODE_ID)) {
-    nodes.set(ROOT_NODE_ID, {
-      id: ROOT_NODE_ID,
-      parentId: null,
-      x: 0,
-      y: 0,
-      width: DEFAULT_NODE_WIDTH,
-      height: DEFAULT_NODE_HEIGHT,
-      text: '未命名项目',
-      connections: [],
-    })
+    nodes.set(
+      ROOT_NODE_ID,
+      createNode({
+        id: ROOT_NODE_ID,
+        parentId: null,
+        text: '未命名项目',
+      }),
+    )
   }
 
   // ── 派生索引 ──
@@ -150,16 +142,13 @@ export const useNodeStore = defineStore('node', () => {
     options?: { id?: string },
   ): string {
     const nodeId = options?.id ?? generateId()
-    const node: WhiteboardNode = {
+    const node = createNode({
       id: nodeId,
       parentId,
       x,
       y,
-      width: DEFAULT_NODE_WIDTH,
-      height: DEFAULT_NODE_HEIGHT,
-      text: text ?? DEFAULT_NODE_TEXT,
-      connections: [],
-    }
+      text,
+    })
     nodes.set(nodeId, node)
     return nodeId
   }
@@ -307,9 +296,9 @@ export const useNodeStore = defineStore('node', () => {
   function resetNodeStyle(nodeId: string): void {
     const node = nodes.get(nodeId)
     if (!node) return
-    node.backgroundColor = undefined
-    node.borderColor = undefined
-    node.textColor = undefined
+    node.backgroundColor = DEFAULT_NODE_STYLE.backgroundColor
+    node.borderColor = DEFAULT_NODE_STYLE.borderColor
+    node.textColor = DEFAULT_NODE_STYLE.textColor
   }
 
   /** 批量更新多个节点的样式属性（按 ID 列表，不感知选中） */
@@ -360,17 +349,9 @@ export const useNodeStore = defineStore('node', () => {
   function addConnection(parentId: string, fromNodeId: string, toNodeId: string): void {
     const parent = nodes.get(parentId)
     if (!parent) return
-    const id = fromNodeId < toNodeId ? toNodeId + fromNodeId : fromNodeId + toNodeId
-    if (parent.connections.some((c) => c.id === id)) return
-    parent.connections.push({
-      id,
-      fromNodeId,
-      toNodeId,
-      lineStyle: DEFAULT_LINE_STYLE,
-      strokeWidth: CONNECTION_STROKE_WIDTH,
-      strokeColor: CONNECTION_STROKE_COLOR,
-      directed: DEFAULT_CONNECTION_DIRECTED,
-    })
+    const conn = createConnection({ fromNodeId, toNodeId })
+    if (parent.connections.some((c) => c.id === conn.id)) return
+    parent.connections.push(conn)
   }
 
   /** 删除单条连线 */

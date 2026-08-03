@@ -1,5 +1,6 @@
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
+import { useNodeStore } from '@/stores/node'
 
 /**
  * 节点视图编排
@@ -14,6 +15,7 @@ import { useCommands } from '@/composables/useCommands'
 export function useNodeViewLink() {
   const active = useActiveView()
   const commands = useCommands()
+  const node = useNodeStore()
 
   /**
    * 进入选中节点的子级视图（切换活跃视图）。
@@ -24,6 +26,18 @@ export function useNodeViewLink() {
     const nodeId = active.view.selectedNodeId
     if (!nodeId) return
     active.project.switchView(nodeId)
+  }
+
+  /**
+   * 进入选中节点父级视图（切换活跃视图）。
+   * 纯视图操作，不入历史栈。
+   */
+  function enterParentNodeView(): void {
+    const nodeId = active.project.activeViewId
+    if (!nodeId) return
+    const parentId = node.getNode(nodeId)?.parentId
+    if (!parentId) return
+    active.project.switchView(parentId)
   }
 
   /**
@@ -50,6 +64,7 @@ export function useNodeViewLink() {
 
   return {
     enterNodeView,
+    enterParentNodeView,
     groupSelectedNodes,
     clearNodeChildren,
   }

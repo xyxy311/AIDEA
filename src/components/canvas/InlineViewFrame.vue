@@ -28,7 +28,6 @@ const props = defineProps<{
   nodeId: string
   /** 宿主视图 ID（读内联视图尺寸） */
   viewId: string
-  isSelected: boolean
 }>()
 
 const emit = defineEmits<{

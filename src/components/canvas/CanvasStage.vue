@@ -457,14 +457,12 @@ function handleStageMouseUp(e: unknown): void {
             :ref="(el: unknown) => setNodeRef(node.id, el)"
             :node-id="node.id"
             :view-id="viewId"
-            :is-selected="view.selectedNodeIds.has(node.id)"
             @dblclick="startTextEdit"
           />
           <WhiteboardNode
             v-else
             :ref="(el: unknown) => setNodeRef(node.id, el)"
             :node-id="node.id"
-            :is-selected="view.selectedNodeIds.has(node.id)"
             @dblclick="startTextEdit"
           />
         </template>

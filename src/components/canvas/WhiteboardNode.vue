@@ -25,7 +25,6 @@ import {
 // ── Props ──
 const props = defineProps<{
   nodeId: string
-  isSelected: boolean
 }>()
 
 // ── Emits ──

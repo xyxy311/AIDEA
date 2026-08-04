@@ -88,7 +88,7 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     const containerEl = shallowRef<HTMLElement | null>(null)
 
     // ── Getters ──
-
+    /** 作为属性面板的基准节点 */
     const selectedNodeId = computed(() => {
       const ids = Array.from(selectedNodeIds.value)
       return ids[0] ?? null

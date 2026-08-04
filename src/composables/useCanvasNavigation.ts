@@ -1,10 +1,12 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveView } from '@/composables/useActiveView'
+import { useViewStore } from '@/stores/view'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 /**
  * 画布导航（平移 + 缩放）
+ *
+ * @param viewId - 视图 ID（主视图传 'main'）
  *
  * 提供无限画布的平移和缩放能力：
  * - 按住空格键 + 鼠标拖拽 -> 平移画布
@@ -13,8 +15,8 @@ import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
  * 导航状态存储在当前视图的 viewStore 中，以便 Toolbar 等组件
  * 读取当前视口状态来计算"视口中央"的世界坐标。
  */
-export function useCanvasNavigation() {
-  const active = useActiveView()
+export function useCanvasNavigation(viewId: string) {
+  const view = useViewStore(viewId)
   const isPanMode = ref(false)
 
   // ── 空格键处理 ──
@@ -55,7 +57,6 @@ export function useCanvasNavigation() {
     const pointer = stage.getPointerPosition()
     if (!pointer) return
 
-    const view = active.view
     const oldScale = view.stageScale
     const direction = e.evt.deltaY > 0 ? -1 : 1
     const factor = direction > 0 ? ZOOM_STEP : 1 / ZOOM_STEP
@@ -83,8 +84,8 @@ export function useCanvasNavigation() {
    */
   function handleDragMove(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    active.view.stageX = e.target.x()
-    active.view.stageY = e.target.y()
+    view.stageX = e.target.x()
+    view.stageY = e.target.y()
   }
 
   /**
@@ -93,8 +94,8 @@ export function useCanvasNavigation() {
    */
   function handleDragEnd(e: KonvaEventObject<DragEvent>): void {
     if (e.target !== e.currentTarget) return
-    active.view.stageX = e.target.x()
-    active.view.stageY = e.target.y()
+    view.stageX = e.target.x()
+    view.stageY = e.target.y()
   }
 
   // ── 生命周期 ──

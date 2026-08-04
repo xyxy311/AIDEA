@@ -167,3 +167,20 @@ export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'typ
   { name: '绿色无箭头', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false },
   { name: '灰色点线', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false },
 ]
+
+// ── 内联视图 ──
+
+/** 内联视图标题栏高度（世界坐标 px，随主视口缩放） */
+export const INLINE_VIEW_TITLE_HEIGHT: number = 28
+
+/** 内联视图默认矩形宽度 */
+export const INLINE_VIEW_DEFAULT_WIDTH: number = 400
+
+/** 内联视图默认矩形高度 */
+export const INLINE_VIEW_DEFAULT_HEIGHT: number = 300
+
+/** 内联视图最小矩形宽度 */
+export const INLINE_VIEW_MIN_WIDTH: number = 200
+
+/** 内联视图最小矩形高度 */
+export const INLINE_VIEW_MIN_HEIGHT: number = 150

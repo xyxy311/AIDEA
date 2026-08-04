@@ -127,11 +127,11 @@ describe('history store', () => {
       const childId = commands.createNode(ROOT_NODE_ID, 0, 0, '子')
       project.switchView(childId)
 
-      expect(project.activeViewId).toBe(childId)
+      expect(project.currentNodeId).toBe(childId)
 
       // undo 创建 -> 子节点被删 -> 应回退到 root
       history.undo()
-      expect(project.activeViewId).toBe(ROOT_NODE_ID)
+      expect(project.currentNodeId).toBe(ROOT_NODE_ID)
       expect(nodeStore.getNode(childId)).toBeUndefined()
     })
 
@@ -147,7 +147,7 @@ describe('history store', () => {
 
       // undo 创建 B -> B 被删，但当前视图 A 仍存在 -> 保持 A
       history.undo()
-      expect(project.activeViewId).toBe(a)
+      expect(project.currentNodeId).toBe(a)
       expect(nodeStore.getNode(b)).toBeUndefined()
     })
   })

@@ -77,12 +77,12 @@ const renameText = ref('')
 
 /** 在活跃视图下新建子节点并进入编辑态 */
 function handleAdd(): void {
-  addSubNode(project.activeViewId)
+  addSubNode(project.currentNodeId)
 }
 
 /** 递归删除当前活跃节点（含子树） */
 function handleDeleteActive(): void {
-  deleteNodeRecursive(project.activeViewId)
+  deleteNodeRecursive(project.currentNodeId)
 }
 
 // ── 节点项操作 ──
@@ -153,7 +153,7 @@ function cancelRename(): void {
               size="small"
               quaternary
               type="error"
-              :disabled="project.activeViewId === rootViewId"
+              :disabled="project.currentNodeId === rootViewId"
             >
               <template #icon><TrashOutline /></template>
               删除
@@ -170,7 +170,7 @@ function cancelRename(): void {
             :key="item.id"
             class="node-item"
             :class="{
-              active: item.id === project.activeViewId && !editingNodeId,
+              active: item.id === project.currentNodeId && !editingNodeId,
               selected: selectedSet.has(item.id),
               leaf: !item.hasChildren && !item.isRoot,
             }"

@@ -16,7 +16,7 @@ const commands = useCommands()
 const { stageWidth, stageHeight } = useStageSize()
 
 /** 当前视图的节点列表 */
-const nodes = computed(() => active.nodeStore.childrenOf(active.project.activeViewId))
+const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentNodeId))
 
 /**
  * 在视口中央创建新节点
@@ -37,7 +37,7 @@ function handleAddNode() {
   const nodeX = worldX - DEFAULT_NODE_WIDTH / 2
   const nodeY = worldY - DEFAULT_NODE_HEIGHT / 2
 
-  const id = commands.createNode(active.project.activeViewId, nodeX, nodeY)
+  const id = commands.createNode(active.project.currentNodeId, nodeX, nodeY)
   active.view.selectNode(id)
   active.view.startEditing(id)
 }

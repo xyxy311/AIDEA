@@ -23,7 +23,7 @@ import { useCommands } from '@/composables/useCommands'
  * 用法：
  *   const active = useActiveView()
  *   active.view.stageX           // 当前视图视口
- *   active.nodeStore.childrenOf(active.project.activeViewId)  // 当前视图节点
+ *   active.nodeStore.childrenOf(active.project.currentNodeId)  // 当前视图节点
  *   active.deleteSelectedNodes() // 编排：删除选中节点
  */
 export function useActiveView() {
@@ -31,7 +31,7 @@ export function useActiveView() {
   const nodeStore = useNodeStore()
   const commands = useCommands()
 
-  /** 获取当前活跃视图 store（每次调用取最新 activeViewId） */
+  /** 获取主视图 store（activeViewId 固定为 'main'） */
   function view() {
     return useViewStore(project.activeViewId)
   }
@@ -40,7 +40,7 @@ export function useActiveView() {
 
   /** 更新当前节点名称 */
   function updateNodeName(name: string): void {
-    commands.setNodeText(project.activeViewId, name)
+    commands.setNodeText(project.currentNodeId, name)
   }
 
   /** 批量更新选中节点样式 */
@@ -65,7 +65,7 @@ export function useActiveView() {
     directed?: boolean
   }): void {
     commands.updateConnectionsStyle(
-      project.activeViewId,
+      project.currentNodeId,
       Array.from(view().selectedConnectionIds),
       partial,
     )
@@ -88,7 +88,7 @@ export function useActiveView() {
     const v = view()
     const ids = Array.from(v.selectedConnectionIds)
     if (ids.length === 0) return
-    commands.deleteConnections(project.activeViewId, ids)
+    commands.deleteConnections(project.currentNodeId, ids)
     v.clearSelection()
   }
 

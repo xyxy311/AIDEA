@@ -19,7 +19,7 @@ import { useProjectStore } from '@/stores/project'
  */
 export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
   const active = useActiveView()
-  const link = useNodeViewLink()
+  const link = useNodeViewLink('main')
   const commands = useCommands()
 
   function onKeydown(e: KeyboardEvent) {

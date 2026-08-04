@@ -22,7 +22,7 @@ const active = useActiveView()
 const { stageWidth, stageHeight } = useStageSize()
 
 // ── 当前视图的节点列表 ──
-const nodes = computed(() => active.nodeStore.childrenOf(active.project.activeViewId))
+const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentNodeId))
 const mapRef = ref<HTMLDivElement | null>(null)
 
 // ── 拖拽状态 ──

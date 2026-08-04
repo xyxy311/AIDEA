@@ -1,12 +1,17 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveView } from '@/composables/useActiveView'
+import { useViewStore } from '@/stores/view'
+import { useNodeStore } from '@/stores/node'
+import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
+import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT } from '@/constants'
+import { generateId } from '@/utils/id'
 
 /**
  * 画布事件处理
+ *
+ * @param viewId - 视图 ID（主视图传 'main'）
  *
  * 提供针对 v-stage 事件的回调：
  * - handleStageClick：点击空白区域取消选中
@@ -17,10 +22,12 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
  * - 单选节点：进入子视图 / 清空子级（有子节点时）
  * - 多选节点：组合
  */
-export function useCanvasEvents() {
-  const active = useActiveView()
+export function useCanvasEvents(viewId: string) {
+  const view = useViewStore(viewId)
+  const nodeStore = useNodeStore()
+  const project = useProjectStore()
   const contextMenu = useContextMenu()
-  const link = useNodeViewLink()
+  const link = useNodeViewLink(viewId)
   const commands = useCommands()
 
   /**
@@ -30,7 +37,7 @@ export function useCanvasEvents() {
   function handleStageClick(e: KonvaEventObject<MouseEvent>) {
     // Konva 中：点击空白区域时，e.target === e.currentTarget (Stage)
     if (e.target === e.currentTarget) {
-      active.view.clearSelection()
+      view.clearSelection()
     }
   }
 
@@ -51,12 +58,11 @@ export function useCanvasEvents() {
     if (pos) {
       // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
       const newId = commands.createNode(
-        active.project.activeViewId,
+        view.viewedNodeId,
         pos.x - DEFAULT_NODE_WIDTH / 2,
         pos.y - DEFAULT_NODE_HEIGHT / 2,
       )
       // 新建后选中并进入编辑态（数据与视图状态分离，需手动编排）
-      const view = active.view
       view.selectNode(newId)
       view.startEditing(newId)
     }
@@ -73,7 +79,6 @@ export function useCanvasEvents() {
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     e.evt.preventDefault()
 
-    const view = active.view
     const count = view.selectedNodeIds.size
 
     if (count === 0) {
@@ -90,8 +95,45 @@ export function useCanvasEvents() {
         label: '进入子视图',
         action: () => link.enterNodeView(),
       })
+      // 主视图：提供"展开/收起内联视图"（视图操作，不入 undo）
+      if (nodeId && view.type === 'main') {
+        if (view.getInlineViewRect(nodeId)) {
+          // 已展开 -> 收起
+          items.push({
+            key: 'collapse-inline',
+            label: '收起内联视图',
+            action: () => {
+              const iv = view.inlineViews.find((v) => v.nodeId === nodeId)
+              if (iv) {
+                project.destroyView(iv.viewId)
+                view.removeInlineView(nodeId)
+              }
+            },
+          })
+        } else {
+          // 未展开 -> 展开
+          items.push({
+            key: 'expand-inline',
+            label: '展开内联视图',
+            action: () => {
+              const inlineViewId = generateId()
+              useViewStore(inlineViewId, {
+                nodeId,
+                type: 'inline',
+                hostViewId: viewId,
+              })
+              view.addInlineView(
+                nodeId,
+                inlineViewId,
+                INLINE_VIEW_DEFAULT_WIDTH,
+                INLINE_VIEW_DEFAULT_HEIGHT,
+              )
+            },
+          })
+        }
+      }
       // 有子节点时提供"清空子级"（删除子树，保留节点本身）
-      if (nodeId && active.nodeStore.hasChildren(nodeId)) {
+      if (nodeId && nodeStore.hasChildren(nodeId)) {
         items.push({
           key: 'clear-children',
           label: '清空子级',

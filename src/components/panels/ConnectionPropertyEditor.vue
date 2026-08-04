@@ -33,7 +33,7 @@ const presetsStore = usePresetsStore()
 
 // 选中的连线信息
 const conn = computed(() =>
-  active.nodeStore.getConnections(active.project.activeViewId).find(c => c.id === active.view.selectedConnectionId)
+  active.nodeStore.getConnections(active.project.currentNodeId).find(c => c.id === active.view.selectedConnectionId)
 )
 const selectedCount = computed(() => active.view.selectedConnectionIds.size)
 

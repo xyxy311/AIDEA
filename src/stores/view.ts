@@ -1,18 +1,66 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 
+/** 内联视图项（宿主视图持有的展开状态） */
+export interface InlineViewItem {
+  /** 被展开的节点 ID */
+  nodeId: string
+  /** 内联视图实例的 viewId */
+  viewId: string
+  /** 矩形宽度（视图状态，不入 undo） */
+  width: number
+  /** 矩形高度（视图状态，不入 undo） */
+  height: number
+}
+
+/** 视图初始化参数（首次创建 store 时使用） */
+export interface ViewStoreInit {
+  nodeId: string
+  type: 'main' | 'inline'
+  hostViewId?: string | null
+}
+
+/** 存储每个 viewId 的初始化参数（只读一次，创建后清除） */
+const viewStoreInits = new Map<string, ViewStoreInit>()
+
 /**
- * 视图 Store 工厂 - 每个节点视图（白板）拥有独立的 store 实例
+ * 视图 Store 工厂
  *
- * 使用 `useViewStore(viewId)` 获取指定视图的 store（viewId = 被查看的节点 ID）。
+ * viewId 区分：
+ * - 'main'：单一主视图实例，常驻。切换查看的节点通过改 viewedNodeId 实现。
+ * - 其他值：内联视图实例，每个独立。
  *
- * 仅管理视图状态：视口（平移 / 缩放）、选中、编辑、连线创建中状态。
+ * 仅管理视图状态：视口（平移 / 缩放）、选中、编辑、连线创建中、内联视图列表。
  * 不存储任何节点 / 连线数据（数据归全局 nodeStore）。
+ *
+ * @param init 首次创建时传入的初始化参数（后续调用忽略）
  */
-export function useViewStore(viewId: string) {
+export function useViewStore(viewId: string, init?: ViewStoreInit) {
   const storeId = `view-${viewId}`
 
+  if (init) {
+    viewStoreInits.set(storeId, init)
+  }
+
   return defineStore(storeId, () => {
+    const savedInit = viewStoreInits.get(storeId)
+    // 读取后清除，避免后续误用
+    if (savedInit) {
+      viewStoreInits.delete(storeId)
+    }
+
+    // ── 视图关联节点（主视图可变，内联视图固定）──
+    /** 当前查看的节点 ID（主视图可变，内联视图首次初始化后不变） */
+    const viewedNodeId = ref<string>(savedInit?.nodeId ?? viewId)
+    /** 视图类型 */
+    const type = ref<'main' | 'inline'>(savedInit?.type ?? 'inline')
+    /** 宿主视图 ID（仅 inline 有值） */
+    const hostViewId = ref<string | null>(savedInit?.hostViewId ?? null)
+
+    // ── 内联视图列表（仅主视图持有）──
+    /** 展开的内联视图项列表 */
+    const inlineViews = ref<InlineViewItem[]>([])
+
     // ── 视口 ──
     /** 画布视口 X 偏移 */
     const stageX = ref(0)
@@ -152,12 +200,41 @@ export function useViewStore(viewId: string) {
       stageScale.value = scale
     }
 
+    // ── 内联视图操作 ──
+
+    /** 添加内联视图项（已存在同 nodeId 则忽略） */
+    function addInlineView(nodeId: string, viewId: string, width: number, height: number): void {
+      if (inlineViews.value.some((iv) => iv.nodeId === nodeId)) return
+      inlineViews.value.push({ nodeId, viewId, width, height })
+    }
+
+    /** 移除内联视图项 */
+    function removeInlineView(nodeId: string): void {
+      inlineViews.value = inlineViews.value.filter((iv) => iv.nodeId !== nodeId)
+    }
+
+    /** 更新内联视图项的尺寸 */
+    function updateInlineViewSize(nodeId: string, width: number, height: number): void {
+      const iv = inlineViews.value.find((iv) => iv.nodeId === nodeId)
+      if (iv) {
+        iv.width = width
+        iv.height = height
+      }
+    }
+
+    /** 获取内联视图项的矩形尺寸（不含位置 x/y，由调用方拼 node.x/node.y） */
+    function getInlineViewRect(nodeId: string): { width: number; height: number } | null {
+      const iv = inlineViews.value.find((iv) => iv.nodeId === nodeId)
+      return iv ? { width: iv.width, height: iv.height } : null
+    }
+
     // ── 状态重置 ──
 
     /**
      * 重置视图交互状态（切换视图时调用）
      *
      * 清除选中、编辑、连线创建状态；视口保留（各视图独立记忆平移/缩放）。
+     * 不清除 inlineViews。
      */
     function resetViewState(): void {
       selectedNodeIds.value = new Set()
@@ -167,6 +244,16 @@ export function useViewStore(viewId: string) {
     }
 
     return {
+      // 视图关联
+      viewedNodeId,
+      type,
+      hostViewId,
+      // 内联视图
+      inlineViews,
+      addInlineView,
+      removeInlineView,
+      updateInlineViewSize,
+      getInlineViewRect,
       // 视口
       stageX,
       stageY,

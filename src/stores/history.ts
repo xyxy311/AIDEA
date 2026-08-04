@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
+import { useViewStore } from '@/stores/view'
 import type { WhiteboardNode } from '@/types'
 import type { DataPatch, HistoryEntry, NodeChange, ConnectionChange } from '@/utils/command'
 import { deepClone } from '@/utils/command'
@@ -154,33 +155,33 @@ export const useHistoryStore = defineStore('history', () => {
 
   /**
    * 包裹一个数据操作 fn，执行后统一处理视图协调：
-   * 1. 销毁被移除节点的 viewStore
-   * 2. 若当前 activeViewId 节点无效，沿执行前记录的 pathToRoot 回退到最近存在的祖先
+   * 1. 销毁被删除节点的内联视图实例
+   * 2. 若当前 currentNodeId 节点无效，沿执行前记录的 pathToRoot 回退到最近存在的祖先
    * 3. 清理 expandedIds 中已不存在的节点
    *
    * 命令层的 deleteNodes/clearNodeChildren 和 history 的 undo/redo 都通过此函数包裹。
    */
   function runWithViewCoord(fn: () => void): void {
     // 执行前记录当前视图的祖先链（此时节点还在，pathToRoot 有效）
-    const pathToRoot = nodeStore.pathToRoot(project.activeViewId)
+    const pathToRoot = nodeStore.pathToRoot(project.currentNodeId)
     const beforeIds = new Set(nodeStore.nodes.keys())
 
     fn()
 
     const afterIds = new Set(nodeStore.nodes.keys())
 
-    // 1. 销毁被移除节点的 viewStore
-    const removed: string[] = []
-    for (const id of beforeIds) {
-      if (!afterIds.has(id)) removed.push(id)
-    }
-    if (removed.length > 0) {
-      project.destroyViews(removed)
+    // 1. 销毁被移除节点的内联视图实例
+    const mainView = useViewStore('main')
+    for (const iv of [...mainView.inlineViews]) {
+      if (!afterIds.has(iv.nodeId)) {
+        project.destroyView(iv.viewId)
+        mainView.removeInlineView(iv.nodeId)
+      }
     }
 
-    // 2. 视图回退：当前视图节点无效时，沿祖先链找最近存在的祖先
-    if (!afterIds.has(project.activeViewId)) {
-      // pathToRoot[0] 是当前 av（已无效），从 [1]（父级）开始找
+    // 2. 视图回退：当前节点无效时，沿祖先链找最近存在的祖先
+    if (!afterIds.has(project.currentNodeId)) {
+      // pathToRoot[0] 是当前节点（已无效），从 [1]（父级）开始找
       let target = ROOT_NODE_ID
       for (let i = 1; i < pathToRoot.length; i++) {
         if (afterIds.has(pathToRoot[i])) {

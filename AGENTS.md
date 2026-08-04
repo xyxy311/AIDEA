@@ -5,15 +5,16 @@
 
 ## 项目概况
 
-**核心数据结构：** 节点、连线
+**核心结构：** 节点、连线、视图
 
 **主要功能：** 通过节点和连线表达想法，节点可以展开为子级视图（白板），实现更高的灵活度
 
 **核心设计：**
 - 一切皆节点，通过节点的 `parentId` 构建节点树（邻接表模式）。查看某节点的子级即为一个"视图"（旧称白板），任何节点均可进入查看其子级。
-- 连线表示节点之间的同级关系（因果、时间等），**非**父子关系。连线嵌套在父节点的 `connections` 数组中（两端均为该父节点的直接子节点），使组合/移动子树时连线随父节点自然迁移。
+- 连线表示节点之间的同级关系（因果、时间等），非父子关系。连线嵌套在父节点的 `connections` 数组中（两端均为该父节点的直接子节点），使组合/移动子树时连线随父节点自然迁移。
 - 整个项目也是一个节点（根节点，`parentId === null`，id 固定为 `ROOT_NODE_ID = 'root'`），其 `text` 即项目名（单一数据源）。根节点无父级，几何与样式属性无意义。
 - 数据模型只存 `parentId`（单一数据源，无 children 冗余）；nodeStore 内通过 `computed` 派生 `childrenIndex`（parentId -> 子节点 id[]），使子节点查询与递归删除均为高效。
+- 节点可"展开为内联视图"：主视图中为该节点绘制矩形宿主框架，内容区用**独立 Konva Stage**（DOM 覆盖层）渲染该节点的子级画布，实现"画布内嵌画布"。详情见下文"内联视图架构"。
 
 ## 常用命令
 
@@ -46,17 +47,21 @@ constants/    -> 设计 token（尺寸、颜色、预设样式、缩放范围）
 utils/        -> 纯函数（generateId, calculateTextContentSize, command[命令类型+辅助]）
 stores/       -> Pinia stores
   node.ts     -> 全局 nodeStore：节点树（parentId 邻接表）+ 连线（嵌套父节点）+ 派生索引
-  view.ts     -> 工厂 useViewStore(viewId)：per-view 视口 / 选中 / 编辑状态
-  project.ts  -> 项目导航：activeViewId、expandedIds、项目名（派生自根节点 text）、pruneExpanded
+  view.ts     -> 工厂 useViewStore(viewId)：'main'（常驻，viewedNodeId 可变）/ 内联实例（viewedNodeId 固定）；视口 / 选中 / 编辑 / inlineViews
+  project.ts  -> 项目导航：activeViewId 固定 'main'、currentNodeId、viewSnapshots 快照存取、expandedIds、destroyView（只销毁内联实例）
   presets.ts  -> 节点 / 连线预设样式（localStorage 持久化）
-  history.ts  -> 撤销重做栈：past/future 栈 + DataPatch 应用 + 视图协调 + batch 事务 + coalesce 合并
+  history.ts  -> 撤销重做栈：past/future 栈 + DataPatch 应用 + 视图协调（含内联视图清理）+ batch 事务 + coalesce 合并
 composables/  -> Vue composables（交互逻辑，编排 nodeStore + viewStore）
-  useActiveView.ts -> 快捷访问活跃视图（project + nodeStore + view getter + 编排方法，委托命令层）
+  useActiveView.ts -> 快捷访问活跃主视图（'main'）--仅主视图上下文（组件）使用
   useCommands.ts   -> 命令层：所有数据写操作的统一入口（捕获旧值 -> nodeStore -> pushCommand）
   useNodeTree.ts   -> 节点树导航（树构建/扁平化/新建子节点/递归删除/重命名）
   useNodeViewLink.ts -> 进入子视图/父视图 / 组合 / 清空子级
 components/
-  canvas/     -> WhiteboardCanvas, WhiteboardNode, WhiteboardConnection, NodeTextEditor, OverviewMap
+  canvas/     -> CanvasStage（通用画布组件，viewId/allowExpand/showOverviewMap/width/height props）
+                 WhiteboardCanvas（主视图薄壳：useKeyboardShortcuts + CanvasStage viewId='main'）
+                 WhiteboardNode, WhiteboardConnection, NodeTextEditor, OverviewMap
+                 InlineViewFrame（内联视图宿主框架：标题栏+边框矩形，v-group name=nodeId）
+                 InlineViewCanvas（内联视图 DOM 覆盖层：坐标同步，内嵌 CanvasStage）
   toolbar/    -> Toolbar
   panels/     -> LeftSidebar(节点树), RightSidebar, NodePropertyEditor, ConnectionPropertyEditor, SettingsModal
   layout/     -> AppShell, MenuBar
@@ -66,11 +71,11 @@ components/
 
 **nodeStore（全局唯一，`defineStore('node')`）**：所有节点存于单一 `reactive(new Map())`，通过 `parentId` 构建树。连线嵌套在父节点的 `connections` 数组。`childrenIndex` 为 `computed` 派生索引（parentId -> 子节点 id[]），使 `childrenOf` / `descendantsOf` 免于遍历全表。所有操作按节点/连线 ID 进行，不感知"选中"概念--批量操作由调用方传入 ID 列表，便于未来 undo/redo 以命令封装。
 
-**viewStore（工厂 `useViewStore(viewId)`）**：每个节点视图（viewId = 被查看的节点 ID）拥有独立 store 实例（`view-<viewId>`）。仅管理视图状态：视口（stageX/Y/Scale）、选中、编辑、连线创建中状态。**不存储任何节点/连线数据**。
+**viewStore（工厂 `useViewStore(viewId, init?)`）**：viewId 区分两类实例--`'main'` 主视图常驻，切换查看节点通过改 `viewedNodeId`（不重建实例）；其他值 = 内联视图实例，`viewedNodeId` 首次初始化后固定，`hostViewId` 指向宿主视图。仅管理视图状态：视口（stageX/Y/Scale）、选中、编辑、连线创建中、内联视图列表（`inlineViews` + `addInlineView` / `removeInlineView` / `updateInlineViewSize` / `getInlineViewRect`）。**不存储任何节点/连线数据**。
 
-**project store**：管理 `activeViewId`（当前查看哪个节点的子级）、`expandedIds`（节点树展开状态）、`projectName`（computed，派生自根节点 text）。viewStore 实例的销毁由 project 负责（`destroyView` / `destroyViews`）。`pruneExpanded(existingIds)` 用于 undo/redo 后清理已不存在的节点展开状态。
+**project store**：`activeViewId` 固定为 `'main'`（主视图常驻），`currentNodeId` 派生自主视图 `viewedNodeId`。维护 `viewSnapshots`（Map<nodeId, ViewSnapshot>，切走时保存/恢复各节点独立导航状态，含内联视图快照）与 `switchView(id)`（保存当前快照 -> 销毁全部内联实例 -> 改 viewedNodeId -> 恢复目标快照）。`expandedIds`（节点树展开状态）、`projectName`（computed，派生自根节点 text）。viewStore 实例销毁由 project 负责（`destroyView` / `destroyViews`，`'main'` 永不销毁，只销毁内联实例）。`pruneExpanded(existingIds)` 用于 undo/redo 后清理已不存在的节点展开状态。
 
-**history store（`defineStore('history')`）**：撤销/重做栈管理。维护 `past` / `future` 两个 `HistoryEntry[]` 栈（上限 50 步）。每个 entry 包含一个 `DataPatch`（节点变更 + 连线变更的 diff，非全量快照）。`applyPatch` 直接操作 nodeStore 已暴露的 `nodes` Map（绕过 nodeStore 业务逻辑如 `fitNodeToText`），实现精确状态恢复。`runWithViewCoord` 包裹数据操作，执行后统一处理视图协调（销毁被删节点的 viewStore、当前视图无效时沿 `pathToRoot` 回退到最近存在的祖先、清理 `expandedIds`）。支持 batch 事务（复合操作合并为单条历史）和 coalesce 合并（同 `coalesceKey` + 1s 时间窗口内的连续编辑合并为一条）。
+**history store（`defineStore('history')`）**：撤销/重做栈管理。维护 `past` / `future` 两个 `HistoryEntry[]` 栈（上限 50 步）。每个 entry 包含一个 `DataPatch`（节点变更 + 连线变更的 diff，非全量快照）。`applyPatch` 直接操作 nodeStore 已暴露的 `nodes` Map（绕过 nodeStore 业务逻辑如 `fitNodeToText`），实现精确状态恢复。`runWithViewCoord` 包裹数据操作，执行后统一处理视图协调（销毁宿主节点已被删除的内联视图实例、当前视图无效时沿 `pathToRoot` 回退到最近存在的祖先、清理 `expandedIds`）。支持 batch 事务（复合操作合并为单条历史）和 coalesce 合并（同 `coalesceKey` + 1s 时间窗口内的连续编辑合并为一条）。
 
 组件中通常通过 `useActiveView()` 统一访问：
 
@@ -96,7 +101,7 @@ const { project, nodeStore, view } = useActiveView()
 
 **命令层（`useCommands`）**是所有数据写操作的统一入口。每个语义接口（`createNode` / `deleteNodes` / `setNodeText` / `updateNodesStyle` / `commitNodeMove` / `commitNodeResize` / `addConnection` / `groupNodes` 等）内部完成：捕获旧值 -> 调用 nodeStore action -> 构造 `DataPatch` -> `history.pushCommand`。
 
-**例外**：拖拽 mousemove 中的 `nodeStore.moveNode`（实时渲染，不入栈），mouseup 时调 `commands.commitNodeMove` 入栈。同理 `nodeStore.resizeNode` 在 `onTransformEnd` 中直接调用，mouseup 时调 `commands.commitNodeResize` 入栈。
+**例外**：拖拽 mousemove 中的 `nodeStore.moveNode`（实时渲染，不入栈），mouseup 时调 `commands.commitNodeMove` 入栈。同理 `nodeStore.resizeNode` 在 `onTransformEnd` 中直接调用，mouseup 时调 `commands.commitNodeResize` 入栈。**内联视图矩形缩放是视图状态**：onTransformEnd 中直接调 `view.updateInlineViewSize`（不入 undo，undo/redo 不覆盖）。
 
 **DataPatch 结构**：`{ nodeChanges: NodeChange[], connChanges: ConnectionChange[] }`。每个 change 为 `add` / `remove` / `modify` 类型。`modify` 只存变化字段（diff），非全量节点。`add` / `remove` 存完整节点/连线深拷贝。
 
@@ -112,6 +117,30 @@ Canvas 事件 -> composable 编排 -> 命令层 useCommands（捕获旧值 -> no
 ```
 
 组合操作（`useNodeViewLink.groupSelectedNodes`）退化为同 nodeStore 内的树重 parenting：新建容器节点 + `reparentNode`（改 parentId）+ `moveConnections`（迁连线），纯单 store 数据变更，通过命令层入栈为复合 DataPatch。
+
+### 内联视图架构（DOM 覆盖层渲染）
+
+节点可"展开为内联视图"：主视图中为该节点绘制矩形宿主框架，内容区用**独立 Konva Stage**（DOM 覆盖层）渲染该节点的子级画布。仅允许 1 层嵌套（内联视图内不再展开），内联视图不渲染小地图。
+
+**viewId 语义（viewStore 工厂）**：
+- `'main'`：单一主视图实例，常驻不销毁。切换查看的节点通过改 `viewedNodeId` 实现（不重建实例）。
+- 其他值：内联视图实例（`type === 'inline'`），`viewedNodeId` 首次初始化后固定，`hostViewId` 指向宿主视图。
+
+**渲染分层**：主视图 = 常驻单 Stage（WhiteboardCanvas 薄壳 -> CanvasStage viewId='main'）。每个内联视图 = 独立 Stage，渲染在 InlineViewCanvas（DOM `<div>` 覆盖层）内，内嵌 CanvasStage（viewId = 内联视图 ID）。CanvasStage 无主视图/内联特判，差异全靠 props（`viewId` / `allowExpand` / `showOverviewMap` / `width` / `height`）。
+
+**事件隔离**：浏览器按 DOM 层级分发事件。内联视图 DOM 覆盖层只覆盖矩形内容区（标题栏下方），标题栏保留在主 Stage 上可交互，天然无串扰。宿主节点用 `InlineViewFrame`（v-group，`name` 设为节点 ID）替代 WhiteboardNode 渲染，使拖拽 / 选中 / 连线 / 双击等交互经 `findNodeIdFromTarget` 原样复用--标题栏拖拽即拖拽宿主节点。
+
+**坐标同步**：InlineViewCanvas 通过 ResizeObserver 测量容器实际渲染尺寸，容器样式 = 宿主节点世界坐标 × 宿主 stageScale + 宿主 stage 偏移，top 再偏移标题栏高度（`INLINE_VIEW_TITLE_HEIGHT`）。容器内独立 Stage 用容器宽高作 stage 尺寸（CanvasStage props.width/height）。
+
+**展开 / 收起**：右键菜单（仅主视图、单选节点时）提供"展开 / 收起内联视图"（useCanvasEvents）。展开 = `generateId()` 生成内联 viewId -> `useViewStore(viewId, { nodeId, type: 'inline', hostViewId })` -> `view.addInlineView(nodeId, viewId, w, h)`。收起 = `project.destroyView(iv.viewId)` + `view.removeInlineView(nodeId)`。二者均为**视图操作，不入 undo 栈**。
+
+**有效尺寸**：内联矩形尺寸存 viewStore 的 inlineViews 项（width/height，视图状态），经 `getInlineViewRect(nodeId)` 读取。onTransformEnd 分叉：内联视图节点 -> `view.updateInlineViewSize`（不入 undo）；普通节点 -> `commands.commitNodeResize`（入栈）。
+
+**视图切换（快照记忆）**：`project.switchView(id)` = 保存当前节点快照（视口/选中/编辑/连线/内联视图列表）-> 销毁当前全部内联视图实例 -> 改 `viewedNodeId` -> 恢复目标节点快照（含按快照重建内联视图实例）。切走销毁、切回重建，任意时刻仅一套内联实例存活。
+
+**边界清理**：`runWithViewCoord` 执行数据操作后，销毁宿主节点已被删除的内联视图实例（`mainView.inlineViews` 中 `!afterIds.has(iv.nodeId)` 的项）并从 inlineViews 移除；当前节点无效时沿 pathToRoot 回退。
+
+**mouseup 提窗**：鼠标移入内联视图 DOM 覆盖层后，主 Stage 收不到 stage mouseup。三个 composable（useNodeDragging / useMarqueeSelection / useConnectionCreation）在 handleMouseDown 接管后注册一次性 `window.addEventListener('mouseup', onWindowMouseUp, { once: true })` 兜底（拖拽提交移动 / 框选取消 / 连线回滚取消），stage mouseup 已处理时幂等返回。
 
 ## 关键陷阱
 
@@ -146,13 +175,12 @@ rectRef.value?.getNode()
 
 本项目的正确性**只能由人类在浏览器中验证**。Agent 的"完成"标准是 `type-check + test` 双绿。
 
-### deepClone 与 undefined 字段
+### 内联视图 DOM 覆盖层与 stage 事件
 
-`utils/command.ts` 的 `deepClone` 用 `JSON.parse(JSON.stringify(toRaw(obj)))` 实现深拷贝。但 `JSON.stringify(undefined)` 返回 `undefined`（非字符串），`JSON.parse(undefined)` 会抛 `SyntaxError`。因此 `deepClone` 已对 `undefined` / `null` 做短路返回。
-
-节点创建时不带 `textColor` / `backgroundColor` / `borderColor`（默认 `undefined`），而 `captureNodeFields` 对每个字段值单独调用 `deepClone`。若无短路保护，崩溃会发生在 `nodeStore.updateNodesStyle` **之前**，导致样式永远写不进去（连线字段创建时全有显式默认值，不受影响）。
-
-同理，undo/redo 的 `applyPatch` 中 `modify` 类型不能简单用 `Object.assign(node, deepClone(target))`--`JSON.stringify` 会丢弃 `undefined` 属性，导致无法恢复 `undefined`。history store 的 `assignFields` 辅助函数逐一遍历 key，`undefined` 值 `delete` 属性，其余 `deepClone` 后赋值。
+内联视图是叠在主 Stage 之上的 DOM 元素，鼠标移入覆盖层后主 Stage 不再收到 mousemove / mouseup：
+- 拖拽 / 框选 / 连线创建必须注册 window mouseup 兜底（见上文"mouseup 提窗"），否则交互状态卡死。
+- 覆盖层必须只覆盖矩形内容区（标题栏下方），标题栏留给主 Stage 交互。
+- 覆盖层内独立 Stage 的事件在容器内正常冒泡，不受主 Stage 影响。
 
 ### 命令层约束
 

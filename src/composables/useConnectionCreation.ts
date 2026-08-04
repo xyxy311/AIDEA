@@ -1,7 +1,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
-import { useActiveView } from '@/composables/useActiveView'
+import { useViewStore } from '@/stores/view'
+import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import {
   CONNECTION_TEMP_STROKE_COLOR,
@@ -19,14 +20,17 @@ import {
  * - 鼠标事件处理（mousedown -> 标记起始节点，mousemove -> 更新临时终点，mouseup -> 创建连线）
  * - 临时连线的 Konva 渲染配置
  *
+ * @param viewId - 视图 ID（主视图传 'main'）
+ *
  * 用法：
- *   const conn = useConnectionCreation()
+ *   const conn = useConnectionCreation(viewId)
  *   onMounted(() => conn.setup())
  *   onUnmounted(() => conn.teardown())
  *   在 Stage 上绑定 @mousedown="conn.handleMouseDown" 等事件
  */
-export function useConnectionCreation() {
-  const active = useActiveView()
+export function useConnectionCreation(viewId: string) {
+  const view = useViewStore(viewId)
+  const nodeStore = useNodeStore()
   const commands = useCommands()
 
   /** Shift 键是否按下 */
@@ -48,7 +52,7 @@ export function useConnectionCreation() {
     let current: Konva.Node | null = target
     while (current && current.nodeType !== 'Stage') {
       const nodeName: string = current.name()
-      if (nodeName && active.nodeStore.nodes.has(nodeName)) {
+      if (nodeName && nodeStore.nodes.has(nodeName)) {
         return nodeName
       }
       current = current.getParent()
@@ -64,13 +68,12 @@ export function useConnectionCreation() {
     // 仅响应左键
     if (e.evt.button !== 0) return
 
-    const view = active.view
-
     // 命中已有节点 -> 以其为连线起始
     const hitNodeId = e.target !== e.currentTarget ? findNodeIdFromTarget(e.target) : null
     if (hitNodeId) {
       view.connectingFrom = hitNodeId
       startNodeCreated = false
+      window.addEventListener('mouseup', onWindowMouseUp, { once: true })
       return
     }
 
@@ -81,21 +84,22 @@ export function useConnectionCreation() {
     // 开启 batch，起始节点入 batch（后续 mouseup 时合并为单条历史）
     commands.beginBatch()
     const newId = commands.createNode(
-      active.project.activeViewId,
+      view.viewedNodeId,
       pos.x - DEFAULT_NODE_WIDTH / 2,
       pos.y - DEFAULT_NODE_HEIGHT / 2,
     )
     view.connectingFrom = newId
     startNodeCreated = true
+    window.addEventListener('mouseup', onWindowMouseUp, { once: true })
   }
 
   /** Stage mousemove: 连线拖拽中更新临时终点 */
   function handleMouseMove(e: KonvaEventObject<MouseEvent>): void {
-    if (active.view.connectingFrom === null) return
+    if (view.connectingFrom === null) return
 
     const stage = e.target.getStage()
+    console.log(stage)   // 此处stage可能失效
     if (!stage) return
-
     const pos = stage.getRelativePointerPosition()
     if (pos) {
       tempConnEnd.value = { x: pos.x, y: pos.y }
@@ -104,9 +108,6 @@ export function useConnectionCreation() {
 
   /** Stage mouseup: 连线拖拽结束 -> 创建连线或取消 */
   function handleMouseUp(e: KonvaEventObject<MouseEvent>): void {
-    const view = active.view
-    const project = active.project
-
     if (view.connectingFrom === null) return
     if (e.evt.button !== 0) return
 
@@ -122,7 +123,7 @@ export function useConnectionCreation() {
 
     if (targetNodeId && targetNodeId !== fromNodeId) {
       // 命中已有节点 -> 直接连线
-      commands.addConnection(project.activeViewId, fromNodeId, targetNodeId)
+      commands.addConnection(view.viewedNodeId, fromNodeId, targetNodeId)
     } else if (!targetNodeId) {
       // 结束位置无节点 -> 在指针处创建节点作为结束，再连线
       const stage = e.target.getStage()
@@ -134,12 +135,12 @@ export function useConnectionCreation() {
         return
       }
       const newId = commands.createNode(
-        project.activeViewId,
+        view.viewedNodeId,
         pos.x - DEFAULT_NODE_WIDTH / 2,
         pos.y - DEFAULT_NODE_HEIGHT / 2,
       )
       if (newId !== fromNodeId) {
-        commands.addConnection(project.activeViewId, fromNodeId, newId)
+        commands.addConnection(view.viewedNodeId, fromNodeId, newId)
       }
     }
 
@@ -149,16 +150,29 @@ export function useConnectionCreation() {
     tempConnEnd.value = null
   }
 
+  /**
+   * window mouseup 兜底：鼠标移出 Stage 松手时取消连线创建。
+   * stage mouseup 已处理时（connectingFrom 已清）幂等返回。
+   */
+  function onWindowMouseUp(): void {
+    if (view.connectingFrom === null) return
+    if (startNodeCreated) {
+      commands.rollbackBatch()
+      startNodeCreated = false
+    }
+    view.connectingFrom = null
+    tempConnEnd.value = null
+  }
+
   // ── 临时连线渲染配置 ──
 
   /** 临时连线（拖拽创建中，虚线）的 Konva Line 配置 */
   const tempConnConfig = computed(() => {
-    const view = active.view
     if (view.connectingFrom === null || tempConnEnd.value === null) {
       return { visible: false }
     }
 
-    const fromNode = active.nodeStore.getNode(view.connectingFrom)
+    const fromNode = nodeStore.getNode(view.connectingFrom)
     if (!fromNode) return { visible: false }
 
     return {
@@ -188,13 +202,13 @@ export function useConnectionCreation() {
     if (e.key === 'Shift') {
       isShiftHeld.value = false
       // Shift 释放时取消连线创建
-      if (active.view.connectingFrom !== null) {
+      if (view.connectingFrom !== null) {
         // 若起始节点是新建的且操作未完成，回滚 batch（丢弃历史，不删已创建节点）
         if (startNodeCreated) {
           commands.rollbackBatch()
           startNodeCreated = false
         }
-        active.view.connectingFrom = null
+        view.connectingFrom = null
         tempConnEnd.value = null
       }
     }

@@ -2,7 +2,8 @@ import { ref } from 'vue'
 import type { Ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
-import { useActiveView } from '@/composables/useActiveView'
+import { useViewStore } from '@/stores/view'
+import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
 
@@ -11,6 +12,8 @@ import { NODE_DRAG_THRESHOLD } from '@/constants'
  *
  * 以纯鼠标事件驱动节点拖拽（替代 Konva 原生 draggable），统一在
  * WhiteboardCanvas 的 Stage 事件中处理，与框选、连线创建等交互模式一致。
+ *
+ * @param viewId - 视图 ID（主视图传 'main'）
  *
  * 交互流程：
  *   1. handleMouseDown：检测是否点中节点，记录起点（不改变选中状态）
@@ -24,8 +27,9 @@ import { NODE_DRAG_THRESHOLD } from '@/constants'
  *
  * 坐标系：stage.getRelativePointerPosition() 返回世界坐标，与 node.x/y 同系。
  */
-export function useNodeDragging() {
-  const active = useActiveView()
+export function useNodeDragging(viewId: string) {
+  const view = useViewStore(viewId)
+  const nodeStore = useNodeStore()
   const commands = useCommands()
 
   /** 是否正在拖动节点（已超过阈值激活） */
@@ -50,7 +54,7 @@ export function useNodeDragging() {
     let current: Konva.Node | null = target
     while (current && current.nodeType !== 'Stage') {
       const nodeName: string = current.name()
-      if (nodeName && active.nodeStore.nodes.has(nodeName)) {
+      if (nodeName && nodeStore.nodes.has(nodeName)) {
         return nodeName
       }
       current = current.getParent()
@@ -87,6 +91,7 @@ export function useNodeDragging() {
       return false
     }
     pendingStart = { x: pos.x, y: pos.y }
+    window.addEventListener('mouseup', onWindowMouseUp, { once: true })
     return true
   }
 
@@ -95,6 +100,7 @@ export function useNodeDragging() {
     if (!pendingNodeId || !pendingStart) return
 
     const pos = getWorldPos(e)
+    console.log(pos)   // pos可能失效
     if (!pos) return
 
     // 首次移动超过阈值才激活拖动
@@ -106,8 +112,6 @@ export function useNodeDragging() {
       // 激活拖动
       isDragging.value = true
 
-      const view = active.view
-      const nodeStore = active.nodeStore
       // 若被拖节点未选中，单选它（拖动一个未选中节点意味着"我要移动这个节点"）
       if (!view.selectedNodeIds.has(pendingNodeId)) {
         view.selectNode(pendingNodeId, false)
@@ -123,7 +127,6 @@ export function useNodeDragging() {
     // 按总 delta 同步移动所有选中节点（起点固定不动，保证多选相对位置不变）
     const deltaX = pos.x - pendingStart.x
     const deltaY = pos.y - pendingStart.y
-    const nodeStore = active.nodeStore
     dragStartPositions.forEach((start, id) => {
       nodeStore.moveNode(id, start.x + deltaX, start.y + deltaY)
     })
@@ -136,10 +139,9 @@ export function useNodeDragging() {
     if (!isDragging.value) {
       // 纯 click（未超过阈值）：处理选中（单选 / Ctrl toggle）
       const ctrl = e.evt.ctrlKey || e.evt.metaKey
-      active.view.selectNode(pendingNodeId, ctrl)
+      view.selectNode(pendingNodeId, ctrl)
     } else {
       // 拖拽结束：提交移动命令到历史栈
-      const nodeStore = active.nodeStore
       const positions: Array<{
         id: string
         oldX: number
@@ -165,6 +167,37 @@ export function useNodeDragging() {
     }
 
     // 清理状态
+    isDragging.value = false
+    pendingNodeId = null
+    pendingStart = null
+    dragStartPositions.clear()
+  }
+
+  /**
+   * window mouseup 兜底：鼠标移出 Stage（如进入内联视图 DOM 区域）松手时，
+   * stage 的 mouseup 不触发，由此兜底清理。若 stage mouseup 已处理（状态已清），
+   * 此处 pendingNodeId 为 null 直接返回，幂等无副作用。
+   */
+  function onWindowMouseUp(): void {
+    if (!pendingNodeId) return
+    if (isDragging.value) {
+      // 拖拽中：提交移动（用当前 node 位置作为新位置）
+      const positions: Array<{
+        id: string
+        oldX: number
+        oldY: number
+        newX: number
+        newY: number
+      }> = []
+      dragStartPositions.forEach((start, id) => {
+        const n = nodeStore.getNode(id)
+        if (n && (n.x !== start.x || n.y !== start.y)) {
+          positions.push({ id, oldX: start.x, oldY: start.y, newX: n.x, newY: n.y })
+        }
+      })
+      if (positions.length > 0) commands.commitNodeMove(positions)
+    }
+    // 清理（与 handleMouseUp 相同的清理逻辑）
     isDragging.value = false
     pendingNodeId = null
     pendingStart = null

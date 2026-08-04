@@ -435,7 +435,7 @@ export function useCommands() {
   function groupNodes(ids: string[]): string | null {
     if (ids.length < 2) return null
 
-    const currentViewId = project.activeViewId
+    const currentViewId = project.currentNodeId
 
     // ── 捕获旧值 ──
     const oldParents = ids.map((id) => ({

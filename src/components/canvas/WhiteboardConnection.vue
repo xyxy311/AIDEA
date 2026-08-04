@@ -12,7 +12,7 @@
  */
 import { computed } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveView } from '@/composables/useActiveView'
+import { useNodeStore } from '@/stores/node'
 import {
   LINE_STYLE_DASH_MAP,
   CONNECTION_ARROW_SIZE,
@@ -23,6 +23,8 @@ import {
 // ── Props ──
 const props = defineProps<{
   connectionId: string
+  /** 持有此连线的父节点 ID（视图关联节点） */
+  parentId: string
   isSelected: boolean
 }>()
 
@@ -32,12 +34,12 @@ const emit = defineEmits<{
 }>()
 
 // ── Store ──
-const active = useActiveView()
+const nodeStore = useNodeStore()
 
 // ── Computed: 连线数据 ──
-// 从当前视图的连接数组中查找该连线
+// 从父节点的连接数组中查找该连线
 const connection = computed(() =>
-  active.nodeStore.getConnections(active.project.activeViewId).find(c => c.id === props.connectionId)
+  nodeStore.getConnections(props.parentId).find(c => c.id === props.connectionId)
 )
 
 // ── Computed: 两端节点 ──
@@ -45,13 +47,13 @@ const connection = computed(() =>
 const fromNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  return active.nodeStore.getNode(conn.fromNodeId)
+  return nodeStore.getNode(conn.fromNodeId)
 })
 
 const toNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
-  return active.nodeStore.getNode(conn.toNodeId)
+  return nodeStore.getNode(conn.toNodeId)
 })
 
 // ── 连线主体 Konva 配置 ──

@@ -38,25 +38,25 @@ describe('useKeyboardShortcuts', () => {
   it('should delete selected node on Delete key', () => {
     const nodeStore = useNodeStore()
     const project = useProjectStore()
-    const view = useViewStore(project.activeViewId)
+    const view = useViewStore('main')
 
-    const id = nodeStore.addNode(project.activeViewId, 0, 0)
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
     view.selectNode(id)
-    expect(nodeStore.childrenOf(project.activeViewId).length).toBe(1)
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1)
 
     const isEditing = ref(false)
     wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
-    expect(nodeStore.childrenOf(project.activeViewId).length).toBe(0)
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
   })
 
   it('should deselect on Escape key', () => {
     const nodeStore = useNodeStore()
     const project = useProjectStore()
-    const view = useViewStore(project.activeViewId)
+    const view = useViewStore('main')
 
-    const id = nodeStore.addNode(project.activeViewId, 0, 0)
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
     view.selectNode(id)
     expect(view.selectedNodeId).not.toBeNull()
 
@@ -70,17 +70,17 @@ describe('useKeyboardShortcuts', () => {
   it('should NOT trigger shortcuts when isEditing is true', () => {
     const nodeStore = useNodeStore()
     const project = useProjectStore()
-    const view = useViewStore(project.activeViewId)
+    const view = useViewStore('main')
 
-    const id = nodeStore.addNode(project.activeViewId, 0, 0)
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
     view.selectNode(id)
-    expect(nodeStore.childrenOf(project.activeViewId).length).toBe(1)
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1)
 
     const isEditing = ref(true)
     wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
-    expect(nodeStore.childrenOf(project.activeViewId).length).toBe(1) // Should NOT delete
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1) // Should NOT delete
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(view.selectedNodeId).toBe(id) // Should NOT deselect

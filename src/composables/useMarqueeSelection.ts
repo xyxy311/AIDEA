@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
 import type { Ref, ComputedRef } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import { useActiveView } from '@/composables/useActiveView'
+import { useViewStore } from '@/stores/view'
+import { useNodeStore } from '@/stores/node'
 import {
   MARQUEE_FILL_COLOR,
   MARQUEE_STROKE_COLOR,
@@ -30,6 +31,8 @@ const INVISIBLE_CONFIG = { visible: false } as const
 /**
  * 框选（Marquee Selection）交互 Composable
  *
+ * @param viewId - 视图 ID（主视图传 'main'）
+ *
  * 交互流程：
  *   1. handleMouseDown：在 Stage 空白处按下，记录起点（暂不激活）
  *   2. handleMouseMove：移动超过阈值才激活框选并绘制矩形
@@ -42,8 +45,9 @@ const INVISIBLE_CONFIG = { visible: false } as const
  * 响应式注意：startPoint / currentPoint 必须是 ref，否则 marqueeRectConfig（computed）
  * 无法追踪其变化，框选框将不会随鼠标实时更新。
  */
-export function useMarqueeSelection() {
-  const active = useActiveView()
+export function useMarqueeSelection(viewId: string) {
+  const view = useViewStore(viewId)
+  const nodeStore = useNodeStore()
 
   /** 是否正在框选（已超过阈值激活） */
   const isMarqueeDragging: Ref<boolean> = ref(false)
@@ -109,6 +113,7 @@ export function useMarqueeSelection() {
     pendingStart = { x: pos.x, y: pos.y }
     startPoint.value = { x: pos.x, y: pos.y }
     currentPoint.value = { x: pos.x, y: pos.y }
+    window.addEventListener('mouseup', onWindowMouseUp, { once: true })
   }
 
   /** mousemove：超过阈值激活框选，更新当前点 */
@@ -145,7 +150,7 @@ export function useMarqueeSelection() {
 
       // AABB 命中检测：框选矩形与节点矩形相交则选中（仅检测当前视图的子节点）
       const hitIds: string[] = []
-      for (const node of active.nodeStore.childrenOf(active.project.activeViewId)) {
+      for (const node of nodeStore.childrenOf(view.viewedNodeId)) {
         if (
           selBox.x < node.x + node.width &&
           selBox.x + selBox.width > node.x &&
@@ -158,10 +163,22 @@ export function useMarqueeSelection() {
 
       // Ctrl/Cmd 追加到现有选中；否则替换
       const additive = e.evt.ctrlKey || e.evt.metaKey
-      active.view.setSelectedNodes(hitIds, additive)
+      view.setSelectedNodes(hitIds, additive)
     }
 
     // 清空状态（无论是否激活框选，mouseup 都要重置 pendingStart）
+    isMarqueeDragging.value = false
+    pendingStart = null
+    startPoint.value = null
+    currentPoint.value = null
+  }
+
+  /**
+   * window mouseup 兜底：鼠标移出 Stage 松手时清理框选状态。
+   * 不做命中选中（鼠标在 Stage 外无法 AABB）。stage mouseup 已处理时幂等返回。
+   */
+  function onWindowMouseUp(): void {
+    if (!pendingStart) return
     isMarqueeDragging.value = false
     pendingStart = null
     startPoint.value = null

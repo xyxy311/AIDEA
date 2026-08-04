@@ -14,7 +14,7 @@
  * 数据源：nodeStore（全局节点树 + 连线）+ viewStore（props.viewId 对应视图的视口/选中/编辑）。
  * 当前视图渲染的是 view.viewedNodeId 节点的直接子节点与它们之间的连线。
  */
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
@@ -82,6 +82,14 @@ const conn = useConnectionCreation(props.viewId)
 
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
 const stageContainerRef = ref<HTMLDivElement | null>(null)
+
+// 挂载/卸载时设置/清理 containerEl（供跨视图拖拽坐标映射）
+onMounted(() => {
+  view.containerEl = stageContainerRef.value
+})
+onUnmounted(() => {
+  view.containerEl = null
+})
 
 /** Konva Stage 引用（用于获取底层 Konva 实例） */
 const stageRef = ref<VueKonvaRef<Konva.Stage> | null>(null)

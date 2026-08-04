@@ -6,6 +6,12 @@ import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
+import {
+  hitTestInlineViewWorld,
+  mapMainWorldToInlineWorld,
+  hitTestInlineViewScreen,
+  screenToMainWorld,
+} from '@/utils/view'
 
 /**
  * 节点拖动交互 Composable
@@ -13,22 +19,27 @@ import { NODE_DRAG_THRESHOLD } from '@/constants'
  * 以纯鼠标事件驱动节点拖拽（替代 Konva 原生 draggable），统一在
  * WhiteboardCanvas 的 Stage 事件中处理，与框选、连线创建等交互模式一致。
  *
+ * 支持跨视图拖拽：主视图拖节点到内联视图（reparent 到内联视图观察的节点），
+ * 内联视图拖节点回主视图（reparent 到主视图 viewedNodeId）。
+ *
  * @param viewId - 视图 ID（主视图传 'main'）
  *
  * 交互流程：
  *   1. handleMouseDown：检测是否点中节点，记录起点（不改变选中状态）
  *   2. handleMouseMove：移动超过阈值才激活拖动；激活时若被拖节点未选中则单选它，
- *      然后按总 delta 同步移动所有选中节点
- *   3. handleMouseUp：若未拖动（纯 click）则处理选中（单选 / Ctrl toggle）；
- *      若已拖动则仅清理状态
+ *      然后按总 delta 同步移动所有选中节点；主视图拖拽中实时更新悬停的内联视图
+ *   3. handleMouseUp：若未拖动（纯 click）则处理选中；若已拖动则判断跨视图 reparent
+ *      或同视图提交移动
  *
  * 事件分流由 WhiteboardCanvas 负责：Shift 走连线创建，PanMode 走平移，
  * 命中节点走本 composable，空白走框选。
  *
  * 坐标系：stage.getRelativePointerPosition() 返回世界坐标，与 node.x/y 同系。
+ * 跨视图判断用屏幕坐标（clientX/clientY）经 utils/view 映射，不依赖 stage 事件。
  */
 export function useNodeDragging(viewId: string) {
   const view = useViewStore(viewId)
+  const mainView = useViewStore('main')
   const nodeStore = useNodeStore()
   const commands = useCommands()
 
@@ -69,6 +80,168 @@ export function useNodeDragging(viewId: string) {
     return stage.getRelativePointerPosition()
   }
 
+  /** 提交同视图内移动到历史栈（拖拽未跨视图时） */
+  function commitMovePositions(): void {
+    const positions: Array<{
+      id: string
+      oldX: number
+      oldY: number
+      newX: number
+      newY: number
+    }> = []
+    dragStartPositions.forEach((start, id) => {
+      const n = nodeStore.getNode(id)
+      if (n && (n.x !== start.x || n.y !== start.y)) {
+        positions.push({ id, oldX: start.x, oldY: start.y, newX: n.x, newY: n.y })
+      }
+    })
+    if (positions.length > 0) commands.commitNodeMove(positions)
+  }
+
+  /** 清理拖拽状态（含视图状态恢复） */
+  function cleanupDragState(): void {
+    isDragging.value = false
+    pendingNodeId = null
+    pendingStart = null
+    dragStartPositions.clear()
+  }
+
+  /**
+   * 解析拖拽落点目标视图。
+   * - 主视图拖拽：用主世界坐标 hit-test 内联视图内容区，命中则 reparent 到该内联视图观察的节点(iv.nodeId)。
+   * - 内联视图拖拽：用屏幕坐标 hit-test 主视图内联覆盖层，未命中(落在主视图空白)则 reparent 到主视图 viewedNodeId。
+   * @returns 目标父级信息，null 表示同视图移动
+   */
+  function resolveDropTarget(
+    clientX: number,
+    clientY: number,
+    mainRect: DOMRect,
+  ): { targetParentId: string; targetInlineViewId: string | null } | null {
+    if (view.type === 'main') {
+      // 主->内联：用主世界坐标 hit-test 内联矩形
+      const world = screenToMainWorld(clientX, clientY, mainRect, view)
+      const overId = hitTestInlineViewWorld(world.x, world.y, view, nodeStore)
+      if (overId) {
+        const iv = view.inlineViews.find((v) => v.nodeId === overId)
+        if (iv) {
+          // targetParentId = 内联视图观察的节点 = 宿主节点 id
+          return { targetParentId: iv.nodeId, targetInlineViewId: iv.viewId }
+        }
+      }
+      return null
+    } else {
+      // 内联->主：屏幕坐标 hit-test 主视图内联覆盖层
+      const overId = hitTestInlineViewScreen(clientX, clientY, mainView, mainRect, nodeStore)
+      if (overId === null) {
+        // 落在主视图区域(非任何内联覆盖层) -> reparent 到主视图 viewedNodeId
+        return { targetParentId: mainView.viewedNodeId, targetInlineViewId: null }
+      }
+      return null // 落在内联覆盖层(含自身) -> 同视图移动
+    }
+  }
+
+  /**
+   * 执行跨视图 reparent。
+   * 主拖节点对齐鼠标在目标视图的映射位置，其余节点按缩放比转换相对偏移以保持几何。
+   *  主->内联：内联世界偏移 = 主世界偏移 / inlineScale
+   *  内联->主：主世界偏移 = 内联世界偏移 * inlineScale
+   */
+  function performReparent(
+    target: { targetParentId: string; targetInlineViewId: string | null },
+    clientX: number,
+    clientY: number,
+    mainRect: DOMRect,
+  ): void {
+    const ids = Array.from(dragStartPositions.keys())
+    // 防环 + 过滤（reparentTo 内部也会做，这里先过滤以便位置计算）
+    const validIds = ids.filter((id) => {
+      if (id === target.targetParentId) return false
+      return !nodeStore.descendantsOf(id).includes(target.targetParentId)
+    })
+    if (validIds.length === 0) {
+      commitMovePositions()
+      return
+    }
+
+    const mainWorld = screenToMainWorld(clientX, clientY, mainRect, mainView)
+    let baseX: number
+    let baseY: number
+    let isMainTarget: boolean
+    let scaleForOffset: number
+
+    if (target.targetInlineViewId) {
+      // 目标是内联视图：主世界 -> 内联世界
+      const inlineView = useViewStore(target.targetInlineViewId)
+      const mapped = mapMainWorldToInlineWorld(
+        mainWorld.x,
+        mainWorld.y,
+        target.targetParentId,
+        inlineView,
+        mainView,
+        nodeStore,
+      )
+      baseX = mapped.x
+      baseY = mapped.y
+      isMainTarget = false
+      scaleForOffset = inlineView.stageScale !== 0 ? inlineView.stageScale : 1
+    } else {
+      // 目标是主视图
+      baseX = mainWorld.x
+      baseY = mainWorld.y
+      isMainTarget = true
+      scaleForOffset = view.stageScale !== 0 ? view.stageScale : 1
+    }
+
+    const pendingNode = pendingNodeId ? nodeStore.getNode(pendingNodeId) : null
+    const pendingX = pendingNode?.x ?? 0
+    const pendingY = pendingNode?.y ?? 0
+
+    const newPositions = new Map<string, { x: number; y: number }>()
+    for (const id of validIds) {
+      const node = nodeStore.getNode(id)
+      if (!node) continue
+      const dx = node.x - pendingX
+      const dy = node.y - pendingY
+      let targetDx: number
+      let targetDy: number
+      if (isMainTarget) {
+        // 内联 -> 主：主世界偏移 = 内联世界偏移 * inlineScale
+        targetDx = (dx - node.width / 2) * scaleForOffset
+        targetDy = (dy - node.height / 2) * scaleForOffset
+      } else {
+        // 主 -> 内联：内联世界偏移 = 主世界偏移 / inlineScale
+        targetDx = (dx - node.width / 2) / scaleForOffset
+        targetDy = (dy - node.height / 2) / scaleForOffset
+      }
+      newPositions.set(id, { x: baseX + targetDx, y: baseY + targetDy })
+    }
+
+    commands.reparentTo(validIds, target.targetParentId, newPositions)
+    // reparent 后节点离开当前视图，清空选中
+    view.clearSelection()
+  }
+
+  /** 拖拽结束统一处理：判断跨视图 reparent 或同视图移动 */
+  function finishDrag(clientX: number, clientY: number): void {
+    if (!isDragging.value) return // 纯 click 不在此处理
+
+    const mainRect = mainView.containerEl?.getBoundingClientRect()
+    if (!mainRect) {
+      // 无 DOM 引用，退化为同视图移动
+      commitMovePositions()
+      cleanupDragState()
+      return
+    }
+
+    const target = resolveDropTarget(clientX, clientY, mainRect)
+    if (target) {
+      performReparent(target, clientX, clientY, mainRect)
+    } else {
+      commitMovePositions()
+    }
+    cleanupDragState()
+  }
+
   // ── 鼠标事件处理 ──
 
   /**
@@ -100,7 +273,6 @@ export function useNodeDragging(viewId: string) {
     if (!pendingNodeId || !pendingStart) return
 
     const pos = getWorldPos(e)
-    console.log(pos)   // pos可能失效
     if (!pos) return
 
     // 首次移动超过阈值才激活拖动
@@ -132,7 +304,7 @@ export function useNodeDragging(viewId: string) {
     })
   }
 
-  /** mouseup：纯 click 处理选中；拖动结束提交移动命令到历史栈 */
+  /** mouseup：纯 click 处理选中；拖动结束判断跨视图 reparent */
   function handleMouseUp(e: KonvaEventObject<MouseEvent>): void {
     if (!pendingNodeId) return // 非节点拖动，不处理
 
@@ -140,68 +312,26 @@ export function useNodeDragging(viewId: string) {
       // 纯 click（未超过阈值）：处理选中（单选 / Ctrl toggle）
       const ctrl = e.evt.ctrlKey || e.evt.metaKey
       view.selectNode(pendingNodeId, ctrl)
+      cleanupDragState()
     } else {
-      // 拖拽结束：提交移动命令到历史栈
-      const positions: Array<{
-        id: string
-        oldX: number
-        oldY: number
-        newX: number
-        newY: number
-      }> = []
-      dragStartPositions.forEach((start, id) => {
-        const n = nodeStore.getNode(id)
-        if (n && (n.x !== start.x || n.y !== start.y)) {
-          positions.push({
-            id,
-            oldX: start.x,
-            oldY: start.y,
-            newX: n.x,
-            newY: n.y,
-          })
-        }
-      })
-      if (positions.length > 0) {
-        commands.commitNodeMove(positions)
-      }
+      // 拖拽结束：跨视图判断
+      finishDrag(e.evt.clientX, e.evt.clientY)
     }
-
-    // 清理状态
-    isDragging.value = false
-    pendingNodeId = null
-    pendingStart = null
-    dragStartPositions.clear()
   }
 
   /**
-   * window mouseup 兜底：鼠标移出 Stage（如进入内联视图 DOM 区域）松手时，
-   * stage 的 mouseup 不触发，由此兜底清理。若 stage mouseup 已处理（状态已清），
-   * 此处 pendingNodeId 为 null 直接返回，幂等无副作用。
+   * window mouseup 兜底：鼠标移出 Stage（如从内联视图覆盖层拖出到主视图区域）松手时，
+   * stage 的 mouseup 不触发，由此兜底处理跨视图 reparent 或提交移动。
+   * 若 stage mouseup 已处理（状态已清），此处 pendingNodeId 为 null 直接返回，幂等无副作用。
    */
-  function onWindowMouseUp(): void {
+  function onWindowMouseUp(e: MouseEvent): void {
     if (!pendingNodeId) return
     if (isDragging.value) {
-      // 拖拽中：提交移动（用当前 node 位置作为新位置）
-      const positions: Array<{
-        id: string
-        oldX: number
-        oldY: number
-        newX: number
-        newY: number
-      }> = []
-      dragStartPositions.forEach((start, id) => {
-        const n = nodeStore.getNode(id)
-        if (n && (n.x !== start.x || n.y !== start.y)) {
-          positions.push({ id, oldX: start.x, oldY: start.y, newX: n.x, newY: n.y })
-        }
-      })
-      if (positions.length > 0) commands.commitNodeMove(positions)
+      finishDrag(e.clientX, e.clientY)
+    } else {
+      // 纯 click 但 stage mouseup 未触发（鼠标移出 Stage）：不处理选中，仅清理
+      cleanupDragState()
     }
-    // 清理（与 handleMouseUp 相同的清理逻辑）
-    isDragging.value = false
-    pendingNodeId = null
-    pendingStart = null
-    dragStartPositions.clear()
   }
 
   return { isDragging, handleMouseDown, handleMouseMove, handleMouseUp }

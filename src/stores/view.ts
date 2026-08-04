@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 
 /** 内联视图项（宿主视图持有的展开状态） */
@@ -82,6 +82,10 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     // ── 连线创建中 ──
     /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
     const connectingFrom = ref<string | null>(null)
+
+    // ── 跨视图拖拽 ──
+    /** Stage 容器 DOM 引用（供坐标映射用 getBoundingClientRect） */
+    const containerEl = shallowRef<HTMLElement | null>(null)
 
     // ── Getters ──
 
@@ -267,6 +271,8 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       editingNodeId,
       // 连线创建
       connectingFrom,
+      // 跨视图拖拽
+      containerEl,
       // 操作
       selectNode,
       selectConnection,

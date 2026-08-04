@@ -58,10 +58,8 @@ const borderRectConfig = computed(() => {
     width: r.width,
     height: r.height,
     fill: n.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
-    stroke: props.isSelected
-      ? '#3b82f6'
-      : n.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
-    strokeWidth: props.isSelected ? 2 : DEFAULT_NODE_STYLE.borderWidth,
+    stroke: DEFAULT_NODE_STYLE.borderColor,
+    strokeWidth: DEFAULT_NODE_STYLE.borderWidth,
     strokeScaleEnabled: false,
   }
 })

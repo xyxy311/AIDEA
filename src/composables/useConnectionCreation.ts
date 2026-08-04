@@ -98,7 +98,6 @@ export function useConnectionCreation(viewId: string) {
     if (view.connectingFrom === null) return
 
     const stage = e.target.getStage()
-    console.log(stage)   // 此处stage可能失效
     if (!stage) return
     const pos = stage.getRelativePointerPosition()
     if (pos) {

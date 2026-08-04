@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import type { ComputedRef } from 'vue'
-import { useNodeStore } from '@/stores/node'
+import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import type { Connection, LineStyle } from '@/types'
@@ -279,6 +279,123 @@ export function useCommands() {
       ],
       connChanges: [],
     })
+  }
+
+  /**
+   * 跨视图 reparent 节点（拖拽到内联视图 / 拖回主视图）。
+   *
+   * 1. 迁移内部连线（两端均在迁移集合）到目标父级
+   * 2. 删除外部连线（仅一端在迁移集合）—— reparent 后不再是同级关系
+   * 3. reparent 每个节点到 targetParentId 并设置新位置
+   * 4. 入栈复合 DataPatch（parentId + x/y 修改 + 连线 remove/add）
+   *
+   * @param nodeIds       要迁移的节点 ID（假设来自同一原父级 = 当前视图子节点）
+   * @param targetParentId 新父级节点 ID
+   * @param newPositions   每个节点在新视图中的落点 { x, y }
+   */
+  function reparentTo(
+    nodeIds: string[],
+    targetParentId: string,
+    newPositions: Map<string, { x: number; y: number }>,
+  ): void {
+    // ── 1. 过滤无效节点 ──
+    const validIds = nodeIds.filter((id) => {
+      if (id === ROOT_NODE_ID) return false
+      const node = nodeStore.getNode(id)
+      if (!node) return false
+      if (node.parentId === targetParentId) return false
+      return true
+    })
+    if (validIds.length === 0) return
+
+    // ── 2. 防环校验：targetParentId 不能是节点自身或其后代 ──
+    const filteredIds = validIds.filter((id) => {
+      const descendants = nodeStore.descendantsOf(id)
+      return !descendants.includes(targetParentId)
+    })
+    if (filteredIds.length === 0) return
+
+    // ── 3. 捕获旧值 ──
+    const oldValues = filteredIds.map((id) => {
+      const node = nodeStore.getNode(id)!
+      return { id, oldParentId: node.parentId, oldX: node.x, oldY: node.y }
+    })
+
+    // ── 4. 确定原父级 ──
+    const sourceParentId = oldValues[0].oldParentId
+    if (sourceParentId === null) return
+
+    // ── 5. 连线分类 ──
+    const idSet = new Set(filteredIds)
+    const allConns = nodeStore.getConnections(sourceParentId)
+    // 内部连线（两端均在迁移集合）-- 迁移到目标父级
+    const internalConns = allConns.filter(
+      (c) => idSet.has(c.fromNodeId) && idSet.has(c.toNodeId),
+    )
+    const capturedInternalConns = internalConns.map((c) => deepClone(c))
+    // 外部连线（仅一端在迁移集合）-- reparent 后不再是同级关系，需删除
+    const externalConns = allConns.filter(
+      (c) =>
+        (idSet.has(c.fromNodeId) || idSet.has(c.toNodeId)) &&
+        !(idSet.has(c.fromNodeId) && idSet.has(c.toNodeId)),
+    )
+    const capturedExternalConns = externalConns.map((c) => deepClone(c))
+
+    // ── 6. 执行 ──
+    const internalConnIds = capturedInternalConns.map((c) => c.id)
+    if (internalConnIds.length > 0) {
+      nodeStore.moveConnections(sourceParentId, targetParentId, internalConnIds)
+    }
+    const externalConnIds = capturedExternalConns.map((c) => c.id)
+    if (externalConnIds.length > 0) {
+      nodeStore.deleteConnections(sourceParentId, externalConnIds)
+    }
+    for (const id of filteredIds) {
+      nodeStore.reparentNode(id, targetParentId)
+      const p = newPositions.get(id)
+      if (p) {
+        nodeStore.moveNode(id, p.x, p.y)
+      }
+    }
+
+    // ── 7. 构造 DataPatch ──
+    const nodeChanges: NodeChange[] = filteredIds.map((id) => {
+      const old = oldValues.find((o) => o.id === id)!
+      const p = newPositions.get(id)
+      return {
+        type: 'modify',
+        id,
+        old: { parentId: old.oldParentId ?? undefined, x: old.oldX, y: old.oldY },
+        new: {
+          parentId: targetParentId,
+          x: p ? p.x : old.oldX,
+          y: p ? p.y : old.oldY,
+        },
+      }
+    })
+    const connChanges: ConnectionChange[] = [
+      // 内部连线：从原父级删除 + 加到目标父级
+      ...capturedInternalConns.map((c) => ({
+        type: 'remove' as const,
+        parentId: sourceParentId,
+        connectionId: c.id,
+        connection: deepClone(c),
+      })),
+      ...capturedInternalConns.map((c) => ({
+        type: 'add' as const,
+        parentId: targetParentId,
+        connectionId: c.id,
+        connection: deepClone(c),
+      })),
+      // 外部连线：从原父级删除
+      ...capturedExternalConns.map((c) => ({
+        type: 'remove' as const,
+        parentId: sourceParentId,
+        connectionId: c.id,
+        connection: deepClone(c),
+      })),
+    ]
+    history.pushCommand({ nodeChanges, connChanges })
   }
 
   // ── 连线操作 ──
@@ -592,6 +709,7 @@ export function useCommands() {
     updateNodesStyle,
     commitNodeResize,
     reparentNode,
+    reparentTo,
     // 连线
     addConnection,
     deleteConnections,

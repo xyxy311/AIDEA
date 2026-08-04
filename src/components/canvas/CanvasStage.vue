@@ -397,6 +397,7 @@ function handleStageMouseUp(e: unknown): void {
     ref="stageContainerRef"
     class="canvas-wrapper"
     :class="{ 'pan-mode': nav.isPanMode.value, 'shift-held': conn.isShiftHeld.value }"
+    :style="{ backgroundColor: CANVAS_BACKGROUND_COLOR }"
   >
     <!-- Konva Stage -->
     <v-stage
@@ -420,16 +421,6 @@ function handleStageMouseUp(e: unknown): void {
       <!-- 连线层（底层）：独立 layer 确保节点层始终覆盖在连线之上，
            不受 v-for 列表更新导致的 Konva children 重排影响 -->
       <v-layer>
-        <!-- 背景矩形 -->
-        <v-rect
-          :config="{
-            width: stageWidth,
-            height: stageHeight,
-            fill: CANVAS_BACKGROUND_COLOR,
-            listening: false,
-          }"
-        />
-
         <!--
           连线 - 位于独立连线层（底层），每条连线渲染为线段 + 可选箭头（有向时）。
         -->

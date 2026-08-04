@@ -200,6 +200,20 @@ watch(
 )
 
 /**
+ * 内联视图展开/收起时：选中节点的渲染组件在 WhiteboardNode <-> InlineViewFrame 间切换，
+ * selectedNodeIds 未变（上面的 watch 不触发），需在此重新附着 Transformer 到新组件的 Konva.Rect。
+ * 监听 length 而非整个 inlineViews：展开(+1)/收起(-1) 触发，resize 仅改尺寸不触发。
+ * nextTick 确保组件切换完成、nodeInstances 已更新为新实例。
+ */
+watch(
+  () => view.inlineViews.length,
+  async () => {
+    await nextTick()
+    attachTransformer()
+  },
+)
+
+/**
  * 全局 Transformer 变换结束：遍历所有附着节点，将 scale 烘焙为 width/height
  *
  * Konva Transformer resize 时只改节点的 scaleX/scaleY（不改 width/height），

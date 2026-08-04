@@ -164,8 +164,7 @@ export const useProjectStore = defineStore('project', () => {
       ivView.stageX = ivSnap.stageX
       ivView.stageY = ivSnap.stageY
       ivView.stageScale = ivSnap.stageScale
-      ivView.selectedNodeIds = new Set(ivSnap.selectedNodeIds)
-      ivView.selectedConnectionIds = new Set(ivSnap.selectedConnectionIds)
+      // 选中状态由主视图统一持有（内联视图通过 computed 共享主视图选中），不单独恢复
       ivView.editingNodeId = ivSnap.editingNodeId
       ivView.connectingFrom = ivSnap.connectingFrom
       view.addInlineView(ivSnap.nodeId, ivSnap.viewId, ivSnap.width, ivSnap.height)
@@ -208,6 +207,7 @@ export const useProjectStore = defineStore('project', () => {
    * 主视图实例 viewId='main' 常驻，永不销毁；只销毁内联视图实例。
    */
   function destroyView(viewId: string): void {
+    console.log('destroyView: ', viewId)
     if (viewId === 'main') return
     const pinia = getActivePinia()
     if (pinia) {

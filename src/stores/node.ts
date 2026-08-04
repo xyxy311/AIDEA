@@ -126,6 +126,21 @@ export const useNodeStore = defineStore('node', () => {
     return nodes.get(parentId)?.connections ?? []
   }
 
+  /**
+   * 全局查找连线及其所属父级（按连线 ID）。
+   * 用于跨视图选中场景：选中连线可能来自主视图或任一内联视图宿主节点，
+   * 调用方无需知道连线所属父级即可定位。
+   */
+  function findConnectionById(
+    connectionId: string,
+  ): { parentId: string; connection: Connection } | null {
+    for (const [nodeId, node] of nodes) {
+      const conn = node.connections.find((c) => c.id === connectionId)
+      if (conn) return { parentId: nodeId, connection: conn }
+    }
+    return null
+  }
+
   // ── 节点 CRUD ──
 
   /**
@@ -470,6 +485,7 @@ export const useNodeStore = defineStore('node', () => {
     descendantsOf,
     pathToRoot,
     getConnections,
+    findConnectionById,
     // 节点 CRUD
     addNode,
     deleteNode,

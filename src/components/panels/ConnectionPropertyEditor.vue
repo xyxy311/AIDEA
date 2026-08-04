@@ -32,9 +32,12 @@ const active = useActiveView()
 const presetsStore = usePresetsStore()
 
 // 选中的连线信息
-const conn = computed(() =>
-  active.nodeStore.getConnections(active.project.currentNodeId).find(c => c.id === active.view.selectedConnectionId)
-)
+// 跨视图选中：选中连线可能来自主视图或任一内联视图宿主节点，按 ID 全局查找
+const conn = computed(() => {
+  const id = active.view.selectedConnectionId
+  if (!id) return undefined
+  return active.nodeStore.findConnectionById(id)?.connection
+})
 const selectedCount = computed(() => active.view.selectedConnectionIds.size)
 
 /** 获取连线的两端节点名称 */

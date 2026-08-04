@@ -288,11 +288,14 @@ export function useNodeDragging(viewId: string) {
       if (!view.selectedNodeIds.has(pendingNodeId)) {
         view.selectNode(pendingNodeId, false)
       }
-      // 记录所有选中节点初始位置（选中状态可能刚变，需在激活后快照）
+      // 记录当前视图渲染的选中节点初始位置（选中状态可能刚变，需在激活后快照）
+      // 只纳入当前视图直接子节点；跨视图选中时避免移动其他视图节点导致坐标错乱
       dragStartPositions.clear()
       view.selectedNodeIds.forEach((id) => {
         const n = nodeStore.getNode(id)
-        if (n) dragStartPositions.set(id, { x: n.x, y: n.y })
+        if (n && n.parentId === view.viewedNodeId) {
+          dragStartPositions.set(id, { x: n.x, y: n.y })
+        }
       })
     }
 

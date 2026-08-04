@@ -69,11 +69,26 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     /** 画布缩放倍率 */
     const stageScale = ref(1)
 
-    // ── 选中 ──
-    /** 当前选中的节点 ID 集合（支持多选） */
-    const selectedNodeIds = ref<Set<string>>(new Set())
-    /** 当前选中的连线 ID 集合（支持多选） */
-    const selectedConnectionIds = ref<Set<string>>(new Set())
+    // ── 选中（全局共享：主视图持有真实状态，内联视图通过 computed + action 转发引用主视图）──
+    // 这样内联视图中选中节点/连线时，主视图的 selectedNodeIds/selectedConnectionIds 同步更新，
+    // 使快捷键和右侧边栏属性编辑（均读取主视图选中）能作用于内联视图选中的节点。
+    const isInline = savedInit?.type === 'inline'
+    // 显式声明 any 打破循环类型推断（useViewStore 在自身工厂内引用自身）
+    const mainView: any = isInline ? useViewStore('main') : null
+
+    /** 主视图的真实选中节点 ID 集合（内联视图不持有，引用主视图） */
+    const _ownSelectedNodeIds = isInline ? null : ref<Set<string>>(new Set())
+    /** 主视图的真实选中连线 ID 集合（内联视图不持有，引用主视图） */
+    const _ownSelectedConnectionIds = isInline ? null : ref<Set<string>>(new Set())
+
+    /** 当前选中的节点 ID 集合（内联视图返回主视图的，实现全局选中共享） */
+    const selectedNodeIds = isInline
+      ? computed<Set<string>>(() => mainView!.selectedNodeIds)
+      : _ownSelectedNodeIds!
+    /** 当前选中的连线 ID 集合（内联视图返回主视图的） */
+    const selectedConnectionIds = isInline
+      ? computed<Set<string>>(() => mainView!.selectedConnectionIds)
+      : _ownSelectedConnectionIds!
 
     // ── 编辑 ──
     /** 当前正在编辑的节点 ID */
@@ -109,24 +124,29 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
      * 节点与连线选择互斥--选中节点时总是清空连线选择
      */
     function selectNode(nodeId: string | null, ctrlKey?: boolean): void {
+      // 内联视图转发主视图（全局选中共享）
+      if (isInline) {
+        mainView!.selectNode(nodeId, ctrlKey)
+        return
+      }
       // 节点与连线互斥：选中节点时总是清空连线选择
-      selectedConnectionIds.value = new Set()
+      _ownSelectedConnectionIds!.value = new Set()
 
       if (nodeId === null) {
-        selectedNodeIds.value = new Set()
+        _ownSelectedNodeIds!.value = new Set()
         return
       }
 
       if (ctrlKey) {
-        const newSet = new Set(selectedNodeIds.value)
+        const newSet = new Set(_ownSelectedNodeIds!.value)
         if (newSet.has(nodeId)) {
           newSet.delete(nodeId)
         } else {
           newSet.add(nodeId)
         }
-        selectedNodeIds.value = newSet
+        _ownSelectedNodeIds!.value = newSet
       } else {
-        selectedNodeIds.value = new Set([nodeId])
+        _ownSelectedNodeIds!.value = new Set([nodeId])
       }
     }
 
@@ -138,31 +158,41 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
      * 节点与连线选择互斥--选中连线时总是清空节点选择
      */
     function selectConnection(connectionId: string | null, ctrlKey?: boolean): void {
+      // 内联视图转发主视图（全局选中共享）
+      if (isInline) {
+        mainView!.selectConnection(connectionId, ctrlKey)
+        return
+      }
       // 节点与连线互斥：选中连线时总是清空节点选择
-      selectedNodeIds.value = new Set()
+      _ownSelectedNodeIds!.value = new Set()
 
       if (connectionId === null) {
-        selectedConnectionIds.value = new Set()
+        _ownSelectedConnectionIds!.value = new Set()
         return
       }
 
       if (ctrlKey) {
-        const newSet = new Set(selectedConnectionIds.value)
+        const newSet = new Set(_ownSelectedConnectionIds!.value)
         if (newSet.has(connectionId)) {
           newSet.delete(connectionId)
         } else {
           newSet.add(connectionId)
         }
-        selectedConnectionIds.value = newSet
+        _ownSelectedConnectionIds!.value = newSet
       } else {
-        selectedConnectionIds.value = new Set([connectionId])
+        _ownSelectedConnectionIds!.value = new Set([connectionId])
       }
     }
 
     /** 清空所有选中（节点和连线） */
     function clearSelection(): void {
-      selectedNodeIds.value = new Set()
-      selectedConnectionIds.value = new Set()
+      // 内联视图转发主视图（全局选中共享）
+      if (isInline) {
+        mainView!.clearSelection()
+        return
+      }
+      _ownSelectedNodeIds!.value = new Set()
+      _ownSelectedConnectionIds!.value = new Set()
     }
 
     /**
@@ -171,17 +201,22 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
      * - additive=true：将 ids 追加到当前选中节点集合（去重），清空连线选中
      */
     function setSelectedNodes(ids: string[], additive?: boolean): void {
+      // 内联视图转发主视图（全局选中共享）
+      if (isInline) {
+        mainView!.setSelectedNodes(ids, additive)
+        return
+      }
       // 节点与连线互斥：清空连线选中
-      selectedConnectionIds.value = new Set()
+      _ownSelectedConnectionIds!.value = new Set()
 
       if (additive) {
-        const newSet = new Set(selectedNodeIds.value)
+        const newSet = new Set(_ownSelectedNodeIds!.value)
         for (const id of ids) {
           newSet.add(id)
         }
-        selectedNodeIds.value = newSet
+        _ownSelectedNodeIds!.value = newSet
       } else {
-        selectedNodeIds.value = new Set(ids)
+        _ownSelectedNodeIds!.value = new Set(ids)
       }
     }
 
@@ -241,10 +276,15 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
      * 不清除 inlineViews。
      */
     function resetViewState(): void {
-      selectedNodeIds.value = new Set()
+      if (isInline) {
+        // 内联视图：选中归主视图管理，清全局选中；编辑/连线创建是本视图私有
+        mainView!.clearSelection()
+      } else {
+        _ownSelectedNodeIds!.value = new Set()
+        _ownSelectedConnectionIds!.value = new Set()
+      }
       editingNodeId.value = null
       connectingFrom.value = null
-      selectedConnectionIds.value = new Set()
     }
 
     return {

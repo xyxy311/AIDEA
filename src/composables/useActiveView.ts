@@ -64,8 +64,7 @@ export function useActiveView() {
     strokeColor?: string
     directed?: boolean
   }): void {
-    commands.updateConnectionsStyle(
-      project.currentNodeId,
+    commands.updateConnectionsStyleByIds(
       Array.from(view().selectedConnectionIds),
       partial,
     )
@@ -88,7 +87,7 @@ export function useActiveView() {
     const v = view()
     const ids = Array.from(v.selectedConnectionIds)
     if (ids.length === 0) return
-    commands.deleteConnections(project.currentNodeId, ids)
+    commands.deleteConnectionsByIds(ids)
     v.clearSelection()
   }
 

@@ -170,10 +170,13 @@ export const useHistoryStore = defineStore('history', () => {
 
     const afterIds = new Set(nodeStore.nodes.keys())
 
-    // 1. 销毁被移除节点的内联视图实例
+    // 1. 销毁无效的内联视图实例
+    //    - 宿主节点被删除
+    //    - 宿主节点不再是主视图当前节点的直接子级（如被组合 / reparent 到其他层级）
     const mainView = useViewStore('main')
     for (const iv of [...mainView.inlineViews]) {
-      if (!afterIds.has(iv.nodeId)) {
+      const hostNode = nodeStore.getNode(iv.nodeId)
+      if (!hostNode || hostNode.parentId !== project.currentNodeId) {
         project.destroyView(iv.viewId)
         mainView.removeInlineView(iv.nodeId)
       }

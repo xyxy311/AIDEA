@@ -17,6 +17,7 @@
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { DEFAULT_NODE_STYLE, NODE_PADDING } from '@/constants'
+import { useThemeStore } from '@/stores/theme'
 
 // ── Props ──
 const props = defineProps<{
@@ -53,6 +54,9 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const currentText = ref(props.initialText)
 
 // ── 计算编辑器位置 ──
+/** themeStore 实例，用于读取当前主色 */
+const themeStore = useThemeStore()
+
 /**
  * 编辑器 CSS 定位样式（相对于 Stage 容器）
  * 需要将 Konva 坐标转换为屏幕像素坐标：
@@ -67,7 +71,7 @@ const editorStyle = computed(() => ({
   fontSize: `${DEFAULT_NODE_STYLE.fontSize * props.stageScale}px`,
   fontFamily: DEFAULT_NODE_STYLE.fontFamily,
   padding: `${NODE_PADDING * props.stageScale}px`,
-  border: '2px solid #3b82f6',
+  border: `2px solid ${themeStore.scheme.cssVars['--color-primary'] || '#3b82f6'}`,
   borderRadius: `${DEFAULT_NODE_STYLE.borderRadius * props.stageScale}px`,
   background: DEFAULT_NODE_STYLE.backgroundColor,
   color: DEFAULT_NODE_STYLE.textColor,

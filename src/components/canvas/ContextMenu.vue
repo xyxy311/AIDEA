@@ -152,11 +152,9 @@ onUnmounted(() => {
   position: fixed;
   min-width: 160px;
   padding: 4px 0;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 8px;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.12),
-    0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-lg);
   z-index: 9999;
   font-size: 14px;
   user-select: none;
@@ -175,20 +173,20 @@ onUnmounted(() => {
 }
 
 .context-menu-item:hover:not(.context-menu-item--disabled) {
-  background-color: #f0f0f0;
+  background-color: var(--color-bg);
 }
 
 .context-menu-item--disabled {
-  color: #bbb;
+  color: var(--color-text-secondary);
   cursor: not-allowed;
 }
 
 .context-menu-item--danger {
-  color: #e74c3c;
+  color: var(--color-danger);
 }
 
 .context-menu-item--danger:hover:not(.context-menu-item--disabled) {
-  background-color: #fef0ef;
+  background-color: var(--color-bg);
 }
 
 .context-menu-item__icon {

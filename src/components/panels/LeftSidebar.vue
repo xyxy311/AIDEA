@@ -28,6 +28,7 @@ import {
 import { useProjectStore } from '@/stores/project'
 import { useNodeTree } from '@/composables/useNodeTree'
 import { useActiveView } from '@/composables/useActiveView'
+import { t } from '@/composables/useT'
 import { useNodeStore } from '@/stores/node'
 
 defineProps<{
@@ -132,7 +133,7 @@ function cancelRename(): void {
     :style="{ width: collapsed ? '36px' : width + 'px' }"
   >
     <div class="sidebar-header">
-      <span v-if="!collapsed" class="sidebar-title">节点树</span>
+      <span v-if="!collapsed" class="sidebar-title">{{ t('leftSidebar.nodeTree') }}</span>
       <NButton size="tiny" quaternary @click="emit('toggle')">
         <template #icon>
           <ChevronBack v-if="!collapsed" />
@@ -145,7 +146,7 @@ function cancelRename(): void {
       <div class="sidebar-toolbar">
         <NButton size="small" quaternary @click="handleAdd">
           <template #icon><AddOutline /></template>
-          新建子节点
+          {{ t('leftSidebar.newChild') }}
         </NButton>
         <NPopconfirm @positive-click="handleDeleteActive">
           <template #trigger>
@@ -159,7 +160,7 @@ function cancelRename(): void {
               删除
             </NButton>
           </template>
-          确定删除当前节点及其所有子节点？
+          {{ t('leftSidebar.deleteConfirmCurrent') }}
         </NPopconfirm>
       </div>
 
@@ -227,7 +228,7 @@ function cancelRename(): void {
                   <template #icon><TrashOutline /></template>
                 </NButton>
               </template>
-              确定删除此节点及其所有子节点？
+              {{ t('leftSidebar.deleteConfirmNode') }}
             </NPopconfirm>
           </div>
         </div>
@@ -301,17 +302,17 @@ function cancelRename(): void {
 }
 
 .node-item:hover {
-  background: var(--color-bg);
+  background: var(--color-hover);
 }
 
 .node-item.active {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: var(--color-active-bg);
+  border: 1px solid var(--color-active-border);
 }
 
 /* 画布选中节点：无填充圆角矩形框（与画布 Transformer 选中色一致） */
 .node-item.selected {
-  box-shadow: inset 0 0 0 2px #3b82f6;
+  box-shadow: inset 0 0 0 2px var(--color-selected-ring);
 }
 
 /* 叶子节点（无子节点且非根）颜色减淡 */
@@ -338,7 +339,7 @@ function cancelRename(): void {
 }
 
 .expand-arrow:hover {
-  background: var(--color-border);
+  background: var(--color-hover);
 }
 
 .expand-placeholder {
@@ -401,7 +402,7 @@ function cancelRename(): void {
   width: 16px;
   height: 100%;
   flex-shrink: 0;
-  border-left: 1px solid rgba(128, 128, 128, 0.15);
+  border-left: 1px solid var(--color-indent-line);
 }
 
 /* 首条竖线偏移 12px（与 base padding 对齐） */
@@ -412,6 +413,6 @@ function cancelRename(): void {
 /* active/hover 态下竖线保持可见且协调 */
 .node-item.active .indent-line,
 .node-item:hover .indent-line {
-  border-left-color: rgba(128, 128, 128, 0.22);
+  border-left-color: var(--color-indent-line-strong);
 }
 </style>

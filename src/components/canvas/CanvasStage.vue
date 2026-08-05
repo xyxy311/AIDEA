@@ -17,6 +17,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
+import { useThemeStore } from '@/stores/theme'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
@@ -28,11 +29,9 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
 import {
-  CANVAS_BACKGROUND_COLOR,
   MIN_NODE_WIDTH,
   MIN_NODE_HEIGHT,
   TRANSFORMER_ANCHOR_SIZE,
-  TRANSFORMER_BORDER_STROKE,
   TRANSFORMER_BORDER_DASH,
   INLINE_VIEW_MIN_WIDTH,
   INLINE_VIEW_MIN_HEIGHT,
@@ -63,6 +62,7 @@ const props = defineProps<{
 // ── Store ──
 const view = useViewStore(props.viewId)
 const nodeStore = useNodeStore()
+const theme = useThemeStore()
 const commands = useCommands()
 
 // ── Stage 尺寸 ──
@@ -121,9 +121,9 @@ const connectionsArray = computed(() => nodeStore.getConnections(view.viewedNode
 const transformerRef = ref<VueKonvaRef<Konva.Transformer> | null>(null)
 
 /** 全局 Transformer 配置 */
-const transformerConfig = {
+const transformerConfig = computed(() => ({
   anchorSize: TRANSFORMER_ANCHOR_SIZE,
-  borderStroke: TRANSFORMER_BORDER_STROKE,
+  borderStroke: theme.scheme.canvas.transformerBorder,
   borderDash: TRANSFORMER_BORDER_DASH,
   // 配合 rect 的 strokeScaleEnabled:false，计算包围盒时忽略 stroke，
   // 避免缩放过程中包围盒/锚点因 stroke 宽度偏移
@@ -149,7 +149,7 @@ const transformerConfig = {
     }
     return newBox
   },
-}
+}))
 
 /** 收集 WhiteboardNode 组件实例（id -> 实例），用于获取 Konva 节点供 Transformer 附着 / 层级调整 */
 const nodeInstances = new Map<
@@ -478,7 +478,7 @@ function handleStageMouseUp(e: unknown): void {
     ref="stageContainerRef"
     class="canvas-wrapper"
     :class="{ 'pan-mode': nav.isPanMode.value, 'shift-held': conn.isShiftHeld.value }"
-    :style="{ backgroundColor: CANVAS_BACKGROUND_COLOR }"
+    :style="{ backgroundColor: theme.scheme.canvas.background }"
   >
     <!-- Konva Stage -->
     <v-stage

@@ -22,6 +22,7 @@ import {
   NPopconfirm,
 } from 'naive-ui'
 import { useActiveView } from '@/composables/useActiveView'
+import { t } from '@/composables/useT'
 import { usePresetsStore } from '@/stores/presets'
 import {
   LINE_STYLE_OPTIONS,
@@ -43,7 +44,7 @@ const selectedCount = computed(() => active.view.selectedConnectionIds.size)
 /** 获取连线的两端节点名称 */
 function getNodeLabel(nodeId: string): string {
   const node = active.nodeStore.getNode(nodeId)
-  return node ? (node.text || '未命名节点') : nodeId
+  return node ? (node.text || t('connectionEditor.unnamedNode')) : nodeId
 }
 
 const lineStyle = computed<LineStyle | undefined>({
@@ -176,14 +177,14 @@ function openEdit(preset: ConnectionPresetStyle): void {
   formStrokeWidth.value = preset.strokeWidth
   formStrokeColor.value = preset.strokeColor
   formDirected.value = preset.directed
-  modalTitle.value = '编辑预设'
+  modalTitle.value = t('connectionEditor.editPreset')
   showModal.value = true
 }
 
 function openCreate(): void {
   editId.value = null
   resetForm()
-  modalTitle.value = '新建预设'
+  modalTitle.value = t('connectionEditor.newPresetTitle')
   showModal.value = true
 }
 
@@ -196,7 +197,7 @@ function openSaveCurrent(): void {
     formStrokeColor.value = conn.value.strokeColor
     formDirected.value = conn.value.directed
   }
-  modalTitle.value = '保存为预设'
+  modalTitle.value = t('connectionEditor.saveAsPreset')
   showModal.value = true
 }
 
@@ -228,7 +229,7 @@ function handleSave(): void {
     <!-- 多选提示 -->
     <div class="multi-select-hint">
       <NTag size="small" type="info" :bordered="false">
-        已选中 {{ selectedCount }} 条连线
+        {{ t('connectionEditor.selectedCount', { count: selectedCount }) }}
       </NTag>
     </div>
 
@@ -246,14 +247,14 @@ function handleSave(): void {
     <NDivider style="margin: 8px 0" />
 
     <NForm label-placement="top" size="small">
-      <NText depth="3" style="font-size: 12px; font-weight: 600">连线样式</NText>
+      <NText depth="3" style="font-size: 12px; font-weight: 600">{{ t('connectionEditor.style') }}</NText>
 
-      <NFormItem label="线型" style="margin-top: 8px">
+      <NFormItem :label="t('connectionEditor.lineStyle')" style="margin-top: 8px">
         <NSelect
           v-model:value="lineStyle"
           :options="LINE_STYLE_OPTIONS"
           size="small"
-          placeholder="选择线型"
+          :placeholder="t('connectionEditor.lineStylePlaceholder')"
         />
       </NFormItem>
 
@@ -276,7 +277,7 @@ function handleSave(): void {
         />
       </NFormItem>
 
-      <NFormItem label="有向">
+      <NFormItem :label="t('connectionEditor.directed')">
         <NSwitch
           v-model:value="directed"
           size="small"
@@ -286,7 +287,7 @@ function handleSave(): void {
 
     <!-- 连线预设管理区 -->
     <NDivider style="margin: 8px 0" />
-    <NText depth="3" class="section-title">连线预设</NText>
+    <NText depth="3" class="section-title">{{ t('connectionEditor.presets') }}</NText>
 
     <div class="preset-list">
       <div
@@ -363,20 +364,20 @@ function handleSave(): void {
               ✕
             </NButton>
           </template>
-          确定删除预设「{{ preset.name }}」？
+          {{ t('connectionEditor.deletePresetConfirm', { name: preset.name }) }}
         </NPopconfirm>
       </div>
 
       <!-- 空状态 -->
       <div v-if="presetsStore.connectionPresets.length === 0" class="preset-empty">
-        <NText depth="3">暂无预设</NText>
+        <NText depth="3">{{ t('connectionEditor.noPreset') }}</NText>
       </div>
     </div>
 
     <!-- 底部操作按钮 -->
     <div class="preset-actions">
-      <NButton size="tiny" @click="openCreate">+ 新建预设</NButton>
-      <NButton size="tiny" @click="openSaveCurrent">保存当前为预设</NButton>
+      <NButton size="tiny" @click="openCreate">{{ t('connectionEditor.newPreset') }}</NButton>
+      <NButton size="tiny" @click="openSaveCurrent">{{ t('connectionEditor.saveCurrentAsPreset') }}</NButton>
     </div>
 
     <!-- 编辑 / 新建 / 保存为预设 Modal -->
@@ -387,20 +388,20 @@ function handleSave(): void {
       style="width: 380px"
     >
       <NForm label-placement="top" :show-feedback="false">
-        <NFormItem label="名称">
+        <NFormItem :label="t('connectionEditor.name')">
           <NInput v-model:value="formName" placeholder="预设名称" />
         </NFormItem>
         <NFormItem label="线型">
           <NSelect v-model:value="formLineStyle" :options="LINE_STYLE_OPTIONS" />
         </NFormItem>
-        <NFormItem label="粗细">
+      <NFormItem :label="t('connectionEditor.width')">
           <NSlider
             v-model:value="formStrokeWidth"
             :min="1"
             :max="CONNECTION_MAX_STROKE_WIDTH"
           />
         </NFormItem>
-        <NFormItem label="颜色">
+      <NFormItem :label="t('connectionEditor.color')">
           <NColorPicker v-model:value="formStrokeColor" />
         </NFormItem>
         <NFormItem label="箭头">
@@ -482,7 +483,7 @@ function handleSave(): void {
 }
 
 .preset-row:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--color-hover);
 }
 
 .preset-row.is-dragging {
@@ -496,7 +497,7 @@ function handleSave(): void {
   left: 4px;
   right: 4px;
   height: 2px;
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   border-radius: 1px;
   pointer-events: none;
   z-index: 1;
@@ -504,7 +505,7 @@ function handleSave(): void {
 
 .drag-handle {
   cursor: grab;
-  color: #999;
+  color: var(--color-text-muted);
   font-size: 14px;
   letter-spacing: -3px;
   padding: 0 2px;
@@ -514,7 +515,7 @@ function handleSave(): void {
 }
 
 .drag-handle:hover {
-  color: #555;
+  color: var(--color-text-secondary);
 }
 
 .drag-handle:active {

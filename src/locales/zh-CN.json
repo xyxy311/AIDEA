@@ -1,0 +1,92 @@
+{
+  "menuBar": {
+    "file": "文件",
+    "edit": "编辑",
+    "newProject": "新建项目",
+    "save": "保存",
+    "undo": "撤销",
+    "redo": "重做",
+    "settings": "设置"
+  },
+  "toolbar": {
+    "title": "白板",
+    "addNode": "添加节点",
+    "debug": "调试",
+    "nodeCount": "节点：{count}"
+  },
+  "settings": {
+    "title": "设置",
+    "appearance": "外观",
+    "darkMode": "深色模式",
+    "canvas": "画布",
+    "showGrid": "显示网格",
+    "snapToGrid": "吸附到网格",
+    "shortcuts": "快捷键",
+    "customShortcutsSoon": "自定义快捷键（即将推出）",
+    "accent": "主题色",
+    "accentEmerald": "翡翠绿",
+    "accentBlue": "经典蓝"
+  },
+  "nodeEditor": {
+    "selectedCount": "已选中 {count} 个节点",
+    "textContent": "文本内容",
+    "textPlaceholder": "输入节点文本",
+    "appearance": "外观样式",
+    "fontColor": "字体颜色",
+    "bgColor": "背景颜色",
+    "borderColor": "边框颜色",
+    "presets": "节点预设",
+    "deletePresetConfirm": "确定删除预设「{name}」？",
+    "noPreset": "暂无预设",
+    "newPreset": "+ 新建预设",
+    "saveCurrentAsPreset": "保存当前为预设",
+    "name": "名称",
+    "presetNamePlaceholder": "预设名称",
+    "presetBgColor": "背景色",
+    "presetBorderColor": "边框色",
+    "presetTextColor": "文字色",
+    "cancel": "取消",
+    "save": "保存",
+    "selectNodeHint": "选中一个节点以编辑属性"
+  },
+  "connectionEditor": {
+    "unnamedNode": "未命名节点",
+    "editPreset": "编辑预设",
+    "newPresetTitle": "新建预设",
+    "saveAsPreset": "保存为预设",
+    "selectedCount": "已选中 {count} 条连线",
+    "style": "连线样式",
+    "lineStyle": "线型",
+    "lineStylePlaceholder": "选择线型",
+    "width": "粗细",
+    "color": "颜色",
+    "directed": "有向",
+    "presets": "连线预设",
+    "deletePresetConfirm": "确定删除预设「{name}」？",
+    "noPreset": "暂无预设",
+    "newPreset": "+ 新建预设",
+    "saveCurrentAsPreset": "保存当前为预设",
+    "name": "名称"
+  },
+  "leftSidebar": {
+    "nodeTree": "节点树",
+    "newChild": "新建子节点",
+    "deleteConfirmCurrent": "确定删除当前节点及其所有子节点？",
+    "deleteConfirmNode": "确定删除此节点及其所有子节点？"
+  },
+  "rightSidebar": {
+    "connectionProps": "连线属性",
+    "nodeProps": "节点属性"
+  },
+  "canvas": {
+    "enterChildView": "进入子视图",
+    "collapseInlineView": "收起内联视图",
+    "fitView": "自适应视图",
+    "expandInlineView": "展开内联视图",
+    "clearChildren": "清空子级",
+    "group": "组合"
+  },
+  "common": {
+    "untitledProject": "未命名项目"
+  }
+}

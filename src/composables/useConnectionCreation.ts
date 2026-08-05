@@ -3,9 +3,9 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
+import { useThemeStore } from '@/stores/theme'
 import { useCommands } from '@/composables/useCommands'
 import {
-  CONNECTION_TEMP_STROKE_COLOR,
   CONNECTION_TEMP_DASH,
   CONNECTION_STROKE_WIDTH,
   DEFAULT_NODE_WIDTH,
@@ -31,6 +31,7 @@ import {
 export function useConnectionCreation(viewId: string) {
   const view = useViewStore(viewId)
   const nodeStore = useNodeStore()
+  const theme = useThemeStore()
   const commands = useCommands()
 
   /** Shift 键是否按下 */
@@ -181,7 +182,7 @@ export function useConnectionCreation(viewId: string) {
         tempConnEnd.value.x,
         tempConnEnd.value.y,
       ],
-      stroke: CONNECTION_TEMP_STROKE_COLOR,
+      stroke: theme.scheme.canvas.connectionTemp,
       strokeWidth: CONNECTION_STROKE_WIDTH,
       dash: CONNECTION_TEMP_DASH,
       listening: false,

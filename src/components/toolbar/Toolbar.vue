@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
+import { t } from '@/composables/useT'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 const active = useActiveView()
@@ -51,7 +52,7 @@ function debugPrint() {
 <template>
   <header class="toolbar">
     <div class="toolbar-left">
-      <h1 class="toolbar-title">白板</h1>
+      <h1 class="toolbar-title">{{ t('toolbar.title') }}</h1>
     </div>
 
     <div class="toolbar-center">
@@ -70,16 +71,16 @@ function debugPrint() {
             stroke-linecap="round"
           />
         </svg>
-        添加节点
+        {{ t('toolbar.addNode') }}
       </button>
       <button class="btn btn-primary" @click="debugPrint">
-        调试
+        {{ t('toolbar.debug') }}
       </button>
     </div>
 
     <div class="toolbar-right">
       <span class="node-count">
-        节点：{{ nodes.length }}
+        {{ t('toolbar.nodeCount', { count: nodes.length }) }}
       </span>
     </div>
   </header>
@@ -150,17 +151,17 @@ function debugPrint() {
 /* ── 主要按钮（添加节点） ── */
 .btn-primary {
   background-color: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
   border-color: var(--color-primary);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #2563eb;
-  border-color: #2563eb;
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
 }
 
 .btn-primary:active:not(:disabled) {
-  background-color: #1d4ed8;
+  background-color: var(--color-primary-pressed);
 }
 
 /* ── 节点计数 ── */

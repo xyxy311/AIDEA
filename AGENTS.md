@@ -43,19 +43,23 @@ npm run build        # vue-tsc --noEmit && vite build
 
 ```
 types/        -> 纯接口（WhiteboardNode, Connection, NodeStyle, StageConfig 等）
-constants/    -> 设计 token（尺寸、颜色、预设样式、缩放范围）
+constants/    -> 设计 token（尺寸、几何、节点/连线数据色与预设样式、缩放范围）。UI chrome 色已迁至 config/colorSchemes
 utils/        -> 纯函数（generateId, calculateTextContentSize, command[命令类型+辅助]）
+config/       -> 配色方案 colorSchemes.ts（亮/暗：Naive UI theme + overrides + CSS 变量 + 画布 UI chrome 色）
+locales/      -> UI 文本资源 zh-CN.json（按模块分组，i18n 占位）
 stores/       -> Pinia stores
   node.ts     -> 全局 nodeStore：节点树（parentId 邻接表）+ 连线（嵌套父节点）+ 派生索引
   view.ts     -> 工厂 useViewStore(viewId)：'main'（常驻，viewedNodeId 可变）/ 内联实例（viewedNodeId 固定）；视口 / 选中 / 编辑 / inlineViews
   project.ts  -> 项目导航：activeViewId 固定 'main'、currentNodeId、viewSnapshots 快照存取、expandedIds、destroyView（只销毁内联实例）
   presets.ts  -> 节点 / 连线预设样式（localStorage 持久化）
   history.ts  -> 撤销重做栈：past/future 栈 + DataPatch 应用 + 视图协调（含内联视图清理）+ batch 事务 + coalesce 合并
+  theme.ts    -> 主题状态（isDark/scheme/toggle，useColorMode 持久化，watchEffect 注入 CSS 变量到 :root）
 composables/  -> Vue composables（交互逻辑，编排 nodeStore + viewStore）
   useActiveView.ts -> 快捷访问活跃主视图（'main'）--仅主视图上下文（组件）使用
   useCommands.ts   -> 命令层：所有数据写操作的统一入口（捕获旧值 -> nodeStore -> pushCommand）
   useNodeTree.ts   -> 节点树导航（树构建/扁平化/新建子节点/递归删除/重命名）
   useNodeViewLink.ts -> 进入子视图/父视图 / 组合 / 清空子级
+  useT.ts         -> 轻量文本访问 t()（i18n 占位层，未来迁移 vue-i18n 调用方零改动）
 components/
   canvas/     -> CanvasStage（通用画布组件，viewId/allowExpand/showOverviewMap/width/height props）
                  WhiteboardCanvas（主视图薄壳：useKeyboardShortcuts + CanvasStage viewId='main'）
@@ -142,6 +146,41 @@ Canvas 事件 -> composable 编排 -> 命令层 useCommands（捕获旧值 -> no
 
 **mouseup 提窗**：鼠标移入内联视图 DOM 覆盖层后，主 Stage 收不到 stage mouseup。三个 composable（useNodeDragging / useMarqueeSelection / useConnectionCreation）在 handleMouseDown 接管后注册一次性 `window.addEventListener('mouseup', onWindowMouseUp, { once: true })` 兜底（拖拽提交移动 / 框选取消 / 连线回滚取消），stage mouseup 已处理时幂等返回。
 
+### 多语言架构（i18n 占位层）
+
+**资源文件**：`src/locales/zh-CN.json`，按功能模块分组（menuBar / toolbar / settings / nodeEditor / connectionEditor / leftSidebar / rightSidebar / canvas / common），与组件目录对齐。支持 `{name}` 形参插值（如 `"nodeCount": "节点：{count}"`）。
+
+**访问层**：`src/composables/useT.ts` 导出 `t(key, params?)`，非 composable（无响应式依赖），可在 `<script setup>` 和普通 `.ts`（composable / store）中直接 import 调用。未命中 key 时回退返回 key 本身（便于发现遗漏）。
+
+**约束**：所有用户可见的 UI 文本（按钮、标签、placeholder、确认弹窗、右键菜单、空状态等）**必须**通过 `t()` 访问，禁止硬编码中文字符串。新增 UI 文本时同步加 JSON key。
+
+**未来迁移**：引入 vue-i18n 时，只需把 `useT.ts` 内部实现替换为 vue-i18n 的 `t`，调用方零改动；JSON 资源结构直接兼容。locale 切换与主题切换相互独立，无耦合。
+
+### UI 配色与主题架构
+
+**两类颜色严格区分**：
+- **UI chrome 色**（随主题变）：画布背景、Transformer 选中框、框选矩形、临时 / 选中连线高亮。定义在 `src/config/colorSchemes.ts` 的 `ColorScheme.canvas`，通过 `themeStore.scheme.canvas.*` 响应式绑定到 Konva config。
+- **节点 / 连线数据色**（不随主题变）：`DEFAULT_NODE_STYLE`、`PRESET_STYLES`、`DEFAULT_NODE_PRESETS`、`DEFAULT_CONNECTION_PRESETS`、`CONNECTION_STROKE_COLOR`、`PLACEHOLDER_TEXT_COLOR`。仍存于 `constants/index.ts`，属于用户内容（节点保持白色卡片，类似 Excalidraw / Figma 深色模式）。
+
+> 新增 UI chrome 色加入 `config/colorSchemes`；新增节点 / 连线数据色加入 `constants`。
+
+**配色方案**：`src/config/colorSchemes.ts` 定义 `colorSchemes = { light, dark }`，每个 `ColorScheme` 含四部分：
+- `theme` -- Naive UI 主题（`null` = 亮 / `darkTheme` = 暗）
+- `naiveOverrides` -- `GlobalThemeOverrides`（主色等组件级覆盖）
+- `cssVars` -- 注入 `:root` 的 `--color-*` 变量（供自定义组件 `var(--color-bg)` 使用）
+- `canvas` -- Konva 画布 UI chrome 色（响应式绑定到 shape config）
+
+架构可扩展--加 sepia / 高对比度只需新增一个 `ColorScheme` 对象并扩展 `useColorMode` 的 `modes`。
+
+**themeStore（`src/stores/theme.ts`）**：单一数据源驱动三处：
+1. **Naive UI** -- `App.vue` 的 `NConfigProvider` 读 `scheme.theme` / `scheme.naiveOverrides`，`NGlobalStyle` 同步 body 背景。
+2. **CSS 变量** -- `watchEffect` 将 `scheme.cssVars` 注入 `:root`，自定义组件通过 `var(--color-bg)` 等自动跟随（`main.css` 不再定义颜色变量）。
+3. **Konva 画布** -- 组件读 `scheme.canvas.*` 绑定到 Konva shape config，Vue 响应式触发重绘。
+
+`mode` 由 `@vueuse/core` 的 `useColorMode` 管理，持久化到 `localStorage('aidea-theme')`，仅 light / dark 两态手动切换（默认浅色）。`isDark` / `scheme` 为 `computed`。切换通过 `toggle()` / `setMode()`。设置面板的深色模式 `NSwitch` 绑定 `theme.isDark` + `theme.toggle`。
+
+**自定义组件色值约束**：`<style scoped>` 中**禁止**硬编码十六进制色值，必须用 `var(--color-surface)` / `var(--color-border)` / `var(--color-text)` 等 CSS 变量，否则深色模式下不跟随。
+
 ## 关键陷阱
 
 ### reactive(Map) 深度响应式
@@ -187,3 +226,12 @@ rectRef.value?.getNode()
 所有数据写操作**必须**通过 `useCommands` 的语义接口，不能直接调用 nodeStore 的写 action（`addNode` / `deleteNodes` / `setNodeText` / `updateNodesStyle` 等）。唯一例外是拖拽 mousemove 中的 `nodeStore.moveNode` 和 `onTransformEnd` 中的 `nodeStore.resizeNode`（实时渲染，不入栈），但 mouseup / transform-end 时必须调 `commands.commitNodeMove` / `commands.commitNodeResize` 入栈。
 
 直接调用 nodeStore 写 action 会导致操作不进入历史栈，undo/redo 无法覆盖，产生不可逆变更。
+
+### 主题响应式与 Konva config
+
+从 `themeStore.scheme.canvas.*` 取的颜色必须处于**响应式上下文**中：要么在 `computed` 内，要么在 template 绑定中。若直接赋值给普通 `const` config 对象，切换主题时不会重算（如 `transformerConfig` 必须是 `computed`）。检查方式：搜索 `scheme.canvas` 的引用点，确认其外层是 `computed` 或 template 绑定。
+
+### UI 文本与主题的独立访问层
+
+- 文本：所有用户可见字符串**必须**经 `t()`（`@/composables/useT`），禁止硬编码中文。
+- 色值：自定义组件 `<style scoped>` **禁止**硬编码十六进制色，必须用 `var(--color-*)`；Konva 画布 UI chrome 色必须读 `themeStore.scheme.canvas.*`（响应式上下文内）。

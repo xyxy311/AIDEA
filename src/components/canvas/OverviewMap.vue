@@ -134,7 +134,6 @@ const mapNodes = computed(() =>
       top: `${toMapY(node.y)}px`,
       width: `${toMapW(node.width)}px`,
       height: `${toMapH(node.height)}px`,
-      backgroundColor: DEFAULT_NODE_STYLE.backgroundColor,
     },
   })),
 )
@@ -265,8 +264,8 @@ onUnmounted(() => {
   bottom: 12px;
   width: 200px;
   height: 140px;
-  background: rgba(30, 30, 30, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--color-overlay);
+  border: 1px solid var(--color-overlay-border);
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
@@ -276,8 +275,8 @@ onUnmounted(() => {
 
 .overview-viewport {
   position: absolute;
-  border: 1.5px solid #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
+  border: 1.5px solid var(--color-primary);
+  background: var(--color-primary-faint);
   border-radius: 2px;
   z-index: 2;
   cursor: grab;
@@ -285,17 +284,17 @@ onUnmounted(() => {
 }
 
 .overview-viewport:hover {
-  background: rgba(59, 130, 246, 0.2);
+  background: var(--color-primary-soft);
 }
 
 .overview-viewport.dragging {
   cursor: grabbing;
-  background: rgba(59, 130, 246, 0.25);
+  background: var(--color-primary-soft);
 }
 
 .overview-node {
   position: absolute;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--color-border);
   border-radius: 1px;
   pointer-events: none;
   z-index: 1;

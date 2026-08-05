@@ -13,10 +13,10 @@
 import { computed } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
+import { useThemeStore } from '@/stores/theme'
 import {
   LINE_STYLE_DASH_MAP,
   CONNECTION_ARROW_SIZE,
-  CONNECTION_SELECTED_STROKE_COLOR,
   CONNECTION_SELECTED_STROKE_WIDTH,
 } from '@/constants'
 
@@ -35,6 +35,7 @@ const emit = defineEmits<{
 
 // ── Store ──
 const nodeStore = useNodeStore()
+const theme = useThemeStore()
 
 // ── Computed: 连线数据 ──
 // 从父节点的连接数组中查找该连线
@@ -73,7 +74,7 @@ const lineConfig = computed(() => {
       to.y + to.height / 2,
     ],
     stroke: props.isSelected
-      ? CONNECTION_SELECTED_STROKE_COLOR
+      ? theme.scheme.canvas.connectionSelected
       : conn.strokeColor,
     strokeWidth: props.isSelected
       ? CONNECTION_SELECTED_STROKE_WIDTH

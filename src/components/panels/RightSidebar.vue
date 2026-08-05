@@ -9,6 +9,7 @@
 import { computed } from 'vue'
 import { NButton, NScrollbar, NText } from 'naive-ui'
 import { ChevronBack, ChevronForward } from '@vicons/ionicons5'
+import { t } from '@/composables/useT'
 import { useActiveView } from '@/composables/useActiveView'
 import NodePropertyEditor from './NodePropertyEditor.vue'
 import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
@@ -27,8 +28,8 @@ const emit = defineEmits<{
 
 /** 标题文本 */
 const title = computed(() => {
-  if (active.view.selectedConnectionIds.size > 0) return '连线属性'
-  return '节点属性'
+  if (active.view.selectedConnectionIds.size > 0) return t('rightSidebar.connectionProps')
+  return t('rightSidebar.nodeProps')
 })
 </script>
 

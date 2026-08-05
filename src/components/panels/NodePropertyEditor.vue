@@ -19,6 +19,7 @@ import {
   NPopconfirm,
 } from 'naive-ui'
 import { useActiveView } from '@/composables/useActiveView'
+import { t } from '@/composables/useT'
 import { usePresetsStore } from '@/stores/presets'
 import { DEFAULT_NODE_STYLE } from '@/constants'
 
@@ -198,27 +199,27 @@ function handleSave(): void {
     <!-- 多选提示 -->
     <div class="multi-select-hint">
       <NTag size="small" type="info" :bordered="false">
-        已选中 {{ selectedCount }} 个节点
+        {{ t('nodeEditor.selectedCount', { count: selectedCount }) }}
       </NTag>
     </div>
 
     <NForm label-placement="top" size="small">
       <!-- 文本 -->
-      <NFormItem label="文本内容">
+      <NFormItem :label="t('nodeEditor.textContent')">
         <NInput
           v-model:value="currentText"
           type="textarea"
           :autosize="{ minRows: 2, maxRows: 5 }"
-          placeholder="输入节点文本"
+          :placeholder="t('nodeEditor.textPlaceholder')"
         />
       </NFormItem>
 
       <NDivider style="margin: 8px 0" />
 
       <!-- 外观样式 -->
-      <NText depth="3" style="font-size: 12px; font-weight: 600">外观样式</NText>
+      <NText depth="3" style="font-size: 12px; font-weight: 600">{{ t('nodeEditor.appearance') }}</NText>
 
-      <NFormItem label="字体颜色" style="margin-top: 8px">
+      <NFormItem :label="t('nodeEditor.fontColor')" style="margin-top: 8px">
         <NColorPicker
           v-model:value="currentTextColor"
           :modes="[colorPickerMode]"
@@ -227,7 +228,7 @@ function handleSave(): void {
         />
       </NFormItem>
 
-      <NFormItem label="背景颜色">
+      <NFormItem :label="t('nodeEditor.bgColor')">
         <NColorPicker
           v-model:value="currentBgColor"
           :modes="[colorPickerMode]"
@@ -236,7 +237,7 @@ function handleSave(): void {
         />
       </NFormItem>
 
-      <NFormItem label="边框颜色">
+      <NFormItem :label="t('nodeEditor.borderColor')">
         <NColorPicker
           v-model:value="currentBorderColor"
           :modes="[colorPickerMode]"
@@ -248,7 +249,7 @@ function handleSave(): void {
 
     <!-- 节点预设管理区 -->
     <NDivider style="margin: 8px 0" />
-    <NText depth="3" class="section-title">节点预设</NText>
+    <NText depth="3" class="section-title">{{ t('nodeEditor.presets') }}</NText>
 
     <div class="preset-list">
       <div
@@ -311,20 +312,20 @@ function handleSave(): void {
               ✕
             </NButton>
           </template>
-          确定删除预设「{{ preset.name }}」？
+          {{ t('nodeEditor.deletePresetConfirm', { name: preset.name }) }}
         </NPopconfirm>
       </div>
 
       <!-- 空状态 -->
       <div v-if="presetsStore.nodePresets.length === 0" class="preset-empty">
-        <NText depth="3">暂无预设</NText>
+        <NText depth="3">{{ t('nodeEditor.noPreset') }}</NText>
       </div>
     </div>
 
     <!-- 底部操作按钮 -->
     <div class="preset-actions">
-      <NButton size="tiny" @click="openCreate">+ 新建预设</NButton>
-      <NButton size="tiny" @click="openSaveCurrent">保存当前为预设</NButton>
+      <NButton size="tiny" @click="openCreate">{{ t('nodeEditor.newPreset') }}</NButton>
+      <NButton size="tiny" @click="openSaveCurrent">{{ t('nodeEditor.saveCurrentAsPreset') }}</NButton>
     </div>
 
     <!-- 编辑 / 新建 / 保存为预设 Modal -->
@@ -335,30 +336,30 @@ function handleSave(): void {
       style="width: 380px"
     >
       <NForm label-placement="top" :show-feedback="false">
-        <NFormItem label="名称">
-          <NInput v-model:value="formName" placeholder="预设名称" />
+        <NFormItem :label="t('nodeEditor.name')">
+          <NInput v-model:value="formName" :placeholder="t('nodeEditor.presetNamePlaceholder')" />
         </NFormItem>
-        <NFormItem label="背景色">
+        <NFormItem :label="t('nodeEditor.presetBgColor')">
           <NColorPicker v-model:value="formBgColor" />
         </NFormItem>
-        <NFormItem label="边框色">
+        <NFormItem :label="t('nodeEditor.presetBorderColor')">
           <NColorPicker v-model:value="formBorderColor" />
         </NFormItem>
-        <NFormItem label="文字色">
+        <NFormItem :label="t('nodeEditor.presetTextColor')">
           <NColorPicker v-model:value="formTextColor" />
         </NFormItem>
       </NForm>
       <template #footer>
         <div class="modal-footer">
-          <NButton @click="showModal = false">取消</NButton>
-          <NButton type="primary" @click="handleSave">保存</NButton>
+          <NButton @click="showModal = false">{{ t('nodeEditor.cancel') }}</NButton>
+          <NButton type="primary" @click="handleSave">{{ t('nodeEditor.save') }}</NButton>
         </div>
       </template>
     </NModal>
   </div>
 
   <div v-else class="property-empty">
-    <NText depth="3" style="font-size: 13px">选中一个节点以编辑属性</NText>
+    <NText depth="3" style="font-size: 13px">{{ t('nodeEditor.selectNodeHint') }}</NText>
   </div>
 </template>
 
@@ -410,7 +411,7 @@ function handleSave(): void {
 }
 
 .preset-row:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--color-hover);
 }
 
 .preset-row.is-dragging {
@@ -424,7 +425,7 @@ function handleSave(): void {
   left: 4px;
   right: 4px;
   height: 2px;
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
   border-radius: 1px;
   pointer-events: none;
   z-index: 1;
@@ -432,7 +433,7 @@ function handleSave(): void {
 
 .drag-handle {
   cursor: grab;
-  color: #999;
+  color: var(--color-text-muted);
   font-size: 14px;
   letter-spacing: -3px;
   padding: 0 2px;
@@ -442,7 +443,7 @@ function handleSave(): void {
 }
 
 .drag-handle:hover {
-  color: #555;
+  color: var(--color-text-secondary);
 }
 
 .drag-handle:active {

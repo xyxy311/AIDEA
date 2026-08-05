@@ -3,9 +3,8 @@ import type { Ref, ComputedRef } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
+import { useThemeStore } from '@/stores/theme'
 import {
-  MARQUEE_FILL_COLOR,
-  MARQUEE_STROKE_COLOR,
   MARQUEE_STROKE_DASH,
   MARQUEE_STROKE_WIDTH,
   MARQUEE_ACTIVATE_THRESHOLD,
@@ -48,6 +47,7 @@ const INVISIBLE_CONFIG = { visible: false } as const
 export function useMarqueeSelection(viewId: string) {
   const view = useViewStore(viewId)
   const nodeStore = useNodeStore()
+  const theme = useThemeStore()
 
   /** 是否正在框选（已超过阈值激活） */
   const isMarqueeDragging: Ref<boolean> = ref(false)
@@ -90,8 +90,8 @@ export function useMarqueeSelection(viewId: string) {
       y,
       width,
       height,
-      fill: MARQUEE_FILL_COLOR,
-      stroke: MARQUEE_STROKE_COLOR,
+      fill: theme.scheme.canvas.marqueeFill,
+      stroke: theme.scheme.canvas.marqueeStroke,
       strokeWidth: MARQUEE_STROKE_WIDTH,
       dash: MARQUEE_STROKE_DASH,
       listening: false,

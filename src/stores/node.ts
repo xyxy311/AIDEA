@@ -9,6 +9,7 @@ import {
   NODE_LINE_HEIGHT,
   type PresetStyle,
 } from '@/constants'
+import { t } from '@/composables/useT'
 import { generateId } from '@/utils/id'
 import { createNode, createConnection } from '@/utils/factory'
 import { calculateTextContentSize } from '@/utils/geometry'
@@ -43,7 +44,7 @@ export const useNodeStore = defineStore('node', () => {
       createNode({
         id: ROOT_NODE_ID,
         parentId: null,
-        text: '未命名项目',
+        text: t('common.untitledProject'),
       }),
     )
   }

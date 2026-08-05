@@ -1,4 +1,5 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
+import { t } from '@/composables/useT'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
@@ -89,7 +90,7 @@ export function useCanvasEvents(viewId: string) {
       const nodeId = view.selectedNodeId
       items.push({
         key: 'enter-view',
-        label: '进入子视图',
+        label: t('canvas.enterChildView'),
         action: () => link.enterNodeView(),
       })
       // 主视图：提供"展开/收起内联视图"（视图操作，不入 undo）
@@ -98,20 +99,20 @@ export function useCanvasEvents(viewId: string) {
           // 已展开 -> 收起
           items.push({
             key: 'collapse-inline',
-            label: '收起内联视图',
+            label: t('canvas.collapseInlineView'),
             action: () => { link.toggleInlineView(nodeId) },
           })
           // 已展开 -> 自适应视图（以宽度为基准调整缩放与高度）
           items.push({
             key: 'fit-inline',
-            label: '自适应视图',
+            label: t('canvas.fitView'),
             action: () => { link.fitInlineView(nodeId) },
           })
         } else {
           // 未展开 -> 展开
           items.push({
             key: 'expand-inline',
-            label: '展开内联视图',
+            label: t('canvas.expandInlineView'),
             action: () => { link.toggleInlineView(nodeId) },
           })
         }
@@ -120,7 +121,7 @@ export function useCanvasEvents(viewId: string) {
       if (nodeId && nodeStore.hasChildren(nodeId)) {
         items.push({
           key: 'clear-children',
-          label: '清空子级',
+          label: t('canvas.clearChildren'),
           danger: true,
           action: () => {
             if (nodeId) link.clearNodeChildren(nodeId)
@@ -130,7 +131,7 @@ export function useCanvasEvents(viewId: string) {
     } else {
       items.push({
         key: 'group',
-        label: '组合',
+        label: t('canvas.group'),
         action: () => link.groupSelectedNodes(),
       })
     }

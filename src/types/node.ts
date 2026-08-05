@@ -39,11 +39,6 @@ export interface NodeStyle {
   fontSize: number
   fontFamily: string
   textColor: string
-  shadowEnabled: boolean
-  shadowColor: string
-  shadowBlur: number
-  shadowOffsetX: number
-  shadowOffsetY: number
 }
 
 /** 连线线型 */

@@ -19,6 +19,7 @@ import { usePresetsStore } from '@/stores/presets'
  * Ctrl/Cmd + G       - 组合选中节点
  * 1-9                - 对选中节点/连线应用对应序号预设
  * Tab                - 单选节点时展开/收起内联视图
+ * R                  - 选中内联视图时自适应视图（以宽度为基准调整缩放与高度）
  */
 export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
   const active = useActiveView()
@@ -117,8 +118,18 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
     if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (view.selectedNodeIds.size === 1) {
         e.preventDefault()
-        console.log('tab pressed')
         link.toggleInlineView(view.selectedNodeId)
+      }
+    }
+
+    // R 键：选中内联视图宿主节点时，自适应内联视图（以宽度为基准调整缩放与高度）
+    if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (view.selectedNodeIds.size === 1) {
+        const nodeId = view.selectedNodeId
+        if (nodeId && view.getInlineViewRect(nodeId)) {
+          e.preventDefault()
+          link.fitInlineView(nodeId)
+        }
       }
     }
   }

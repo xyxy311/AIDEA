@@ -12,6 +12,7 @@ import { computed, ref, onUnmounted } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
 import { useStageSize } from '@/composables/useStageSize'
 import { DEFAULT_NODE_STYLE, MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
+import { getNodesBounds, computeFitScale, computeCenteredViewport } from '@/utils/view'
 
 // ── 小地图尺寸 ──
 const MAP_WIDTH = 200
@@ -154,44 +155,24 @@ function fitAllNodes(): void {
   const allNodes = nodes.value
   if (allNodes.length === 0) return
 
-  // 计算节点包围盒
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const node of allNodes) {
-    if (node.x < minX) minX = node.x
-    if (node.y < minY) minY = node.y
-    if (node.x + node.width > maxX) maxX = node.x + node.width
-    if (node.y + node.height > maxY) maxY = node.y + node.height
-  }
+  const bounds = getNodesBounds(allNodes)
+  if (!bounds) return
 
-  // 加 padding
   const padding = 0.12
-  const w = maxX - minX
-  const h = maxY - minY
-  minX -= w * padding
-  minY -= h * padding
-  maxX += w * padding
-  maxY += h * padding
+  const scale = computeFitScale(
+    bounds.width,
+    bounds.height,
+    stageWidth.value,
+    stageHeight.value,
+    padding,
+    MIN_SCALE,
+    MAX_SCALE,
+  )
+  const { x, y } = computeCenteredViewport(bounds, scale, stageWidth.value, stageHeight.value)
 
-  // 计算适应视口的缩放倍率
-  const totalW = maxX - minX
-  const totalH = maxY - minY
-  const scaleX = stageWidth.value / totalW
-  const scaleY = stageHeight.value / totalH
-  const newScale = Math.min(scaleX, scaleY)
-
-  // 约束在允许范围内
-  const clampedScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale))
-
-  // 居中
-  const centerX = (minX + maxX) / 2
-  const centerY = (minY + maxY) / 2
-
-  active.view.stageScale = clampedScale
-  active.view.stageX = stageWidth.value / 2 - centerX * clampedScale
-  active.view.stageY = stageHeight.value / 2 - centerY * clampedScale
+  active.view.stageScale = scale
+  active.view.stageX = x
+  active.view.stageY = y
 }
 
 // ── 拖拽视口框 → 平移画布 ──

@@ -8,4 +8,9 @@ export {
   hitTestInlineViewScreen,
   screenToMainWorld,
   screenToInlineWorld,
+  getNodesBounds,
+  computeFitScale,
+  computeCenteredViewport,
+  computeInlineFit,
 } from './view'
+export type { BoundsRect } from './view'

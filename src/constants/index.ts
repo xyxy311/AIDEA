@@ -184,3 +184,6 @@ export const INLINE_VIEW_MIN_WIDTH: number = 200
 
 /** 内联视图最小矩形高度 */
 export const INLINE_VIEW_MIN_HEIGHT: number = 150
+
+/** 内联视图自适应的边距比例（节点包围盒四周留白，0.12 = 12%） */
+export const INLINE_VIEW_FIT_PADDING: number = 0.12

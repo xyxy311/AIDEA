@@ -3,7 +3,16 @@ import { useNodeStore } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
 import { generateId } from '@/utils/id'
-import { INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT } from '@/constants'
+import {
+  INLINE_VIEW_DEFAULT_WIDTH,
+  INLINE_VIEW_DEFAULT_HEIGHT,
+  INLINE_VIEW_MIN_HEIGHT,
+  INLINE_VIEW_TITLE_HEIGHT,
+  INLINE_VIEW_FIT_PADDING,
+  MIN_SCALE,
+  MAX_SCALE,
+} from '@/constants'
+import { computeInlineFit } from '@/utils/view'
 
 /**
  * 节点视图编排
@@ -77,7 +86,6 @@ export function useNodeViewLink(viewId: string) {
     if (!nodeId) return
     if (view.type !== 'main') return
     if (!node.isChildOf(nodeId, view.viewedNodeId)) return
-    console.log('toggleInlineView: ', nodeId)
     if (view.getInlineViewRect(nodeId)) {
       // 已展开 -> 收起
       const iv = view.inlineViews.find((v) => v.nodeId === nodeId)
@@ -90,7 +98,38 @@ export function useNodeViewLink(viewId: string) {
       const inlineViewId = generateId()
       useViewStore(inlineViewId, { nodeId, type: 'inline', hostViewId: viewId })
       view.addInlineView(nodeId, inlineViewId, INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT)
+      fitInlineView(nodeId)
     }
+  }
+
+  /**
+   * 自适应内联视图：以当前内联视图宽度为基准，自动调整缩放倍率与高度，
+   * 使所有子节点刚好显示（含余量）。缩放超出 [MIN_SCALE, MAX_SCALE] 时 clamp 到边界。
+   * 仅主视图、已展开内联视图时生效。纯视图操作，不入历史栈。
+   */
+  function fitInlineView(nodeId?: string): void {
+    if (!nodeId) return
+    if (view.type !== 'main') return
+    const iv = view.inlineViews.find((v) => v.nodeId === nodeId)
+    if (!iv) return
+    const rect = view.getInlineViewRect(nodeId)
+    if (!rect || rect.width <= 0) return
+    const children = node.childrenOf(nodeId)
+    const result = computeInlineFit(
+      children,
+      rect.width,
+      INLINE_VIEW_FIT_PADDING,
+      MIN_SCALE,
+      MAX_SCALE,
+      INLINE_VIEW_TITLE_HEIGHT,
+      INLINE_VIEW_MIN_HEIGHT,
+    )
+    if (!result) return
+
+    const inlineView = useViewStore(iv.viewId)
+    // 先更新高度（响应式触发内联 Stage 尺寸更新），再设置视口
+    view.updateInlineViewSize(nodeId, rect.width, result.newHeight)
+    inlineView.setViewport(result.stageX, result.stageY, result.scale)
   }
 
   return {
@@ -99,5 +138,6 @@ export function useNodeViewLink(viewId: string) {
     groupSelectedNodes,
     clearNodeChildren,
     toggleInlineView,
+    fitInlineView,
   }
 }

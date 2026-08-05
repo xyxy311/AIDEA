@@ -101,6 +101,12 @@ export function useCanvasEvents(viewId: string) {
             label: '收起内联视图',
             action: () => { link.toggleInlineView(nodeId) },
           })
+          // 已展开 -> 自适应视图（以宽度为基准调整缩放与高度）
+          items.push({
+            key: 'fit-inline',
+            label: '自适应视图',
+            action: () => { link.fitInlineView(nodeId) },
+          })
         } else {
           // 未展开 -> 展开
           items.push({

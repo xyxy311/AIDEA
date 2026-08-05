@@ -25,21 +25,17 @@ export const MENU_BAR_HEIGHT: number = 28
 
 // ── 节点默认样式（实现 NodeStyle 接口） ──
 export const DEFAULT_NODE_STYLE: NodeStyle = {
-  backgroundColor: '#ffffff',
   borderColor: '#d1d5db',
   borderWidth: 2,
   borderRadius: NODE_BORDER_RADIUS,
   fontSize: 16,
   fontFamily: 'system-ui, -apple-system, sans-serif',
-  textColor: '#1f2937',
 }
 
 // ── 预设节点样式 ──
 export interface PresetStyle {
   name: string
-  backgroundColor: string
   borderColor: string
-  textColor: string
 }
 
 // ── Transformer 配置 ──
@@ -117,14 +113,14 @@ export const CONNECTION_SELECTED_STROKE_WIDTH = 3
 
 /** 默认节点预设（不含 id，由 store 初始化时分配 id） */
 export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type'>[] = [
-  { name: '默认', backgroundColor: '#ffffff', borderColor: '#d1d5db', textColor: '#1f2937' },
-  { name: '蓝色', backgroundColor: '#eff6ff', borderColor: '#3b82f6', textColor: '#1e40af' },
-  { name: '绿色', backgroundColor: '#f0fdf4', borderColor: '#22c55e', textColor: '#166534' },
-  { name: '黄色', backgroundColor: '#fefce8', borderColor: '#eab308', textColor: '#854d0e' },
-  { name: '红色', backgroundColor: '#fef2f2', borderColor: '#ef4444', textColor: '#991b1b' },
-  { name: '紫色', backgroundColor: '#faf5ff', borderColor: '#a855f7', textColor: '#6b21a8' },
-  { name: '灰色', backgroundColor: '#f9fafb', borderColor: '#6b7280', textColor: '#374151' },
-  { name: '粉色', backgroundColor: '#fdf2f8', borderColor: '#ec4899', textColor: '#9d174d' },
+  { name: '默认', borderColor: '#d1d5db' },
+  { name: '蓝色', borderColor: '#3b82f6' },
+  { name: '绿色', borderColor: '#22c55e' },
+  { name: '黄色', borderColor: '#eab308' },
+  { name: '红色', borderColor: '#ef4444' },
+  { name: '紫色', borderColor: '#a855f7' },
+  { name: '灰色', borderColor: '#6b7280' },
+  { name: '粉色', borderColor: '#ec4899' },
 ]
 
 /** 默认连线预设（不含 id，由 store 初始化时分配 id） */

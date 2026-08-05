@@ -308,18 +308,6 @@ export const useNodeStore = defineStore('node', () => {
 
   // ── 节点样式 ──
 
-  function setNodeTextColor(nodeId: string, color: string): void {
-    const node = nodes.get(nodeId)
-    if (!node) return
-    node.textColor = color
-  }
-
-  function setNodeBackgroundColor(nodeId: string, color: string): void {
-    const node = nodes.get(nodeId)
-    if (!node) return
-    node.backgroundColor = color
-  }
-
   function setNodeBorderColor(nodeId: string, color: string): void {
     const node = nodes.get(nodeId)
     if (!node) return
@@ -329,33 +317,25 @@ export const useNodeStore = defineStore('node', () => {
   function applyPresetStyle(nodeId: string, preset: PresetStyle): void {
     const node = nodes.get(nodeId)
     if (!node) return
-    node.backgroundColor = preset.backgroundColor
     node.borderColor = preset.borderColor
-    node.textColor = preset.textColor
   }
 
   function resetNodeStyle(nodeId: string): void {
     const node = nodes.get(nodeId)
     if (!node) return
-    node.backgroundColor = DEFAULT_NODE_STYLE.backgroundColor
     node.borderColor = DEFAULT_NODE_STYLE.borderColor
-    node.textColor = DEFAULT_NODE_STYLE.textColor
   }
 
   /** 批量更新多个节点的样式属性（按 ID 列表，不感知选中） */
   function updateNodesStyle(
     ids: string[],
     partial: {
-      textColor?: string
-      backgroundColor?: string
       borderColor?: string
     },
   ): void {
     for (const id of ids) {
       const node = nodes.get(id)
       if (!node) continue
-      if (partial.textColor !== undefined) node.textColor = partial.textColor
-      if (partial.backgroundColor !== undefined) node.backgroundColor = partial.backgroundColor
       if (partial.borderColor !== undefined) node.borderColor = partial.borderColor
     }
   }
@@ -525,8 +505,6 @@ export const useNodeStore = defineStore('node', () => {
     setNodeText,
     updateNodeText,
     // 节点样式
-    setNodeTextColor,
-    setNodeBackgroundColor,
     setNodeBorderColor,
     applyPresetStyle,
     resetNodeStyle,

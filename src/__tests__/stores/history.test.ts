@@ -224,23 +224,19 @@ describe('history store', () => {
 
       const id = commands.createNode(ROOT_NODE_ID, 0, 0, '样式节点')
       // 新建节点的样式字段为默认值（非 undefined）
-      expect(nodeStore.getNode(id)?.textColor).toBe(DEFAULT_NODE_STYLE.textColor)
-      expect(nodeStore.getNode(id)?.backgroundColor).toBe(DEFAULT_NODE_STYLE.backgroundColor)
+      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_STYLE.borderColor)
 
       // 更新样式 - 不应抛错
-      commands.updateNodesStyle([id], { textColor: '#ff0000', backgroundColor: '#00ff00' })
-      expect(nodeStore.getNode(id)?.textColor).toBe('#ff0000')
-      expect(nodeStore.getNode(id)?.backgroundColor).toBe('#00ff00')
+      commands.updateNodesStyle([id], { borderColor: '#ff0000' })
+      expect(nodeStore.getNode(id)?.borderColor).toBe('#ff0000')
 
       // undo 应恢复为默认值
       history.undo()
-      expect(nodeStore.getNode(id)?.textColor).toBe(DEFAULT_NODE_STYLE.textColor)
-      expect(nodeStore.getNode(id)?.backgroundColor).toBe(DEFAULT_NODE_STYLE.backgroundColor)
+      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_STYLE.borderColor)
 
       // redo 应恢复样式
       history.redo()
-      expect(nodeStore.getNode(id)?.textColor).toBe('#ff0000')
-      expect(nodeStore.getNode(id)?.backgroundColor).toBe('#00ff00')
+      expect(nodeStore.getNode(id)?.borderColor).toBe('#ff0000')
     })
   })
 })

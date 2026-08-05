@@ -22,8 +22,6 @@ export interface CreateNodeOptions {
   width?: number
   height?: number
   text?: string
-  textColor?: string
-  backgroundColor?: string
   borderColor?: string
   connections?: Connection[]
 }
@@ -44,8 +42,6 @@ export function createNode(options: CreateNodeOptions = {}): WhiteboardNode {
     width = DEFAULT_NODE_WIDTH,
     height = DEFAULT_NODE_HEIGHT,
     text = DEFAULT_NODE_TEXT,
-    textColor = DEFAULT_NODE_STYLE.textColor,
-    backgroundColor = DEFAULT_NODE_STYLE.backgroundColor,
     borderColor = DEFAULT_NODE_STYLE.borderColor,
     connections = [],
   } = options
@@ -57,8 +53,6 @@ export function createNode(options: CreateNodeOptions = {}): WhiteboardNode {
     width,
     height,
     text,
-    textColor,
-    backgroundColor,
     borderColor,
     connections,
   }

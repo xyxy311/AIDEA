@@ -18,6 +18,8 @@ import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
+import { useThemeStore } from '@/stores/theme'
+import { deriveBackgroundColor } from '@/utils/color'
 import {
   DEFAULT_NODE_STYLE,
   INLINE_VIEW_TITLE_HEIGHT,
@@ -36,6 +38,7 @@ const emit = defineEmits<{
 
 const nodeStore = useNodeStore()
 const view = useViewStore(props.viewId)
+const themeStore = useThemeStore()
 
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
 const groupRef = ref<VueKonvaRef<Konva.Group> | null>(null)
@@ -56,8 +59,8 @@ const borderRectConfig = computed(() => {
   return {
     width: r.width,
     height: r.height,
-    fill: n.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
-    stroke: DEFAULT_NODE_STYLE.borderColor,
+    fill: deriveBackgroundColor(n.borderColor ?? DEFAULT_NODE_STYLE.borderColor, themeStore.isDark),
+    stroke: n.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
     strokeWidth: DEFAULT_NODE_STYLE.borderWidth,
     strokeScaleEnabled: false,
   }

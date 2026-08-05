@@ -13,11 +13,12 @@ export interface WhiteboardNode {
   width: number
   height: number
   text: string
-  /** 字体颜色（始终有值，默认值由工厂函数 createNode 填充） */
-  textColor: string
-  /** 背景颜色（始终有值，默认值由工厂函数 createNode 填充） */
-  backgroundColor: string
-  /** 边框颜色（始终有值，默认值由工厂函数 createNode 填充） */
+  /**
+   * 边框颜色（始终有值，默认值由工厂函数 createNode 填充）。
+   * 支持透明度（#rrggbbaa / rgba）。节点的唯一可定制样式字段——
+   * 文字色随主题（见 CanvasColors.nodeTextColor），
+   * 背景色由本字段经 deriveBackgroundColor 派生（保持色相、继承透明度）。
+   */
   borderColor: string
   /**
    * 本节点子级之间的连线集合。
@@ -30,15 +31,20 @@ export interface WhiteboardNode {
   connections: Connection[]
 }
 
-/** 节点视觉样式配置 */
+/**
+ * 节点视觉样式配置（全局默认，非 per-node 数据）。
+ *
+ * 仅 borderColor 为用户可调字段（存在节点上）；
+ * 其余为全局统一常量（边框宽度 / 圆角 / 字号 / 字体）。
+ * 文字色与背景色不在此处——文字色随主题（CanvasColors.nodeTextColor），
+ * 背景色由 borderColor 派生（deriveBackgroundColor）。
+ */
 export interface NodeStyle {
-  backgroundColor: string
   borderColor: string
   borderWidth: number
   borderRadius: number
   fontSize: number
   fontFamily: string
-  textColor: string
 }
 
 /** 连线线型 */
@@ -63,14 +69,15 @@ export interface Connection {
 
 // ===== 预设样式系统 =====
 
-/** 节点预设样式 */
+/**
+ * 节点预设样式（持久化到 localStorage）。
+ * 仅存储边框颜色——文字色随主题、背景色由边框色派生。
+ */
 export interface NodePresetStyle {
   id: string
   name: string
   type: 'node'
-  backgroundColor: string
   borderColor: string
-  textColor: string
 }
 
 /** 连线预设样式 */

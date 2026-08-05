@@ -99,7 +99,7 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
           e.preventDefault()
           commands.updateNodesStyle(
             Array.from(view.selectedNodeIds),
-            { backgroundColor: preset.backgroundColor, borderColor: preset.borderColor, textColor: preset.textColor },
+            { borderColor: preset.borderColor },
           )
         }
       } else if (view.selectedConnectionIds.size > 0) {

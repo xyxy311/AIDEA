@@ -18,6 +18,8 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { DEFAULT_NODE_STYLE, NODE_PADDING } from '@/constants'
 import { useThemeStore } from '@/stores/theme'
+import { useNodeStore } from '@/stores/node'
+import { deriveBackgroundColor } from '@/utils/color'
 
 // ── Props ──
 const props = defineProps<{
@@ -56,6 +58,8 @@ const currentText = ref(props.initialText)
 // ── 计算编辑器位置 ──
 /** themeStore 实例，用于读取当前主色 */
 const themeStore = useThemeStore()
+/** nodeStore 实例，用于读取节点边框色以派生背景色 */
+const nodeStore = useNodeStore()
 
 /**
  * 编辑器 CSS 定位样式（相对于 Stage 容器）
@@ -71,10 +75,13 @@ const editorStyle = computed(() => ({
   fontSize: `${DEFAULT_NODE_STYLE.fontSize * props.stageScale}px`,
   fontFamily: DEFAULT_NODE_STYLE.fontFamily,
   padding: `${NODE_PADDING * props.stageScale}px`,
-  border: `2px solid ${themeStore.scheme.cssVars['--color-primary'] || '#3b82f6'}`,
+  border: `2px solid ${nodeStore.getNode(props.nodeId)?.borderColor ?? DEFAULT_NODE_STYLE.borderColor}`,
   borderRadius: `${DEFAULT_NODE_STYLE.borderRadius * props.stageScale}px`,
-  background: DEFAULT_NODE_STYLE.backgroundColor,
-  color: DEFAULT_NODE_STYLE.textColor,
+  background: deriveBackgroundColor(
+    nodeStore.getNode(props.nodeId)?.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
+    themeStore.isDark,
+  ),
+  color: themeStore.scheme.canvas.nodeTextColor,
   resize: 'none' as const,
   outline: 'none',
   zIndex: 1000,

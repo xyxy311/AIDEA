@@ -101,6 +101,14 @@ export const usePresetsStore = defineStore('presets', () => {
 
   initDefaults()
 
+  // 兼容旧版预设（含 backgroundColor/textColor 字段）-> 仅保留 borderColor
+  nodePresets.value = nodePresets.value.map((p) => ({
+    id: p.id,
+    name: p.name,
+    type: 'node' as const,
+    borderColor: p.borderColor,
+  }))
+
   return {
     nodePresets,
     connectionPresets,

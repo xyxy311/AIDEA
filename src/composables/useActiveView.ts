@@ -45,8 +45,6 @@ export function useActiveView() {
 
   /** 批量更新选中节点样式 */
   function updateSelectedNodesStyle(partial: {
-    textColor?: string
-    backgroundColor?: string
     borderColor?: string
   }): void {
     commands.updateNodesStyle(Array.from(view().selectedNodeIds), partial)

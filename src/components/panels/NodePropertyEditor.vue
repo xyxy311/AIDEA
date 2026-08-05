@@ -21,10 +21,13 @@ import {
 import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import { usePresetsStore } from '@/stores/presets'
+import { useThemeStore } from '@/stores/theme'
+import { deriveBackgroundColor } from '@/utils/color'
 import { DEFAULT_NODE_STYLE } from '@/constants'
 
 const active = useActiveView()
 const presetsStore = usePresetsStore()
+const themeStore = useThemeStore()
 
 // 选中的节点信息
 const node = computed(() => active.nodeStore.getNode(active.view.selectedNodeId))
@@ -35,22 +38,6 @@ const currentText = computed({
   set: (val: string) => {
     if (!node.value) return
     active.updateSelectedNodesText(val)
-  },
-})
-
-const currentTextColor = computed({
-  get: () => node.value?.textColor ?? DEFAULT_NODE_STYLE.textColor,
-  set: (val: string | null) => {
-    if (!node.value || !val) return
-    active.updateSelectedNodesStyle({ textColor: val })
-  },
-})
-
-const currentBgColor = computed({
-  get: () => node.value?.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
-  set: (val: string | null) => {
-    if (!node.value || !val) return
-    active.updateSelectedNodesStyle({ backgroundColor: val })
   },
 })
 
@@ -68,7 +55,16 @@ const colorPickerMode = 'hex' as const
 
 /** 点击预设行 → 应用到选中节点 */
 function applyPreset(preset: NodePresetStyle): void {
-  active.updateSelectedNodesStyle(preset)
+  active.updateSelectedNodesStyle({ borderColor: preset.borderColor })
+}
+
+/** 预设色块预览样式：背景由边框色派生，文字随主题 */
+function previewStyle(preset: NodePresetStyle): Record<string, string> {
+  return {
+    backgroundColor: deriveBackgroundColor(preset.borderColor, themeStore.isDark),
+    borderColor: preset.borderColor,
+    color: themeStore.scheme.canvas.nodeTextColor,
+  }
 }
 
 /** 删除预设 */
@@ -133,23 +129,17 @@ const showModal = ref(false)
 const modalTitle = ref('')
 const editId = ref<string | null>(null)
 const formName = ref('')
-const formBgColor = ref('#ffffff')
 const formBorderColor = ref('#d1d5db')
-const formTextColor = ref('#1f2937')
 
 function resetForm(): void {
   formName.value = ''
-  formBgColor.value = '#ffffff'
   formBorderColor.value = '#d1d5db'
-  formTextColor.value = '#1f2937'
 }
 
 function openEdit(preset: NodePresetStyle): void {
   editId.value = preset.id
   formName.value = preset.name
-  formBgColor.value = preset.backgroundColor
   formBorderColor.value = preset.borderColor
-  formTextColor.value = preset.textColor
   modalTitle.value = '编辑预设'
   showModal.value = true
 }
@@ -165,9 +155,7 @@ function openSaveCurrent(): void {
   editId.value = null
   formName.value = ''
   if (node.value) {
-    formBgColor.value = node.value.backgroundColor ?? '#ffffff'
     formBorderColor.value = node.value.borderColor ?? '#d1d5db'
-    formTextColor.value = node.value.textColor ?? '#1f2937'
   }
   modalTitle.value = '保存为预设'
   showModal.value = true
@@ -178,16 +166,12 @@ function handleSave(): void {
   if (editId.value) {
     presetsStore.updateNodePreset(editId.value, {
       name: formName.value.trim(),
-      backgroundColor: formBgColor.value,
       borderColor: formBorderColor.value,
-      textColor: formTextColor.value,
     })
   } else {
     presetsStore.addNodePreset({
       name: formName.value.trim(),
-      backgroundColor: formBgColor.value,
       borderColor: formBorderColor.value,
-      textColor: formTextColor.value,
     })
   }
   showModal.value = false
@@ -219,29 +203,11 @@ function handleSave(): void {
       <!-- 外观样式 -->
       <NText depth="3" style="font-size: 12px; font-weight: 600">{{ t('nodeEditor.appearance') }}</NText>
 
-      <NFormItem :label="t('nodeEditor.fontColor')" style="margin-top: 8px">
-        <NColorPicker
-          v-model:value="currentTextColor"
-          :modes="[colorPickerMode]"
-          :show-alpha="false"
-          size="small"
-        />
-      </NFormItem>
-
-      <NFormItem :label="t('nodeEditor.bgColor')">
-        <NColorPicker
-          v-model:value="currentBgColor"
-          :modes="[colorPickerMode]"
-          :show-alpha="false"
-          size="small"
-        />
-      </NFormItem>
-
       <NFormItem :label="t('nodeEditor.borderColor')">
         <NColorPicker
           v-model:value="currentBorderColor"
           :modes="[colorPickerMode]"
-          :show-alpha="false"
+          :show-alpha="true"
           size="small"
         />
       </NFormItem>
@@ -278,11 +244,7 @@ function handleSave(): void {
 
         <!-- 节点色块预览：28×28，显示名称首字 -->
         <div class="node-preview-block" @click.stop
-          :style="{
-            backgroundColor: preset.backgroundColor,
-            borderColor: preset.borderColor,
-            color: preset.textColor,
-          }"
+          :style="previewStyle(preset)"
         >
           {{ preset.name.charAt(0) }}
         </div>
@@ -339,14 +301,8 @@ function handleSave(): void {
         <NFormItem :label="t('nodeEditor.name')">
           <NInput v-model:value="formName" :placeholder="t('nodeEditor.presetNamePlaceholder')" />
         </NFormItem>
-        <NFormItem :label="t('nodeEditor.presetBgColor')">
-          <NColorPicker v-model:value="formBgColor" />
-        </NFormItem>
         <NFormItem :label="t('nodeEditor.presetBorderColor')">
-          <NColorPicker v-model:value="formBorderColor" />
-        </NFormItem>
-        <NFormItem :label="t('nodeEditor.presetTextColor')">
-          <NColorPicker v-model:value="formTextColor" />
+          <NColorPicker v-model:value="formBorderColor" :show-alpha="true" />
         </NFormItem>
       </NForm>
       <template #footer>

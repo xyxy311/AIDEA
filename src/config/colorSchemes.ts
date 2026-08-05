@@ -20,6 +20,8 @@ import { darkTheme } from 'naive-ui'
 export interface CanvasColors {
   /** 画布背景色 */
   background: string
+  /** 节点文字色（随明暗主题，与主色无关） */
+  nodeTextColor: string
   /** Transformer 选中框描边 */
   transformerBorder: string
   /** 框选矩形填充 */
@@ -51,8 +53,8 @@ export interface ModeScheme {
   theme: GlobalTheme | null
   /** 仅中性色变量（--color-bg / --color-surface / --color-text 等） */
   cssVars: Record<string, string>
-  /** 仅画布背景（中性） */
-  canvas: { background: string }
+  /** 画布中性色（背景 + 节点文字色，随明暗变，与主色无关） */
+  canvas: { background: string; nodeTextColor: string }
 }
 
 /** 单个明暗变体下的主色配置 */
@@ -60,8 +62,8 @@ export interface AccentVariant {
   naiveOverrides: GlobalThemeOverrides
   /** 主色相关 CSS 变量（--color-primary / --color-primary-hover 等） */
   cssVars: Record<string, string>
-  /** 主色相关画布色（不含 background） */
-  canvas: Omit<CanvasColors, 'background'>
+  /** 主色相关画布色（不含 background 与 nodeTextColor，二者随明暗模式） */
+  canvas: Omit<CanvasColors, 'background' | 'nodeTextColor'>
 }
 
 /** 主色调方案：含 light/dark 两个变体 */
@@ -94,7 +96,7 @@ export const modeSchemes: Record<'light' | 'dark', ModeScheme> = {
       '--color-indent-line': 'rgba(0,0,0,0.08)',
       '--color-indent-line-strong': 'rgba(0,0,0,0.14)',
     },
-    canvas: { background: '#f3f4f6' },
+    canvas: { background: '#f3f4f6', nodeTextColor: '#1f2937' },
   },
   dark: {
     id: 'dark',
@@ -113,7 +115,7 @@ export const modeSchemes: Record<'light' | 'dark', ModeScheme> = {
       '--color-indent-line': 'rgba(255,255,255,0.08)',
       '--color-indent-line-strong': 'rgba(255,255,255,0.14)',
     },
-    canvas: { background: '#212020' },
+    canvas: { background: '#212020', nodeTextColor: '#e4e4e7' },
   },
 }
 
@@ -282,6 +284,7 @@ export function combineScheme(mode: 'light' | 'dark', accent: AccentSchemeId): C
     },
     canvas: {
       background: modeScheme.canvas.background,
+      nodeTextColor: modeScheme.canvas.nodeTextColor,
       transformerBorder: accentVariant.canvas.transformerBorder,
       marqueeFill: accentVariant.canvas.marqueeFill,
       marqueeStroke: accentVariant.canvas.marqueeStroke,

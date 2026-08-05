@@ -14,6 +14,8 @@ import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
+import { useThemeStore } from '@/stores/theme'
+import { deriveBackgroundColor } from '@/utils/color'
 import {
   DEFAULT_NODE_STYLE,
   NODE_PADDING,
@@ -34,6 +36,7 @@ const emit = defineEmits<{
 
 // ── Store ──
 const nodeStore = useNodeStore()
+const themeStore = useThemeStore()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
@@ -58,25 +61,13 @@ const rectConfig = computed(() => {
   return {
     width: n.width,
     height: n.height,
-    // 优先使用节点自定义样式，未设置则回退到全局默认
-    fill: n.backgroundColor ?? DEFAULT_NODE_STYLE.backgroundColor,
+    // 背景色由边框色派生（保持色相、继承透明度，随主题明暗）
+    fill: deriveBackgroundColor(n.borderColor ?? DEFAULT_NODE_STYLE.borderColor, themeStore.isDark),
     stroke: n.borderColor ?? DEFAULT_NODE_STYLE.borderColor,
     strokeWidth: DEFAULT_NODE_STYLE.borderWidth,
     // 禁止 stroke 随 scaleX/scaleY 缩放，缩放过程中边框线宽保持恒定
     strokeScaleEnabled: false,
     cornerRadius: DEFAULT_NODE_STYLE.borderRadius,
-    shadowColor: DEFAULT_NODE_STYLE.shadowEnabled
-      ? DEFAULT_NODE_STYLE.shadowColor
-      : undefined,
-    shadowBlur: DEFAULT_NODE_STYLE.shadowEnabled
-      ? DEFAULT_NODE_STYLE.shadowBlur
-      : 0,
-    shadowOffsetX: DEFAULT_NODE_STYLE.shadowEnabled
-      ? DEFAULT_NODE_STYLE.shadowOffsetX
-      : 0,
-    shadowOffsetY: DEFAULT_NODE_STYLE.shadowEnabled
-      ? DEFAULT_NODE_STYLE.shadowOffsetY
-      : 0,
   }
 })
 
@@ -98,12 +89,8 @@ const textConfig = computed(() => {
     lineHeight: NODE_LINE_HEIGHT,
     // 按字符换行，确保中文也能正确断行
     wrap: 'char' as const,
-    // 节点自定义字体颜色 > 全局默认；占位符用灰色
-    fill: n.textColor
-      ? n.textColor
-      : isPlaceholder
-        ? PLACEHOLDER_TEXT_COLOR
-        : DEFAULT_NODE_STYLE.textColor,
+    // 文字色随主题；占位符用灰色
+    fill: isPlaceholder ? PLACEHOLDER_TEXT_COLOR : themeStore.scheme.canvas.nodeTextColor,
     padding: NODE_PADDING,
   }
 })

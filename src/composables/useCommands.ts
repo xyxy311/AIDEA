@@ -216,11 +216,11 @@ export function useCommands() {
    */
   function updateNodesStyle(
     ids: string[],
-    partial: { textColor?: string; backgroundColor?: string; borderColor?: string },
+    partial: { borderColor?: string },
   ): void {
     if (ids.length === 0) return
     const oldStyles = ids.map((id) =>
-      captureNodeFields(nodeStore, id, ['textColor', 'backgroundColor', 'borderColor']),
+      captureNodeFields(nodeStore, id, ['borderColor']),
     )
     nodeStore.updateNodesStyle(ids, partial)
     const sortedKey = [...ids].sort().join(',')

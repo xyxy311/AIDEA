@@ -2,6 +2,8 @@ import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
+import { generateId } from '@/utils/id'
+import { INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT } from '@/constants'
 
 /**
  * 节点视图编排
@@ -12,6 +14,7 @@ import { useCommands } from '@/composables/useCommands'
  * - enterNodeView：进入选中节点的子级视图（任何节点均可进入）
  * - groupSelectedNodes：多选节点 -> 新建容器节点，reparent 选中节点 + 迁移内部连线
  * - clearNodeChildren：清空节点的所有子级（删除子树，保留节点本身）
+ * - toggleInlineView：切换选中节点内联视图的展开/收起
  *
  * 组合和清空操作委托命令层（useCommands），自动入历史栈并处理视图协调。
  */
@@ -65,10 +68,36 @@ export function useNodeViewLink(viewId: string) {
     commands.clearNodeChildren(nodeId)
   }
 
+  /**
+   * 切换选中节点内联视图的展开/收起。
+   * 仅主视图、单选节点时生效。
+   * 纯视图操作，不入历史栈。
+   */
+  function toggleInlineView(nodeId?: string): void {
+    if (!nodeId) return
+    if (view.type !== 'main') return
+    if (!node.isChildOf(nodeId, view.viewedNodeId)) return
+    console.log('toggleInlineView: ', nodeId)
+    if (view.getInlineViewRect(nodeId)) {
+      // 已展开 -> 收起
+      const iv = view.inlineViews.find((v) => v.nodeId === nodeId)
+      if (iv) {
+        project.destroyView(iv.viewId)
+        view.removeInlineView(nodeId)
+      }
+    } else {
+      // 未展开 -> 展开
+      const inlineViewId = generateId()
+      useViewStore(inlineViewId, { nodeId, type: 'inline', hostViewId: viewId })
+      view.addInlineView(nodeId, inlineViewId, INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT)
+    }
+  }
+
   return {
     enterNodeView,
     enterParentNodeView,
     groupSelectedNodes,
     clearNodeChildren,
+    toggleInlineView,
   }
 }

@@ -1,12 +1,10 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
-import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
-import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT } from '@/constants'
-import { generateId } from '@/utils/id'
+import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 /**
  * 画布事件处理
@@ -25,7 +23,6 @@ import { generateId } from '@/utils/id'
 export function useCanvasEvents(viewId: string) {
   const view = useViewStore(viewId)
   const nodeStore = useNodeStore()
-  const project = useProjectStore()
   const contextMenu = useContextMenu()
   const link = useNodeViewLink(viewId)
   const commands = useCommands()
@@ -102,33 +99,14 @@ export function useCanvasEvents(viewId: string) {
           items.push({
             key: 'collapse-inline',
             label: '收起内联视图',
-            action: () => {
-              const iv = view.inlineViews.find((v) => v.nodeId === nodeId)
-              if (iv) {
-                project.destroyView(iv.viewId)
-                view.removeInlineView(nodeId)
-              }
-            },
+            action: () => { link.toggleInlineView(nodeId) },
           })
         } else {
           // 未展开 -> 展开
           items.push({
             key: 'expand-inline',
             label: '展开内联视图',
-            action: () => {
-              const inlineViewId = generateId()
-              useViewStore(inlineViewId, {
-                nodeId,
-                type: 'inline',
-                hostViewId: viewId,
-              })
-              view.addInlineView(
-                nodeId,
-                inlineViewId,
-                INLINE_VIEW_DEFAULT_WIDTH,
-                INLINE_VIEW_DEFAULT_HEIGHT,
-              )
-            },
+            action: () => { link.toggleInlineView(nodeId) },
           })
         }
       }

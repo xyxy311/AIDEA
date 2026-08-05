@@ -94,6 +94,11 @@ export const useNodeStore = defineStore('node', () => {
     return (childrenIndex.value.get(id)?.length ?? 0) > 0
   }
 
+  /** 是否是某节点的直接子集 */
+  function isChildOf(id: string, parentId: string): boolean {
+    return childrenIndex.value.get(parentId)?.includes(id) ?? false
+  }
+
   /**
    * 递归收集某节点的所有后代 ID（含自身）。
    * 沿 childrenIndex 走，O(子树大小)。
@@ -482,6 +487,7 @@ export const useNodeStore = defineStore('node', () => {
     getNode,
     childrenOf,
     hasChildren,
+    isChildOf,
     descendantsOf,
     pathToRoot,
     getConnections,

@@ -11,6 +11,7 @@ import {
   mapMainWorldToInlineWorld,
   hitTestInlineViewScreen,
   screenToMainWorld,
+  screenToInlineWorld,
 } from '@/utils/view'
 
 /**
@@ -80,6 +81,30 @@ export function useNodeDragging(viewId: string) {
     return stage.getRelativePointerPosition()
   }
 
+  /**
+   * 从屏幕坐标（clientX/clientY）计算当前视图世界坐标。
+   * 用于 window mousemove 兜底：鼠标进入内联视图 DOM 覆盖层后 stage 收不到事件，
+   * 需用屏幕坐标手动换算。与 stage.getRelativePointerPosition() 等价。
+   * - 主视图：screenToMainWorld
+   * - 内联视图：screenToInlineWorld（viewedNodeId 即宿主节点 id）
+   */
+  function screenToWorld(clientX: number, clientY: number): { x: number; y: number } | null {
+    const mainRect = mainView.containerEl?.getBoundingClientRect()
+    if (!mainRect) return null
+    if (view.type === 'main') {
+      return screenToMainWorld(clientX, clientY, mainRect, view)
+    }
+    return screenToInlineWorld(
+      clientX,
+      clientY,
+      view.viewedNodeId,
+      view,
+      mainView,
+      mainRect,
+      nodeStore,
+    )
+  }
+
   /** 提交同视图内移动到历史栈（拖拽未跨视图时） */
   function commitMovePositions(): void {
     const positions: Array<{
@@ -104,6 +129,7 @@ export function useNodeDragging(viewId: string) {
     pendingNodeId = null
     pendingStart = null
     dragStartPositions.clear()
+    window.removeEventListener('mousemove', onWindowMouseMove)
   }
 
   /**
@@ -264,16 +290,18 @@ export function useNodeDragging(viewId: string) {
       return false
     }
     pendingStart = { x: pos.x, y: pos.y }
+    // 拖拽全程由 window mousemove 驱动（避免鼠标进入内联覆盖层后 stage 收不到事件而暂停）
+    window.addEventListener('mousemove', onWindowMouseMove)
     window.addEventListener('mouseup', onWindowMouseUp, { once: true })
     return true
   }
 
-  /** mousemove：超过阈值激活拖动，同步移动所有选中节点 */
-  function handleMouseMove(e: KonvaEventObject<MouseEvent>): void {
+  /**
+   * 拖拽移动核心逻辑（阈值激活 + 同步移动选中节点）。由 window mousemove 驱动。
+   * @param pos 当前视图世界坐标
+   */
+  function processDragMove(pos: { x: number; y: number }): void {
     if (!pendingNodeId || !pendingStart) return
-
-    const pos = getWorldPos(e)
-    if (!pos) return
 
     // 首次移动超过阈值才激活拖动
     if (!isDragging.value) {
@@ -305,6 +333,27 @@ export function useNodeDragging(viewId: string) {
     dragStartPositions.forEach((start, id) => {
       nodeStore.moveNode(id, start.x + deltaX, start.y + deltaY)
     })
+  }
+
+  /**
+   * stage mousemove：拖拽全程改由 window mousemove（onWindowMouseMove）驱动。
+   * 鼠标进入内联视图 DOM 覆盖层后主 stage 收不到 mousemove，若仍由 stage 驱动会导致拖拽暂停；
+   * 故此处不再处理移动，保留仅为维持 WhiteboardCanvas 的事件绑定签名。
+   */
+  function handleMouseMove(_e: KonvaEventObject<MouseEvent>): void {
+    void _e
+  }
+
+  /**
+   * window mousemove 兜底：拖拽期间鼠标移入内联视图 DOM 覆盖层后，主 stage 收不到 mousemove，
+   * 由此用屏幕坐标计算世界坐标并驱动节点跟随，避免拖拽暂停。
+   * mousedown 接管后注册，cleanupDragState 时移除。
+   */
+  function onWindowMouseMove(e: MouseEvent): void {
+    if (!pendingNodeId || !pendingStart) return
+    const pos = screenToWorld(e.clientX, e.clientY)
+    if (!pos) return
+    processDragMove(pos)
   }
 
   /** mouseup：纯 click 处理选中；拖动结束判断跨视图 reparent */

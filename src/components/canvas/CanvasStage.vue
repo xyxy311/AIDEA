@@ -186,6 +186,20 @@ function attachTransformer(): void {
   tr.getLayer()?.batchDraw()
 }
 
+/**
+ * 将所有内联视图宿主节点置顶到节点层最上层。
+ *
+ * 内联画布是 DOM 覆盖层（z-index:10），物理上始终浮在主 Stage Canvas 之上，
+ * 主视图节点无法遮挡画布。但标题栏/边框是 Konva shape（与普通节点同层），
+ * 会被普通节点遮挡——导致"能遮标题栏、遮不了画布"的视觉割裂。
+ * 将内联视图宿主节点始终置于普通节点之上，使标题栏与画布层级一致（均不可被遮挡）。
+ */
+function liftInlineViewsToTop(): void {
+  for (const iv of view.inlineViews) {
+    nodeInstances.get(iv.nodeId)?.getGroupNode?.()?.moveToTop()
+  }
+}
+
 /** 选中节点变化时：置顶选中节点 + 重新附着 Transformer（nextTick 确保子组件已渲染） */
 watch(
   () => Array.from(view.selectedNodeIds),
@@ -195,6 +209,8 @@ watch(
     for (const id of view.selectedNodeIds) {
       nodeInstances.get(id)?.getGroupNode?.()?.moveToTop()
     }
+    // 内联视图宿主节点始终保持在选中节点之上（与内联画布 DOM 层级一致，避免视觉割裂）
+    liftInlineViewsToTop()
     attachTransformer()
   },
 )
@@ -209,7 +225,22 @@ watch(
   () => view.inlineViews.length,
   async () => {
     await nextTick()
+    // 内联视图宿主节点置顶（保持与画布 DOM 层级一致，避免视觉割裂）
+    liftInlineViewsToTop()
     attachTransformer()
+  },
+)
+
+/**
+ * 节点列表变化时（新建/删除/undo-redo 恢复等）：vue-konva 将新增节点 append 到 layer 末尾，
+ * 落在内联视图宿主节点之上。即便新增节点未被选中（如 undo 恢复），也需重新置顶内联视图，
+ * 保证其始终位于普通节点之上。
+ */
+watch(
+  () => nodesArray.value,
+  async () => {
+    await nextTick()
+    liftInlineViewsToTop()
   },
 )
 

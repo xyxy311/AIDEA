@@ -231,6 +231,26 @@ export const useNodeStore = defineStore('node', () => {
   }
 
   /**
+   * 设置节点几何尺寸（不触发 fitNodeToText）。
+   * 供内联视图宿主节点 resize 使用--内联视图是容器，尺寸由用户精确控制，
+   * 不应被文本自适应撑大。仅做 MIN_NODE 下限保护。
+   */
+  function setNodeSize(
+    nodeId: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): void {
+    const node = nodes.get(nodeId)
+    if (!node) return
+    node.x = x
+    node.y = y
+    node.width = Math.max(width, MIN_NODE_WIDTH)
+    node.height = Math.max(height, MIN_NODE_HEIGHT)
+  }
+
+  /**
    * 根据文本内容自动调整节点尺寸（只扩大不缩小）。
    * 逻辑与原 whiteboard store 一致，确保节点能完整显示所有文字。
    */
@@ -498,6 +518,7 @@ export const useNodeStore = defineStore('node', () => {
     deleteNodes,
     moveNode,
     resizeNode,
+    setNodeSize,
     fitNodeToText,
     // 节点文本
     setNodeText,

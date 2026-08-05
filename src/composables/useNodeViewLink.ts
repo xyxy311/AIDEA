@@ -97,7 +97,14 @@ export function useNodeViewLink(viewId: string) {
       // 未展开 -> 展开
       const inlineViewId = generateId()
       useViewStore(inlineViewId, { nodeId, type: 'inline', hostViewId: viewId })
-      view.addInlineView(nodeId, inlineViewId, INLINE_VIEW_DEFAULT_WIDTH, INLINE_VIEW_DEFAULT_HEIGHT)
+      // 内联视图初始尺寸 = 节点尺寸（自适应 fit 触发前），随后 fitInlineView 可能调整高度
+      const n = node.getNode(nodeId)
+      view.addInlineView(
+        nodeId,
+        inlineViewId,
+        n?.width ?? INLINE_VIEW_DEFAULT_WIDTH,
+        n?.height ?? INLINE_VIEW_DEFAULT_HEIGHT,
+      )
       fitInlineView(nodeId)
     }
   }

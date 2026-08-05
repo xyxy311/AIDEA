@@ -77,7 +77,6 @@ const editorStyle = computed(() => ({
   boxSizing: 'border-box' as const,
   lineHeight: '1.5',
   overflow: 'hidden',
-  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
 }))
 
 // ── 生命周期 ──

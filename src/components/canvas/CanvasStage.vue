@@ -263,17 +263,45 @@ function onTransformEnd(): void {
     const scaleX = rect.scaleX()
     const scaleY = rect.scaleY()
 
-    // 区分：内联视图节点（更新视图状态尺寸，不入 undo）vs 普通节点（commitNodeResize 入 undo）
+    // 区分：内联视图节点（同步节点尺寸入 undo + 更新视图尺寸）vs 普通节点（commitNodeResize 入 undo）
     if (view.getInlineViewRect(nodeId)) {
-      // 内联视图节点：缩放矩形 = 更新 inlineViews 尺寸（视图状态，不入 undo）
+      // 内联视图节点：缩放矩形 = 同步更新节点尺寸（入 undo）+ 更新 inlineViews 尺寸（视图状态，不入 undo）
       const newWidth = Math.max(rect.width() * scaleX, INLINE_VIEW_MIN_WIDTH)
       const newHeight = Math.max(rect.height() * scaleY, INLINE_VIEW_MIN_HEIGHT)
-      view.updateInlineViewSize(nodeId, newWidth, newHeight)
-      // 重置 rect 的 scale 与偏移（位置不变，始终跟随 node.x/y）
+
+      const nodeData = nodeStore.getNode(nodeId)
+      // 捕获 resize 前的旧状态（用于 undo）
+      const oldState = {
+        x: nodeData?.x ?? 0,
+        y: nodeData?.y ?? 0,
+        width: nodeData?.width ?? 0,
+        height: nodeData?.height ?? 0,
+      }
+
+      const worldX = (nodeData?.x ?? 0) + rect.x()
+      const worldY = (nodeData?.y ?? 0) + rect.y()
+
+      // 重置 rect 的 scale 与 group 内偏移
       rect.x(0)
       rect.y(0)
       rect.scaleX(1)
       rect.scaleY(1)
+
+      // 写入节点尺寸（setNodeSize 不触发 fitNodeToText，内联视图是容器需精确控制）
+      nodeStore.setNodeSize(nodeId, worldX, worldY, newWidth, newHeight)
+
+      // 捕获 resize 后的新状态，提交命令到历史栈
+      const newNode = nodeStore.getNode(nodeId)
+      const newState = {
+        x: newNode?.x ?? 0,
+        y: newNode?.y ?? 0,
+        width: newNode?.width ?? 0,
+        height: newNode?.height ?? 0,
+      }
+      commands.commitNodeResize(nodeId, oldState, newState)
+
+      // 同步更新内联视图尺寸（视图状态，不入 undo）
+      view.updateInlineViewSize(nodeId, newState.width, newState.height)
     } else {
       // 普通节点：将 scale 烘焙为 width/height，写入 store 并入 undo 栈
       const newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)

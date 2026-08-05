@@ -161,7 +161,7 @@ export const useHistoryStore = defineStore('history', () => {
    *
    * 命令层的 deleteNodes/clearNodeChildren 和 history 的 undo/redo 都通过此函数包裹。
    */
-  function runWithViewCoord(fn: () => void): void {
+  function runWithViewCoord(fn: () => void, patch?: DataPatch): void {
     // 执行前记录当前视图的祖先链（此时节点还在，pathToRoot 有效）
     const pathToRoot = nodeStore.pathToRoot(project.currentNodeId)
     const beforeIds = new Set(nodeStore.nodes.keys())
@@ -170,10 +170,11 @@ export const useHistoryStore = defineStore('history', () => {
 
     const afterIds = new Set(nodeStore.nodes.keys())
 
+    const mainView = useViewStore('main')
+
     // 1. 销毁无效的内联视图实例
     //    - 宿主节点被删除
     //    - 宿主节点不再是主视图当前节点的直接子级（如被组合 / reparent 到其他层级）
-    const mainView = useViewStore('main')
     for (const iv of [...mainView.inlineViews]) {
       const hostNode = nodeStore.getNode(iv.nodeId)
       if (!hostNode || hostNode.parentId !== project.currentNodeId) {
@@ -182,7 +183,31 @@ export const useHistoryStore = defineStore('history', () => {
       }
     }
 
-    // 2. 视图回退：当前节点无效时，沿祖先链找最近存在的祖先
+    // 2. 同步被 modify 尺寸的内联视图宿主节点的 inlineViews 尺寸 = 节点当前尺寸
+    //    undo/redo 节点尺寸后，inlineViews 尺寸（视图状态，不入 undo）需同步回节点尺寸，
+    //    否则内联视图渲染尺寸与节点数据不一致。fit 导致的临时尺寸差异会被覆盖（可重新触发 fit）。
+    if (patch) {
+      const sizeModifiedIds = new Set(
+        patch.nodeChanges
+          .filter(
+            (nc): nc is NodeChange & { type: 'modify' } =>
+              nc.type === 'modify' && !!nc.new && ('width' in nc.new || 'height' in nc.new),
+          )
+          .map((nc) => nc.id),
+      )
+      if (sizeModifiedIds.size > 0) {
+        for (const iv of mainView.inlineViews) {
+          if (sizeModifiedIds.has(iv.nodeId)) {
+            const hostNode = nodeStore.getNode(iv.nodeId)
+            if (hostNode) {
+              mainView.updateInlineViewSize(iv.nodeId, hostNode.width, hostNode.height)
+            }
+          }
+        }
+      }
+    }
+
+    // 3. 视图回退：当前节点无效时，沿祖先链找最近存在的祖先
     if (!afterIds.has(project.currentNodeId)) {
       // pathToRoot[0] 是当前节点（已无效），从 [1]（父级）开始找
       let target = ROOT_NODE_ID
@@ -195,7 +220,7 @@ export const useHistoryStore = defineStore('history', () => {
       project.switchView(target)
     }
 
-    // 3. 清理 expandedIds
+    // 4. 清理 expandedIds
     project.pruneExpanded(afterIds)
   }
 
@@ -292,9 +317,12 @@ export const useHistoryStore = defineStore('history', () => {
   function undo(): void {
     if (past.value.length === 0) return
     const entry = past.value.pop()!
-    runWithViewCoord(() => {
-      applyPatch(entry.patch, true)
-    })
+    runWithViewCoord(
+      () => {
+        applyPatch(entry.patch, true)
+      },
+      entry.patch,
+    )
     future.value.push(entry)
   }
 
@@ -302,9 +330,12 @@ export const useHistoryStore = defineStore('history', () => {
   function redo(): void {
     if (future.value.length === 0) return
     const entry = future.value.pop()!
-    runWithViewCoord(() => {
-      applyPatch(entry.patch, false)
-    })
+    runWithViewCoord(
+      () => {
+        applyPatch(entry.patch, false)
+      },
+      entry.patch,
+    )
     past.value.push(entry)
   }
 

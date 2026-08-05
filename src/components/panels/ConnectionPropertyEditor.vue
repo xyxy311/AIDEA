@@ -79,6 +79,15 @@ const directed = computed<boolean | undefined>({
   },
 })
 
+/** 连线文字标签（空字符串统一存为 null） */
+const currentText = computed<string>({
+  get: () => conn.value?.text ?? '',
+  set: (val: string) => {
+    if (!conn.value) return
+    active.updateSelectedConnectionsStyle({ text: val || null })
+  },
+})
+
 const colorPickerMode = 'hex' as const
 
 // ── 连线预设管理 ──
@@ -247,6 +256,15 @@ function handleSave(): void {
     <NDivider style="margin: 8px 0" />
 
     <NForm label-placement="top" size="small">
+      <NFormItem :label="t('connectionEditor.labelText')">
+        <NInput
+          v-model:value="currentText"
+          type="textarea"
+          :autosize="{ minRows: 1, maxRows: 3 }"
+          :placeholder="t('connectionEditor.labelTextPlaceholder')"
+        />
+      </NFormItem>
+
       <NText depth="3" style="font-size: 12px; font-weight: 600">{{ t('connectionEditor.style') }}</NText>
 
       <NFormItem :label="t('connectionEditor.lineStyle')" style="margin-top: 8px">

@@ -500,7 +500,7 @@ export function useCommands() {
   function updateConnection(
     parentId: string,
     connectionId: string,
-    partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>>,
+    partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed' | 'text'>>,
   ): void {
     const parent = nodeStore.getNode(parentId)
     const conn = parent?.connections.find((c) => c.id === connectionId)
@@ -537,6 +537,7 @@ export function useCommands() {
       strokeWidth?: number
       strokeColor?: string
       directed?: boolean
+      text?: string | null
     },
   ): void {
     if (connIds.length === 0) return
@@ -578,6 +579,7 @@ export function useCommands() {
       strokeWidth?: number
       strokeColor?: string
       directed?: boolean
+      text?: string | null
     },
   ): void {
     if (connIds.length === 0) return

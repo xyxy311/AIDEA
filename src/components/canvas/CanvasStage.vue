@@ -41,6 +41,7 @@ import WhiteboardConnection from './WhiteboardConnection.vue'
 import InlineViewFrame from './InlineViewFrame.vue'
 import InlineViewCanvas from './InlineViewCanvas.vue'
 import NodeTextEditor from './NodeTextEditor.vue'
+import ConnectionTextEditor from './ConnectionTextEditor.vue'
 import OverviewMap from './OverviewMap.vue'
 import ContextMenu from './ContextMenu.vue'
 import type { ContextMenuItem } from '@/composables/useContextMenu'
@@ -383,6 +384,47 @@ function handleConnectionClick(connectionId: string, ctrlKey?: boolean): void {
   }
 }
 
+// ── 连线文字编辑 ──
+
+/** 正在编辑文字的连线数据（全局查找，支持跨视图选中） */
+const editingConnection = computed(() => {
+  if (!view.editingConnectionId) return null
+  return nodeStore.findConnectionById(view.editingConnectionId)
+})
+
+/** 正在编辑连线的两端中点坐标（世界坐标） */
+const editingConnectionMid = computed(() => {
+  const ec = editingConnection.value
+  if (!ec) return null
+  const from = nodeStore.getNode(ec.connection.fromNodeId)
+  const to = nodeStore.getNode(ec.connection.toNodeId)
+  if (!from || !to) return null
+  return {
+    x: (from.x + from.width / 2 + to.x + to.width / 2) / 2,
+    y: (from.y + from.height / 2 + to.y + to.height / 2) / 2,
+  }
+})
+
+/** 连线双击 -> 开始编辑连线文字 */
+function handleConnectionDblClick(connectionId: string): void {
+  view.startEditingConnection(connectionId)
+}
+
+/** 完成连线文字编辑（空文字转为 null）-- 经命令层 updateConnection 入历史栈 */
+function finishConnectionTextEdit(connectionId: string, text: string): void {
+  const ec = nodeStore.findConnectionById(connectionId)
+  if (ec) {
+    const value = text.trim() === '' ? null : text
+    commands.updateConnection(ec.parentId, connectionId, { text: value })
+  }
+  view.stopEditingConnection()
+}
+
+/** 取消连线文字编辑 */
+function cancelConnectionTextEdit(): void {
+  view.stopEditingConnection()
+}
+
 // ── Stage 事件包装 ──
 
 /** 处理画布点击：框选命中后跳过取消选中（避免清空刚框选的节点） */
@@ -512,6 +554,7 @@ function handleStageMouseUp(e: unknown): void {
           :parent-id="view.viewedNodeId"
           :is-selected="view.selectedConnectionIds.has(connItem.id)"
           @click="handleConnectionClick"
+          @dblclick="handleConnectionDblClick"
         />
 
         <!-- 临时连线（拖拽创建中，虚线） -->
@@ -571,6 +614,22 @@ function handleStageMouseUp(e: unknown): void {
       :stage-container="stageContainerRef!"
       @save="finishTextEdit"
       @cancel="cancelTextEdit"
+    />
+
+    <!-- 连线文字编辑器覆盖层 -->
+    <ConnectionTextEditor
+      v-if="view.editingConnectionId && editingConnection && editingConnectionMid"
+      :key="view.editingConnectionId"
+      :connection-id="view.editingConnectionId"
+      :initial-text="editingConnection.connection.text ?? ''"
+      :mid-x="editingConnectionMid.x"
+      :mid-y="editingConnectionMid.y"
+      :conn-color="editingConnection.connection.strokeColor"
+      :stage-scale="view.stageScale"
+      :stage-x="view.stageX"
+      :stage-y="view.stageY"
+      @save="finishConnectionTextEdit"
+      @cancel="cancelConnectionTextEdit"
     />
 
     <!-- 内联视图 DOM 覆盖层（每个展开的内联视图一个独立 CanvasStage） -->

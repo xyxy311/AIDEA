@@ -65,6 +65,11 @@ export interface Connection {
   strokeColor: string
   /** 是否有向（箭头） */
   directed: boolean
+  /**
+   * 连线上的文字标注（可为 null 表示无文字）。
+   * 双击连线可编辑，也可在右侧边栏修改。
+   */
+  text: string | null
 }
 
 // ===== 预设样式系统 =====

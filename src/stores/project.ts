@@ -103,6 +103,7 @@ export const useProjectStore = defineStore('project', () => {
     const view = useViewStore('main')
     // 先结束编辑
     view.stopEditing()
+    view.stopEditingConnection()
     // 收集内联视图快照
     const inlineSnapshots: InlineViewSnapshot[] = view.inlineViews.map((iv: InlineViewItem) => {
       const ivView = useViewStore(iv.viewId)

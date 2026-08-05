@@ -431,7 +431,7 @@ export const useNodeStore = defineStore('node', () => {
   function updateConnection(
     parentId: string,
     connectionId: string,
-    partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed'>>,
+    partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed' | 'text'>>,
   ): void {
     const parent = nodes.get(parentId)
     if (!parent) return
@@ -465,6 +465,7 @@ export const useNodeStore = defineStore('node', () => {
       strokeWidth?: number
       strokeColor?: string
       directed?: boolean
+      text?: string | null
     },
   ): void {
     const parent = nodes.get(parentId)
@@ -475,6 +476,7 @@ export const useNodeStore = defineStore('node', () => {
       if (partial.strokeWidth !== undefined) conn.strokeWidth = partial.strokeWidth
       if (partial.strokeColor !== undefined) conn.strokeColor = partial.strokeColor
       if (partial.directed !== undefined) conn.directed = partial.directed
+      if (partial.text !== undefined) conn.text = partial.text
     }
   }
 

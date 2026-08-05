@@ -109,6 +109,18 @@ export const CONNECTION_ARROW_SIZE = 8
 /** 选中连线的描边宽度 */
 export const CONNECTION_SELECTED_STROKE_WIDTH = 3
 
+/** 连线标签文字字号（px，世界坐标） */
+export const CONNECTION_LABEL_FONT_SIZE: number = 14
+
+/** 连线标签文字行高 */
+export const CONNECTION_LABEL_LINE_HEIGHT: number = 1.4
+
+/** 连线标签背景内边距（px，世界坐标） */
+export const CONNECTION_LABEL_PADDING: number = 6
+
+/** 连线标签圆角（px，世界坐标） */
+export const CONNECTION_LABEL_RADIUS: number = 4
+
 // ── 预设样式系统 ──
 
 /** 默认节点预设（不含 id，由 store 初始化时分配 id） */

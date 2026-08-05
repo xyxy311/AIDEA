@@ -93,6 +93,8 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     // ── 编辑 ──
     /** 当前正在编辑的节点 ID */
     const editingNodeId = ref<string | null>(null)
+    /** 当前正在编辑文字的连线 ID（双击连线触发） */
+    const editingConnectionId = ref<string | null>(null)
 
     // ── 连线创建中 ──
     /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
@@ -230,6 +232,16 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       editingNodeId.value = null
     }
 
+    /** 开始编辑连线文字（双击连线触发） */
+    function startEditingConnection(connectionId: string): void {
+      editingConnectionId.value = connectionId
+    }
+
+    /** 结束连线文字编辑 */
+    function stopEditingConnection(): void {
+      editingConnectionId.value = null
+    }
+
     // ── 视口 ──
 
     /** 设置画布视口（平移 + 缩放） */
@@ -284,6 +296,7 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
         _ownSelectedConnectionIds!.value = new Set()
       }
       editingNodeId.value = null
+      editingConnectionId.value = null
       connectingFrom.value = null
     }
 
@@ -309,6 +322,7 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       selectedConnectionId,
       // 编辑
       editingNodeId,
+      editingConnectionId,
       // 连线创建
       connectingFrom,
       // 跨视图拖拽
@@ -320,6 +334,8 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       setSelectedNodes,
       startEditing,
       stopEditing,
+      startEditingConnection,
+      stopEditingConnection,
       setViewport,
       resetViewState,
     }

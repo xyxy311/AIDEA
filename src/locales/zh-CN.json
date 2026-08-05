@@ -57,6 +57,8 @@
     "width": "粗细",
     "color": "颜色",
     "directed": "有向",
+    "labelText": "连线文字",
+    "labelTextPlaceholder": "输入连线文字",
     "presets": "连线预设",
     "deletePresetConfirm": "确定删除预设「{name}」？",
     "noPreset": "暂无预设",

@@ -61,6 +61,7 @@ export function useActiveView() {
     strokeWidth?: number
     strokeColor?: string
     directed?: boolean
+    text?: string | null
   }): void {
     commands.updateConnectionsStyleByIds(
       Array.from(view().selectedConnectionIds),

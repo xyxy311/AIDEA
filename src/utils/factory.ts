@@ -69,6 +69,7 @@ export interface CreateConnectionOptions {
   strokeWidth?: number
   strokeColor?: string
   directed?: boolean
+  text?: string | null
 }
 
 /**
@@ -87,6 +88,7 @@ export function createConnection(options: CreateConnectionOptions = {}): Connect
     strokeWidth = CONNECTION_STROKE_WIDTH,
     strokeColor = CONNECTION_STROKE_COLOR,
     directed = DEFAULT_CONNECTION_DIRECTED,
+    text = null,
   } = options
   // 确定性 id：保持与历史逻辑一致，使同两端连线不会重复创建
   const id =
@@ -99,5 +101,6 @@ export function createConnection(options: CreateConnectionOptions = {}): Connect
     strokeWidth,
     strokeColor,
     directed,
+    text,
   }
 }

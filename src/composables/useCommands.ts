@@ -269,23 +269,6 @@ export function useCommands() {
 
   // ── reparent ──
 
-  /** 修改节点父级（组合操作的一部分，也可单独使用） */
-  function reparentNode(nodeId: string, newParentId: string): void {
-    const oldFields = captureNodeFields(nodeStore, nodeId, ['parentId'])
-    nodeStore.reparentNode(nodeId, newParentId)
-    history.pushCommand({
-      nodeChanges: [
-        {
-          type: 'modify',
-          id: nodeId,
-          old: oldFields ?? undefined,
-          new: { parentId: newParentId },
-        },
-      ],
-      connChanges: [],
-    })
-  }
-
   /**
    * 跨视图 reparent 节点（拖拽到内联视图 / 拖回主视图）。
    *
@@ -326,61 +309,16 @@ export function useCommands() {
       return { id, oldParentId: node.parentId, oldX: node.x, oldY: node.y }
     })
 
-    // ── 4. 收集所有原父级（跨视图选中时节点可能来自不同父级，去重）──
-    const sourceParentIds = new Set<string>()
-    for (const ov of oldValues) {
-      if (ov.oldParentId) sourceParentIds.add(ov.oldParentId)
-    }
-    if (sourceParentIds.size === 0) return
+    // ── 4. 收集内外连线（内部随迁到目标父级、外部删除）──
+    const { internal: capturedInternalConns, external: capturedExternalConns } =
+      nodeStore.collectNodeConnections(filteredIds)
 
-    // ── 5. 连线分类：遍历每个原父级的连线 ──
-    // 内部连线（两端均在迁移集合）-- 迁移到目标父级
-    // 外部连线（仅一端在迁移集合）-- reparent 后不再是同级关系，删除
-    // 每条连线记录来源父级，用于 move/delete 和 DataPatch
-    const idSet = new Set(filteredIds)
-    const capturedInternalConns: Array<{ conn: Connection; sourceParentId: string }> = []
-    const capturedExternalConns: Array<{ conn: Connection; sourceParentId: string }> = []
-    for (const spId of sourceParentIds) {
-      const allConns = nodeStore.getConnections(spId)
-      for (const c of allConns) {
-        const inFrom = idSet.has(c.fromNodeId)
-        const inTo = idSet.has(c.toNodeId)
-        if (inFrom && inTo) {
-          capturedInternalConns.push({ conn: deepClone(c), sourceParentId: spId })
-        } else if (inFrom || inTo) {
-          capturedExternalConns.push({ conn: deepClone(c), sourceParentId: spId })
-        }
-      }
-    }
-
-    // ── 6. 执行 ──（包裹视图协调：reparent 后宿主节点可能离开主视图层级，需清理内联视图）
+    // ── 5. 执行 ──（包裹视图协调：reparent 后宿主节点可能离开主视图层级，需清理内联视图）
     history.runWithViewCoord(() => {
-      // 迁移内部连线：按来源父级分组 moveConnections
-      const internalBySource = new Map<string, string[]>()
-      for (const item of capturedInternalConns) {
-        let arr = internalBySource.get(item.sourceParentId)
-        if (!arr) {
-          arr = []
-          internalBySource.set(item.sourceParentId, arr)
-        }
-        arr.push(item.conn.id)
-      }
-      internalBySource.forEach((connIds, spId) => {
-        nodeStore.moveConnections(spId, targetParentId, connIds)
-      })
-      // 删除外部连线：按来源父级分组 deleteConnections
-      const externalBySource = new Map<string, string[]>()
-      for (const item of capturedExternalConns) {
-        let arr = externalBySource.get(item.sourceParentId)
-        if (!arr) {
-          arr = []
-          externalBySource.set(item.sourceParentId, arr)
-        }
-        arr.push(item.conn.id)
-      }
-      externalBySource.forEach((connIds, spId) => {
-        nodeStore.deleteConnections(spId, connIds)
-      })
+      // 迁移内部连线到目标父级
+      nodeStore.migrateConnectionsToParent(capturedInternalConns, targetParentId)
+      // 删除外部连线
+      nodeStore.removeConnectionsBySource(capturedExternalConns)
       // reparent + 位置更新
       for (const id of filteredIds) {
         nodeStore.reparentNode(id, targetParentId)
@@ -680,128 +618,41 @@ export function useCommands() {
 
     const currentViewId = project.currentNodeId
 
-    // ── 捕获旧值 ──
-    const oldParents = ids.map((id) => ({
-      id,
-      parentId: nodeStore.getNode(id)?.parentId ?? null,
-    }))
-    const idSet = new Set(ids)
-
-    // ── 收集所有原父级（跨视图选中时节点可能来自不同父级，去重）──
-    const sourceParentIds = new Set<string>()
-    for (const op of oldParents) {
-      if (op.parentId) sourceParentIds.add(op.parentId)
+    // ── 计算包围盒中心 ──
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const id of ids) {
+      const n = nodeStore.getNode(id)
+      if (!n) continue
+      minX = Math.min(minX, n.x)
+      minY = Math.min(minY, n.y)
+      maxX = Math.max(maxX, n.x + n.width)
+      maxY = Math.max(maxY, n.y + n.height)
     }
+    const centerX = (minX + maxX) / 2 - DEFAULT_NODE_WIDTH / 2
+    const centerY = (minY + maxY) / 2 - DEFAULT_NODE_HEIGHT / 2
 
-    // ── 连线分类：遍历每个原父级的连线 ──
-    // 内部连线（两端均在选中集合）-- 迁移到容器
-    // 外部连线（仅一端在选中集合）-- reparent 后不再是同级关系，删除
-    // 每条连线记录来源父级，用于 move/delete 和 DataPatch
-    const capturedInternalConns: Array<{ conn: Connection; sourceParentId: string }> = []
-    const capturedExternalConns: Array<{ conn: Connection; sourceParentId: string }> = []
-    for (const spId of sourceParentIds) {
-      const allConns = nodeStore.getConnections(spId)
-      for (const c of allConns) {
-        const inFrom = idSet.has(c.fromNodeId)
-        const inTo = idSet.has(c.toNodeId)
-        if (inFrom && inTo) {
-          capturedInternalConns.push({ conn: deepClone(c), sourceParentId: spId })
-        } else if (inFrom || inTo) {
-          capturedExternalConns.push({ conn: deepClone(c), sourceParentId: spId })
-        }
-      }
-    }
-
-    // ── 执行 ──（包裹视图协调：组合后宿主节点可能离开主视图层级，需清理内联视图）
-    let containerId = ''
-    history.runWithViewCoord(() => {
-      // 计算包围盒中心
-      let minX = Infinity
-      let minY = Infinity
-      let maxX = -Infinity
-      let maxY = -Infinity
-      for (const id of ids) {
-        const n = nodeStore.getNode(id)
-        if (!n) continue
-        minX = Math.min(minX, n.x)
-        minY = Math.min(minY, n.y)
-        maxX = Math.max(maxX, n.x + n.width)
-        maxY = Math.max(maxY, n.y + n.height)
-      }
-      const centerX = (minX + maxX) / 2 - DEFAULT_NODE_WIDTH / 2
-      const centerY = (minY + maxY) / 2 - DEFAULT_NODE_HEIGHT / 2
-
-      // 新建容器节点（放主视图当前层级）
-      containerId = nodeStore.addNode(currentViewId, centerX, centerY, '组合')
-
-      // 迁移内部连线：按来源父级分组 moveConnections
-      const internalBySource = new Map<string, string[]>()
-      for (const item of capturedInternalConns) {
-        let arr = internalBySource.get(item.sourceParentId)
-        if (!arr) {
-          arr = []
-          internalBySource.set(item.sourceParentId, arr)
-        }
-        arr.push(item.conn.id)
-      }
-      internalBySource.forEach((connIds, spId) => {
-        nodeStore.moveConnections(spId, containerId, connIds)
-      })
-
-      // 删除外部连线：按来源父级分组 deleteConnections
-      const externalBySource = new Map<string, string[]>()
-      for (const item of capturedExternalConns) {
-        let arr = externalBySource.get(item.sourceParentId)
-        if (!arr) {
-          arr = []
-          externalBySource.set(item.sourceParentId, arr)
-        }
-        arr.push(item.conn.id)
-      }
-      externalBySource.forEach((connIds, spId) => {
-        nodeStore.deleteConnections(spId, connIds)
-      })
-
-      // reparent 所有选中节点到容器（不关系原父级，迁移后同级）
-      for (const id of ids) {
-        nodeStore.reparentNode(id, containerId)
-      }
-    })
+    // ── 新建容器节点（放主视图当前层级）──
+    const containerId = nodeStore.addNode(currentViewId, centerX, centerY, '组合')
     const containerNode = captureNodeFull(nodeStore, containerId)
 
-    // ── 入栈复合命令 ──
-    const nodeChanges: NodeChange[] = [
-      { type: 'add', id: containerId, new: containerNode ?? undefined },
-      ...ids.map((id, i) => ({
-        type: 'modify' as const,
-        id,
-        old: { parentId: oldParents[i].parentId ?? undefined },
-        new: { parentId: containerId },
-      })),
-    ]
-    const connChanges: ConnectionChange[] = [
-      // 内部连线：从来源父级删除 + 加到容器
-      ...capturedInternalConns.map((item) => ({
-        type: 'remove' as const,
-        parentId: item.sourceParentId,
-        connectionId: item.conn.id,
-        connection: deepClone(item.conn),
-      })),
-      ...capturedInternalConns.map((item) => ({
-        type: 'add' as const,
-        parentId: containerId,
-        connectionId: item.conn.id,
-        connection: deepClone(item.conn),
-      })),
-      // 外部连线：从来源父级删除
-      ...capturedExternalConns.map((item) => ({
-        type: 'remove' as const,
-        parentId: item.sourceParentId,
-        connectionId: item.conn.id,
-        connection: deepClone(item.conn),
-      })),
-    ]
-    history.pushCommand({ nodeChanges, connChanges })
+    // ── 组合 ≈ 新建容器节点 + reparentTo 到容器（batch 合并为单条历史）──
+    history.beginBatch()
+    try {
+      history.pushCommand({
+        nodeChanges: [
+          { type: 'add', id: containerId, new: containerNode ?? undefined },
+        ],
+        connChanges: [],
+      })
+      // reparentTo 内部完成：迁移内部连线 / 删除外部连线 / reparent 全部选中节点。
+      // 传空 newPositions，节点在原位成为容器的子级。
+      reparentTo(ids, containerId, new Map())
+    } finally {
+      history.commitBatch()
+    }
 
     return containerId
   }
@@ -863,7 +714,6 @@ export function useCommands() {
     setNodesText,
     updateNodesStyle,
     commitNodeResize,
-    reparentNode,
     reparentTo,
     // 连线
     addConnection,

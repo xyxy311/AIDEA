@@ -172,6 +172,18 @@ export const useHistoryStore = defineStore('history', () => {
 
     const mainView = useViewStore('main')
 
+    // 计算当前仍有效的连线 ID 集合（连线嵌套在父节点 connections 数组）
+    const validConnectionIds = new Set<string>()
+    for (const node of nodeStore.nodes.values()) {
+      for (const c of node.connections) validConnectionIds.add(c.id)
+    }
+
+    // 0. 清理选中：移除已不存在节点/连线的选中
+    //    删除 / undo-redo 后 selectedNodeIds 可能仍持有被删除的节点，
+    //    导致全局 Transformer 残留附着在失效节点上。仅当选中集合变化时替换 Set，
+    //    使 CanvasStage 对 selectedNodeIds 的 watch 触发并重新附着（含清空）Transformer。
+    mainView.pruneSelection(afterIds, validConnectionIds)
+
     // 1. 销毁无效的内联视图实例
     //    - 宿主节点被删除
     //    - 宿主节点不再是主视图当前节点的直接子级（如被组合 / reparent 到其他层级）

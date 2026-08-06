@@ -14,6 +14,7 @@ import { generateId } from '@/utils/id'
 import { createNode, createConnection } from '@/utils/factory'
 import { calculateTextContentSize } from '@/utils/geometry'
 import { extractReferenceName } from '@/utils/reference'
+import { deepClone } from '@/utils/command'
 
 /** 根/项目节点 ID（全局唯一，parentId === null） */
 export const ROOT_NODE_ID = 'root'
@@ -449,6 +450,92 @@ export const useNodeStore = defineStore('node', () => {
     }
   }
 
+  // ── 迁移场景的连线收集 / 迁移辅助（组合、跨视图 reparent 共用）──
+
+  /**
+   * 按来源父级分组连线（供迁移 / 删除连线时按父级批量执行）。
+   */
+  function groupConnectionsBySource(
+    items: Array<{ conn: Connection; sourceParentId: string }>,
+  ): Map<string, string[]> {
+    const bySource = new Map<string, string[]>()
+    for (const item of items) {
+      let arr = bySource.get(item.sourceParentId)
+      if (!arr) {
+        arr = []
+        bySource.set(item.sourceParentId, arr)
+      }
+      arr.push(item.conn.id)
+    }
+    return bySource
+  }
+
+  /**
+   * 收集一组节点的相关连线（用于组合 / 迁移场景）。
+   *
+   * 遍历这些节点各自原父级持有的连线，按两端是否均在被迁移集合内分类：
+   * - internal：两端都在集合内 —— 迁移后成为新父级下的同级关系，需随迁到目标父级
+   * - external：仅一端在集合内 —— 迁移后不再是同级关系，需从原父级删除
+   *
+   * @param nodeIds 待迁移 / 组合的节点 ID 列表
+   * @returns internal / external 各含 { conn（深拷贝快照）, sourceParentId }
+   */
+  function collectNodeConnections(
+    nodeIds: string[],
+  ): {
+    internal: Array<{ conn: Connection; sourceParentId: string }>
+    external: Array<{ conn: Connection; sourceParentId: string }>
+  } {
+    const idSet = new Set(nodeIds)
+    // 收集所有原父级（跨视图选中时节点可能来自不同父级，去重）
+    const sourceParentIds = new Set<string>()
+    for (const id of nodeIds) {
+      const parentId = nodes.get(id)?.parentId
+      if (parentId) sourceParentIds.add(parentId)
+    }
+
+    const internal: Array<{ conn: Connection; sourceParentId: string }> = []
+    const external: Array<{ conn: Connection; sourceParentId: string }> = []
+    for (const spId of sourceParentIds) {
+      const allConns = nodes.get(spId)?.connections ?? []
+      for (const c of allConns) {
+        const inFrom = idSet.has(c.fromNodeId)
+        const inTo = idSet.has(c.toNodeId)
+        if (inFrom && inTo) {
+          internal.push({ conn: deepClone(c), sourceParentId: spId })
+        } else if (inFrom || inTo) {
+          external.push({ conn: deepClone(c), sourceParentId: spId })
+        }
+      }
+    }
+    return { internal, external }
+  }
+
+  /**
+   * 将内部连线迁移到目标父级（按来源父级分组执行 moveConnections）。
+   * 用于组合 / 迁移：两端均在迁移集合内的连线随迁到新父级。
+   */
+  function migrateConnectionsToParent(
+    items: Array<{ conn: Connection; sourceParentId: string }>,
+    targetParentId: string,
+  ): void {
+    groupConnectionsBySource(items).forEach((connIds, spId) => {
+      moveConnections(spId, targetParentId, connIds)
+    })
+  }
+
+  /**
+   * 删除外部连线（按来源父级分组执行 deleteConnections）。
+   * 用于组合 / 迁移：仅一端在迁移集合内的连线，迁移后不再是同级关系，需删除。
+   */
+  function removeConnectionsBySource(
+    items: Array<{ conn: Connection; sourceParentId: string }>,
+  ): void {
+    groupConnectionsBySource(items).forEach((connIds, spId) => {
+      deleteConnections(spId, connIds)
+    })
+  }
+
   /** 删除指定父节点中涉及某子节点的所有连线（子节点被删除时调用） */
   function deleteNodeConnections(parentId: string, nodeId: string): void {
     const parent = nodes.get(parentId)
@@ -553,6 +640,9 @@ export const useNodeStore = defineStore('node', () => {
     deleteConnection,
     deleteConnections,
     moveConnections,
+    collectNodeConnections,
+    migrateConnectionsToParent,
+    removeConnectionsBySource,
     deleteNodeConnections,
     updateConnection,
     applyConnectionPreset,

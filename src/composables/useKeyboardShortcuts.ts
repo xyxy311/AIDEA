@@ -13,6 +13,9 @@ import { usePresetsStore } from '@/stores/presets'
  * Ctrl/Cmd + Z       - 撤销
  * Ctrl/Cmd + Shift+Z - 重做
  * Ctrl/Cmd + Y       - 重做
+ * Ctrl/Cmd + C       - 复制选中节点（含子树与内部连线）
+ * Ctrl/Cmd + X       - 剪切选中节点
+ * Ctrl/Cmd + V       - 粘贴到当前视图
  * Delete / Backspace - 删除选中节点 / 连线
  * Escape             - 取消选中
  * A                  - 进入选中节点的子级视图（任何节点均可进入）
@@ -62,6 +65,32 @@ export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
       else if (view.selectedNodeIds.size > 0) {
         e.preventDefault()
         active.deleteSelectedNodes()
+      }
+    }
+
+    // ── 复制 / 剪切 / 粘贴（对象剪贴板，不进入撤销重做）──
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'c') {
+        if (view.selectedNodeIds.size > 0) {
+          e.preventDefault()
+          active.copySelectedNodes()
+        }
+        return
+      }
+      if (key === 'x') {
+        if (view.selectedNodeIds.size > 0) {
+          e.preventDefault()
+          active.cutSelectedNodes()
+        }
+        return
+      }
+      if (key === 'v') {
+        if (active.canPaste.value) {
+          e.preventDefault()
+          active.pasteIntoView()
+        }
+        return
       }
     }
 

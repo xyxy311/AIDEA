@@ -2,6 +2,7 @@ import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useCommands } from '@/composables/useCommands'
+import { useClipboard } from '@/composables/useClipboard'
 
 /**
  * 快捷访问当前活跃视图的 composable
@@ -30,6 +31,7 @@ export function useActiveView() {
   const project = useProjectStore()
   const nodeStore = useNodeStore()
   const commands = useCommands()
+  const clipboard = useClipboard()
 
   /** 获取主视图 store（activeViewId 固定为 'main'） */
   function view() {
@@ -90,6 +92,35 @@ export function useActiveView() {
     v.clearSelection()
   }
 
+  // ── 剪贴板编排：复制 / 剪切 / 粘贴（都不进入历史栈）──
+
+  /** 剪贴板是否有可粘贴内容 */
+  const canPaste = clipboard.canPaste
+
+  /** 复制选中节点（含子树与内部连线）到剪贴板 */
+  function copySelectedNodes(): boolean {
+    return clipboard.copy(Array.from(view().selectedNodeIds))
+  }
+
+  /** 剪切选中节点（复制到剪贴板后删除原节点），并清空选中 */
+  function cutSelectedNodes(): boolean {
+    const v = view()
+    const ok = clipboard.cut(Array.from(v.selectedNodeIds))
+    if (ok) v.clearSelection()
+    return ok
+  }
+
+  /** 粘贴剪贴板内容到当前视图，并选中新建的顶层节点 */
+  function pasteIntoView(): string[] {
+    const v = view()
+    const ids = clipboard.paste(v.viewedNodeId)
+    if (ids.length > 0) {
+      v.clearSelection()
+      v.setSelectedNodes(ids)
+    }
+    return ids
+  }
+
   return {
     project,
     nodeStore,
@@ -104,5 +135,10 @@ export function useActiveView() {
     updateSelectedConnectionsStyle,
     deleteSelectedNodes,
     deleteSelectedConnections,
+    // 剪贴板
+    canPaste,
+    copySelectedNodes,
+    cutSelectedNodes,
+    pasteIntoView,
   }
 }

@@ -198,6 +198,30 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     }
 
     /**
+     * 从选中集合中移除已不存在的节点/连线 ID（数据删除 / undo-redo 后调用）。
+     * 仅当选中集合实际变化时才替换 Set（保持引用稳定，避免无意义的渲染 / watch 触发）。
+     */
+    function pruneSelection(validNodeIds: Set<string>, validConnectionIds: Set<string>): void {
+      // 内联视图转发主视图（全局选中共享）
+      if (isInline) {
+        mainView!.pruneSelection(validNodeIds, validConnectionIds)
+        return
+      }
+      const newNodeIds = new Set(
+        Array.from(_ownSelectedNodeIds!.value).filter((id) => validNodeIds.has(id)),
+      )
+      const newConnIds = new Set(
+        Array.from(_ownSelectedConnectionIds!.value).filter((id) => validConnectionIds.has(id)),
+      )
+      if (newNodeIds.size !== _ownSelectedNodeIds!.value.size) {
+        _ownSelectedNodeIds!.value = newNodeIds
+      }
+      if (newConnIds.size !== _ownSelectedConnectionIds!.value.size) {
+        _ownSelectedConnectionIds!.value = newConnIds
+      }
+    }
+
+    /**
      * 批量设置选中节点（供框选使用）
      * - additive=false（默认）：替换当前选中为 ids，并清空连线选中
      * - additive=true：将 ids 追加到当前选中节点集合（去重），清空连线选中
@@ -331,6 +355,7 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       selectNode,
       selectConnection,
       clearSelection,
+      pruneSelection,
       setSelectedNodes,
       startEditing,
       stopEditing,

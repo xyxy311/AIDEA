@@ -5,6 +5,7 @@ import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
+import { useClipboard } from '@/composables/useClipboard'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 /**
@@ -18,6 +19,8 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
  * - handleStageContextMenu：右键弹出上下文菜单（按选中数量生成菜单项）
  *
  * 右键菜单内容：
+ * - 复制 / 剪切：有选中节点时可用
+ * - 粘贴：剪贴板有内容时可用
  * - 单选节点：进入子视图 / 清空子级（有子节点时）
  * - 多选节点：组合
  */
@@ -27,6 +30,7 @@ export function useCanvasEvents(viewId: string) {
   const contextMenu = useContextMenu()
   const link = useNodeViewLink(viewId)
   const commands = useCommands()
+  const clipboard = useClipboard()
 
   /**
    * 处理画布点击事件
@@ -70,7 +74,8 @@ export function useCanvasEvents(viewId: string) {
    * 处理画布右键菜单事件
    *
    * 阻止浏览器默认菜单，并根据当前选中状态弹出上下文菜单：
-   * - 无选中：关闭菜单
+   * - 复制 / 剪切：有选中节点时可用
+   * - 粘贴：剪贴板有内容时可用
    * - 单选节点：进入子视图 / 清空子级（有子节点时）
    * - 多选节点：组合
    */
@@ -79,12 +84,49 @@ export function useCanvasEvents(viewId: string) {
 
     const count = view.selectedNodeIds.size
 
-    if (count === 0) {
-      contextMenu.close()
-      return
+    const items: ContextMenuItem[] = []
+
+    // ── 复制 / 剪切（有选中节点时可用）──
+    if (count > 0) {
+      items.push({
+        key: 'copy',
+        label: t('canvas.copy'),
+        action: () => clipboard.copy(Array.from(view.selectedNodeIds)),
+      })
+      items.push({
+        key: 'cut',
+        label: t('canvas.cut'),
+        action: () => {
+          clipboard.cut(Array.from(view.selectedNodeIds))
+          view.clearSelection()
+        },
+      })
     }
 
-    const items: ContextMenuItem[] = []
+    // ── 粘贴（剪贴板有内容时可用）──
+    if (clipboard.canPaste.value) {
+      items.push({
+        key: 'paste',
+        label: t('canvas.paste'),
+        action: () => {
+          const ids = clipboard.paste(view.viewedNodeId)
+          if (ids.length > 0) {
+            view.clearSelection()
+            view.setSelectedNodes(ids)
+          }
+        },
+      })
+    }
+
+    // 无选中节点：仅在有可粘贴内容时显示"粘贴"，否则关闭菜单
+    if (count === 0) {
+      if (items.length === 0) {
+        contextMenu.close()
+        return
+      }
+      contextMenu.open(e.evt.clientX, e.evt.clientY, items)
+      return
+    }
 
     if (count === 1) {
       const nodeId = view.selectedNodeId

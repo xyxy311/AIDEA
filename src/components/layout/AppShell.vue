@@ -4,9 +4,12 @@
  *
  * 布局结构：
  *   ┌─────────────── MenuBar ───────────────┐
- *   ├─ LeftSidebar ─┬─ Toolbar ─┬─ RightSB ─┤
- *   │               ├─ Canvas ──┤           │
- *   └───────────────┴───────────┴───────────┘
+ *   ├ ActivityBar ┬ LeftSidebar ┬ Toolbar ┬ RightSB ┤
+ *   │             │            ├ Canvas ──┤        │
+ *   └─────────────┴────────────┴──────────┴────────┘
+ *
+ * 左侧：活动栏（ActivityBar，始终可见）+ 面板区（LeftSidebar，渲染激活面板）。
+ * 面板区收起状态由 layout store 驱动。
  *
  * 拖拽调整侧边栏宽度：
  * - 左右侧边栏边缘有可拖拽的 resize handle
@@ -15,7 +18,9 @@
  */
 import { ref, computed } from 'vue'
 import { useEventListener } from '@vueuse/core'
+import { useLayoutStore } from '@/stores/layout'
 import MenuBar from './MenuBar.vue'
+import ActivityBar from './ActivityBar.vue'
 import LeftSidebar from '@/components/panels/LeftSidebar.vue'
 import RightSidebar from '@/components/panels/RightSidebar.vue'
 import SettingsModal from '@/components/panels/SettingsModal.vue'
@@ -24,7 +29,7 @@ import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
 
 // ── 侧边栏收起状态 ──
-const leftCollapsed = ref(false)
+const layout = useLayoutStore()
 const rightCollapsed = ref(false)
 
 // ── 侧边栏宽度（默认值与 CSS 保持一致） ──
@@ -98,17 +103,19 @@ const showSettings = ref(false)
 
     <!-- 主体区域 -->
     <div class="app-body">
-      <!-- 左侧边栏 -->
+      <!-- 左侧活动栏（始终可见） -->
+      <ActivityBar />
+
+      <!-- 左侧面板区 -->
       <LeftSidebar
-        :collapsed="leftCollapsed"
+        :collapsed="layout.collapsed"
         :width="leftWidth"
         :resizing="leftResizing"
-        @toggle="leftCollapsed = !leftCollapsed"
       />
 
       <!-- 左侧 resize handle（收起态隐藏） -->
       <div
-        v-if="!leftCollapsed"
+        v-if="!layout.collapsed"
         class="resize-handle"
         :class="{ active: isDraggingLeft }"
         @pointerdown="startDragLeft"

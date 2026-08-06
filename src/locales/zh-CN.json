@@ -70,9 +70,13 @@
   },
   "leftSidebar": {
     "nodeTree": "节点树",
+    "references": "可引用节点",
     "newChild": "新建子节点",
+    "deleteCurrent": "删除当前节点",
     "deleteConfirmCurrent": "确定删除当前节点及其所有子节点？",
-    "deleteConfirmNode": "确定删除此节点及其所有子节点？"
+    "deleteConfirmNode": "确定删除此节点及其所有子节点？",
+    "refsEmpty": "暂无引用节点",
+    "deleteConfirmReference": "确定删除引用「{name}」及其所有子节点？"
   },
   "rightSidebar": {
     "connectionProps": "连线属性",

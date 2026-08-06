@@ -16,9 +16,15 @@
  * - 宽度范围：180px ~ 440px
  * - 收起态下 handle 隐藏
  */
-import { ref, computed } from 'vue'
+import { ref, computed, provide } from 'vue'
 import { useEventListener } from '@vueuse/core'
+import { useDialog } from 'naive-ui'
 import { useLayoutStore } from '@/stores/layout'
+import { useFileStore } from '@/stores/file'
+import { useViewStore } from '@/stores/view'
+import { useProjectFile } from '@/composables/useProjectFile'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { t } from '@/composables/useT'
 import MenuBar from './MenuBar.vue'
 import ActivityBar from './ActivityBar.vue'
 import LeftSidebar from '@/components/panels/LeftSidebar.vue'
@@ -94,6 +100,41 @@ useEventListener('pointerup', () => {
 })
 
 const showSettings = ref(false)
+
+// ── 项目文件（新建 / 保存 / 打开）──
+const dialog = useDialog()
+const fileStore = useFileStore()
+
+/** 确认回调：返回 true 表示确认放弃，false 表示取消 */
+function confirm(message: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    dialog.warning({
+      title: message,
+      positiveText: t('common.confirm'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false),
+      onClose: () => resolve(false),
+      onMaskClick: () => resolve(false),
+    })
+  })
+}
+
+// 单实例创建并注入，MenuBar 等子孙组件通过 inject 共享同一状态
+const projectFile = useProjectFile({ confirm })
+provide('projectFile', projectFile)
+
+// ── 键盘快捷键（全局单份，含文件快捷键）──
+const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
+useKeyboardShortcuts(isEditing, projectFile)
+
+// ── 关闭 / 刷新前脏提示 ──
+useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
+  if (fileStore.dirty) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+})
 </script>
 
 <template>

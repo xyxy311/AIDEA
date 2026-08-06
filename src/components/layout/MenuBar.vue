@@ -5,10 +5,11 @@
  * 文件菜单：新建项目、保存、导出
  * 编辑菜单：撤销、重做、设置
  */
-import { h, computed, type Component } from 'vue'
+import { h, computed, inject, type Component } from 'vue'
 import { NDropdown, NButton, type DropdownOption } from 'naive-ui'
-import { AddOutline, SaveOutline, ArrowUndoOutline, ArrowRedoOutline, SettingsOutline } from '@vicons/ionicons5'
+import { AddOutline, SaveOutline, FolderOpenOutline, ArrowUndoOutline, ArrowRedoOutline, SettingsOutline } from '@vicons/ionicons5'
 import { useCommands } from '@/composables/useCommands'
+import type { ProjectFileApi } from '@/composables/useProjectFile'
 import { t } from '@/composables/useT'
 
 const emit = defineEmits<{
@@ -17,6 +18,9 @@ const emit = defineEmits<{
 
 const commands = useCommands()
 
+// 从 AppShell 注入的项目文件操作（单实例共享状态）
+const projectFile = inject<ProjectFileApi | undefined>('projectFile')
+
 function renderIcon(icon: Component) {
   return () => h(icon)
 }
@@ -24,6 +28,8 @@ function renderIcon(icon: Component) {
 const fileOptions = computed<DropdownOption[]>(() => [
   { label: t('menuBar.newProject'), key: 'new-project', icon: renderIcon(AddOutline) },
   { type: 'divider', key: 'd1' },
+  { label: t('menuBar.open'), key: 'open', icon: renderIcon(FolderOpenOutline) },
+  { type: 'divider', key: 'd2' },
   { label: t('menuBar.save'), key: 'save', icon: renderIcon(SaveOutline) },
 ])
 
@@ -31,7 +37,7 @@ const fileOptions = computed<DropdownOption[]>(() => [
 const editOptions = computed<DropdownOption[]>(() => [
   { label: t('menuBar.undo'), key: 'undo', icon: renderIcon(ArrowUndoOutline), disabled: !commands.canUndo.value },
   { label: t('menuBar.redo'), key: 'redo', icon: renderIcon(ArrowRedoOutline), disabled: !commands.canRedo.value },
-  { type: 'divider', key: 'd2' },
+  { type: 'divider', key: 'd3' },
   { label: t('menuBar.settings'), key: 'settings', icon: renderIcon(SettingsOutline) },
 ])
 
@@ -48,8 +54,18 @@ function handleSelect(key: string): void {
     commands.redo()
     return
   }
-  // 预留：其他功能暂不实现
-  console.log('[MenuBar]', key)
+  if (key === 'new-project') {
+    projectFile?.newProject()
+    return
+  }
+  if (key === 'open') {
+    projectFile?.openProject()
+    return
+  }
+  if (key === 'save') {
+    projectFile?.saveProject()
+    return
+  }
 }
 </script>
 

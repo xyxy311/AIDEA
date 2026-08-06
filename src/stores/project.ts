@@ -240,6 +240,26 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  /**
+   * 重置为新项目（新建 / 打开项目时调用）。
+   * 清空视图快照、展开态，销毁所有内联视图实例，重置主视图（视口归零、清选中）。
+   */
+  function resetForNewProject(): void {
+    viewSnapshots.clear()
+    expandedIds.value = new Set([ROOT_NODE_ID])
+    const view = useViewStore('main')
+    // 销毁所有内联视图实例
+    for (const iv of [...view.inlineViews]) {
+      destroyView(iv.viewId)
+    }
+    view.inlineViews = []
+    view.resetViewState()
+    view.stageX = 0
+    view.stageY = 0
+    view.stageScale = 1
+    view.viewedNodeId = ROOT_NODE_ID
+  }
+
   return {
     // 活跃视图
     activeViewId,
@@ -255,6 +275,8 @@ export const useProjectStore = defineStore('project', () => {
     // 视图切换
     switchView,
     enterNodeView,
+    // 项目级重置
+    resetForNewProject,
     // viewStore 生命周期
     destroyView,
     destroyViews,

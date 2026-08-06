@@ -6,6 +6,7 @@ import { useViewStore } from '@/stores/view'
 import type { WhiteboardNode } from '@/types'
 import type { DataPatch, HistoryEntry, NodeChange, ConnectionChange } from '@/utils/command'
 import { deepClone } from '@/utils/command'
+import { markDataDirty } from '@/utils/dirtyMarker'
 
 /** 历史栈最大深度 */
 const MAX_HISTORY = 50
@@ -264,6 +265,7 @@ export const useHistoryStore = defineStore('history', () => {
         top.timestamp = now
         // 合并后清空 future（新操作产生）
         future.value = []
+        markDataDirty()
         return
       }
     }
@@ -282,6 +284,9 @@ export const useHistoryStore = defineStore('history', () => {
     if (past.value.length > MAX_HISTORY) {
       past.value.shift()
     }
+
+    // 数据已变更，标记为脏
+    markDataDirty()
   }
 
   /**
@@ -336,6 +341,8 @@ export const useHistoryStore = defineStore('history', () => {
       entry.patch,
     )
     future.value.push(entry)
+    // 撤销导致数据变更，标记为脏
+    markDataDirty()
   }
 
   /** 重做 */
@@ -349,6 +356,8 @@ export const useHistoryStore = defineStore('history', () => {
       entry.patch,
     )
     past.value.push(entry)
+    // 重做导致数据变更，标记为脏
+    markDataDirty()
   }
 
   /** 清空历史（新建项目时调用） */

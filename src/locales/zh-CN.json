@@ -3,10 +3,18 @@
     "file": "文件",
     "edit": "编辑",
     "newProject": "新建项目",
+    "open": "打开项目",
     "save": "保存",
     "undo": "撤销",
     "redo": "重做",
-    "settings": "设置"
+    "settings": "设置",
+    "newProjectDone": "已新建项目",
+    "saved": "已保存",
+    "opened": "已打开项目",
+    "unsavedConfirm": "当前项目有未保存的改动，确定要放弃吗？",
+    "openFailed": "打开文件失败：{message}",
+    "saveFailed": "保存失败：{message}",
+    "unsavedConfirmNeeded": "有未保存的改动，请先保存或确认"
   },
   "toolbar": {
     "title": "白板",
@@ -114,6 +122,8 @@
     "presetBorderColor": "边框色"
   },
   "common": {
-    "untitledProject": "未命名项目"
+    "untitledProject": "未命名项目",
+    "confirm": "确定",
+    "cancel": "取消"
   }
 }

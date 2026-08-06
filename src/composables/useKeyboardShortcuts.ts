@@ -23,14 +23,47 @@ import { usePresetsStore } from '@/stores/presets'
  * 1-9                - 对选中节点/连线应用对应序号预设
  * Tab                - 单选节点时展开/收起内联视图
  * R                  - 选中内联视图时自适应视图（以宽度为基准调整缩放与高度）
+ * Ctrl/Cmd + S       - 保存项目
+ * Ctrl/Cmd + O       - 打开项目
+ * Ctrl/Cmd + N       - 新建项目
+ *
+ * @param isEditing   - 是否正在文本编辑中，编辑时禁用快捷键
+ * @param projectFile - 项目文件操作（可选），提供后启用 S/O/N 文件快捷键
  */
-export function useKeyboardShortcuts(isEditing: Ref<boolean>) {
+export function useKeyboardShortcuts(
+  isEditing: Ref<boolean>,
+  projectFile?: {
+    saveProject: () => void
+    openProject: () => void
+    newProject: () => void
+  },
+) {
   const active = useActiveView()
   const link = useNodeViewLink('main')
   const commands = useCommands()
   const presets = usePresetsStore()
 
   function onKeydown(e: KeyboardEvent) {
+    // ── 文件操作快捷键（置于编辑判定之前，编辑状态下也可保存 / 打开 / 新建）──
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase()
+      if (key === 's' && projectFile) {
+        e.preventDefault()
+        projectFile.saveProject()
+        return
+      }
+      if (key === 'o' && projectFile) {
+        e.preventDefault()
+        projectFile.openProject()
+        return
+      }
+      if (key === 'n' && projectFile) {
+        e.preventDefault()
+        projectFile.newProject()
+        return
+      }
+    }
+
     // 焦点在输入框或文本域时，不触发快捷键（避免删除/退格误删节点）
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
 

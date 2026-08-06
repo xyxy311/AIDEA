@@ -248,6 +248,16 @@ export const useNodeStore = defineStore('node', () => {
     for (const id of ids) deleteNode(id)
   }
 
+  /**
+   * 整树替换（新建 / 打开项目时调用）。
+   * 直接替换全部节点，不经过历史栈（bypass 命令层，属项目级操作）。
+   * 调用方需确保传入的 Map 含根节点。
+   */
+  function replaceNodes(newNodes: Map<string, WhiteboardNode>): void {
+    nodes.clear()
+    for (const [id, n] of newNodes) nodes.set(id, n)
+  }
+
   function moveNode(nodeId: string, x: number, y: number): void {
     const node = nodes.get(nodeId)
     if (!node) return
@@ -622,6 +632,7 @@ export const useNodeStore = defineStore('node', () => {
     addNode,
     deleteNode,
     deleteNodes,
+    replaceNodes,
     moveNode,
     resizeNode,
     setNodeSize,

@@ -18,6 +18,7 @@ import {
   NScrollbar,
   NPopconfirm,
 } from 'naive-ui'
+import { useMessage } from 'naive-ui'
 import {
   AddOutline,
   TrashOutline,
@@ -53,6 +54,7 @@ const {
 
 const active = useActiveView()
 const nodeStore = useNodeStore()
+const message = useMessage()
 
 /** 画布中选中的节点 ID 集合（来自当前活跃视图） */
 const selectedSet = computed(() => active.view.selectedNodeIds)
@@ -115,7 +117,12 @@ function handleDblClick(nodeId: string, currentName: string): void {
  */
 function finishRename(): void {
   if (editingNodeId.value && renameText.value.trim()) {
-    renameNode(editingNodeId.value, renameText.value)
+    const result = renameNode(editingNodeId.value, renameText.value)
+    if (!result.ok && result.conflictRef) {
+      message.warning(t('nodeEditor.referenceNameConflict', { name: result.conflictRef }))
+      // 保持编辑态，不关闭
+      return
+    }
   }
   editingNodeId.value = null
 }

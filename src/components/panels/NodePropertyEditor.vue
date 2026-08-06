@@ -4,7 +4,7 @@
  *
  * 当选中节点时，可修改节点的文本内容和外观样式。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import type { NodePresetStyle } from '@/types'
 import {
   NInput,
@@ -18,16 +18,82 @@ import {
   NModal,
   NPopconfirm,
 } from 'naive-ui'
+import { useMessage } from 'naive-ui'
 import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import { usePresetsStore } from '@/stores/presets'
 import { useThemeStore } from '@/stores/theme'
+import { useNodeStore } from '@/stores/node'
 import { deriveBackgroundColor } from '@/utils/color'
 import { DEFAULT_NODE_STYLE } from '@/constants'
+import { extractReferenceName } from '@/utils/reference'
+import { useReferenceAutocomplete, type AutocompleteCandidate } from '@/composables/useReferenceAutocomplete'
+import TextAutocomplete from '@/components/canvas/TextAutocomplete.vue'
 
 const active = useActiveView()
 const presetsStore = usePresetsStore()
 const themeStore = useThemeStore()
+const message = useMessage()
+const nodeStore = useNodeStore()
+
+// ── @ 补全 ──
+/** 补全下拉共享逻辑 */
+const autocomplete = useReferenceAutocomplete()
+/** naive NInput 实例 ref（暴露内部 textareaElRef） */
+const inputRef = ref()
+/** 下拉定位（视口坐标） */
+const dropdownPos = ref({ x: 0, y: 0 })
+/** 重名冲突时强制 NInput 重建重读 get 值 */
+const forceTextKey = ref(0)
+
+/** 计算下拉位置：定位在内部 textarea 元素下方 */
+function updateDropdownPos(): void {
+  const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+  if (!ta) return
+  const rect = ta.getBoundingClientRect()
+  dropdownPos.value = { x: rect.left, y: rect.top + rect.height }
+}
+
+/** naive NInput @input 签名：接收 (value: string) */
+function onNInputInput(value: string): void {
+  const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+  const cursor = ta?.selectionStart ?? value.length
+  autocomplete.handleInput(value, cursor)
+  if (autocomplete.visible.value) updateDropdownPos()
+}
+
+/** 点击补全候选：插入引用名 */
+function handleAutocompleteSelect(candidate: AutocompleteCandidate): void {
+  const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+  const text = node.value?.text ?? ''
+  const cursor = ta?.selectionStart ?? text.length
+  const result = autocomplete.insertCandidate(text, cursor, candidate.name)
+  currentText.value = result.insertedText
+  autocomplete.close()
+  nextTick(() => {
+    const t = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+    t?.setSelectionRange(result.newCursorPos, result.newCursorPos)
+    t?.focus()
+  })
+}
+
+/** naive NInput @keydown：处理补全键盘导航 */
+function onNInputKeydown(e: KeyboardEvent): void {
+  const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+  const text = currentText.value
+  const cursor = ta?.selectionStart ?? text.length
+  const result = autocomplete.handleKeydown(e, text, cursor)
+  if (result === 'handled') return
+  if (result !== 'unhandled' && typeof result === 'object') {
+    e.preventDefault()
+    currentText.value = result.insertedText // 触发 setter（插入的是已有引用名不会冲突）
+    nextTick(() => {
+      const t = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
+      t?.setSelectionRange(result.newCursorPos, result.newCursorPos)
+    })
+    return
+  }
+}
 
 // 选中的节点信息
 const node = computed(() => active.nodeStore.getNode(active.view.selectedNodeId))
@@ -37,6 +103,16 @@ const currentText = computed({
   get: () => node.value?.text ?? '',
   set: (val: string) => {
     if (!node.value) return
+    // 校验引用名重名（单选时；多选时 setNodesText 会整体失败，这里也拦）
+    const refName = extractReferenceName(val)
+    const selectedId = active.view.selectedNodeId
+    if (refName && selectedId && nodeStore.isReferenceNameTaken(refName, selectedId)) {
+      autocomplete.close()
+      message.warning(t('nodeEditor.referenceNameConflict', { name: refName }))
+      // 回滚：通过 forceKey 强制 NInput 重新读取 get 值
+      forceTextKey.value++
+      return
+    }
     active.updateSelectedNodesText(val)
   },
 })
@@ -191,10 +267,23 @@ function handleSave(): void {
       <!-- 文本 -->
       <NFormItem :label="t('nodeEditor.textContent')">
         <NInput
+          :key="forceTextKey"
+          ref="inputRef"
           v-model:value="currentText"
           type="textarea"
           :autosize="{ minRows: 2, maxRows: 5 }"
           :placeholder="t('nodeEditor.textPlaceholder')"
+          @input="onNInputInput"
+          @keydown="onNInputKeydown"
+        />
+        <TextAutocomplete
+          :visible="autocomplete.visible.value"
+          :x="dropdownPos.x"
+          :y="dropdownPos.y"
+          :candidates="autocomplete.candidates.value"
+          :active-index="autocomplete.activeIndex.value"
+          @select="handleAutocompleteSelect"
+          @close="autocomplete.close"
         />
       </NFormItem>
 

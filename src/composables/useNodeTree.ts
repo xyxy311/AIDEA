@@ -154,11 +154,12 @@ export function useNodeTree() {
   /**
    * 重命名节点（更新节点文本，单一数据源）。
    * 根节点文本即项目名。通过命令层入历史栈。
+   * 返回校验结果供调用方反馈（重名冲突等）。
    */
-  function renameNode(nodeId: string, name: string): void {
+  function renameNode(nodeId: string, name: string): { ok: boolean; conflictRef?: string } {
     const trimmed = name.trim()
-    if (!trimmed) return
-    commands.updateNodeText(nodeId, trimmed)
+    if (!trimmed) return { ok: false }
+    return commands.setNodeText(nodeId, trimmed)
   }
 
   return {

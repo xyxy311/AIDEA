@@ -16,10 +16,15 @@
  * - Blur（失焦）→ 保存并关闭
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { useMessage } from 'naive-ui'
 import { DEFAULT_NODE_STYLE, NODE_PADDING } from '@/constants'
 import { useThemeStore } from '@/stores/theme'
 import { useNodeStore } from '@/stores/node'
 import { deriveBackgroundColor } from '@/utils/color'
+import { extractReferenceName } from '@/utils/reference'
+import { useReferenceAutocomplete, type AutocompleteCandidate } from '@/composables/useReferenceAutocomplete'
+import { t } from '@/composables/useT'
+import TextAutocomplete from './TextAutocomplete.vue'
 
 // ── Props ──
 const props = defineProps<{
@@ -54,6 +59,22 @@ const emit = defineEmits<{
 // ── Refs ──
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const currentText = ref(props.initialText)
+
+// ── @ 补全 ──
+/** 补全共享逻辑实例 */
+const autocomplete = useReferenceAutocomplete()
+/** 全局消息（用于重名冲突提示） */
+const message = useMessage()
+/** 下拉定位（视口坐标） */
+const dropdownPos = ref({ x: 0, y: 0 })
+
+/** 计算下拉位置：定位在 textarea 元素下方 */
+function updateDropdownPos(): void {
+  const ta = textareaRef.value
+  if (!ta) return
+  const rect = ta.getBoundingClientRect()
+  dropdownPos.value = { x: rect.left, y: rect.top + rect.height }
+}
 
 // ── 计算编辑器位置 ──
 /** themeStore 实例，用于读取当前主色 */
@@ -109,6 +130,13 @@ let saved = false
 /** 保存编辑内容 */
 function save() {
   if (saved) return
+  // 校验引用名重名：编辑器内预先校验，冲突则弹窗并保持编辑态
+  const refName = extractReferenceName(currentText.value)
+  if (refName && nodeStore.isReferenceNameTaken(refName, props.nodeId)) {
+    autocomplete.close()
+    message.warning(t('nodeEditor.referenceNameConflict', { name: refName }))
+    return
+  }
   saved = true
   emit('save', props.nodeId, currentText.value)
 }
@@ -120,8 +148,47 @@ function cancel() {
   emit('cancel')
 }
 
+/** 输入事件：更新文本并处理补全 */
+function onInput(e: Event) {
+  const ta = e.target as HTMLTextAreaElement
+  currentText.value = ta.value
+  const cursor = ta.selectionStart ?? ta.value.length
+  autocomplete.handleInput(currentText.value, cursor)
+  if (autocomplete.visible.value) updateDropdownPos()
+}
+
+/** 点击补全候选：插入引用名 */
+function handleAutocompleteSelect(candidate: AutocompleteCandidate) {
+  const cursor = textareaRef.value?.selectionStart ?? currentText.value.length
+  const result = autocomplete.insertCandidate(currentText.value, cursor, candidate.name)
+  currentText.value = result.insertedText
+  autocomplete.close()
+  nextTick(() => {
+    const ta = textareaRef.value
+    if (ta) ta.setSelectionRange(result.newCursorPos, result.newCursorPos)
+    ta?.focus()
+  })
+}
+
 /** 键盘事件处理 */
 function onKeydown(e: KeyboardEvent) {
+  // 优先处理补全键
+  const result = autocomplete.handleKeydown(
+    e,
+    currentText.value,
+    textareaRef.value?.selectionStart ?? currentText.value.length,
+  )
+  if (result === 'handled') return
+  if (result !== 'unhandled' && typeof result === 'object') {
+    // 插入了候选
+    currentText.value = result.insertedText
+    nextTick(() => {
+      const ta = textareaRef.value
+      if (ta) ta.setSelectionRange(result.newCursorPos, result.newCursorPos)
+    })
+    return
+  }
+  // 原有 Enter/Escape 逻辑
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     save()
@@ -137,6 +204,8 @@ function onBlur() {
   // 延迟执行，让 Enter 的 save() 先设置 saved 标志
   // 避免 blur 在 save 之前触发
   setTimeout(() => {
+    // 补全下拉打开时不因 blur 保存（下拉项用 mousedown.prevent 阻止 blur，此处兜底）
+    if (autocomplete.visible.value) return
     save()
   }, 0)
 }
@@ -145,9 +214,19 @@ function onBlur() {
 <template>
   <textarea
     ref="textareaRef"
-    v-model="currentText"
+    :value="currentText"
     :style="editorStyle"
+    @input="onInput"
     @keydown="onKeydown"
     @blur="onBlur"
+  />
+  <TextAutocomplete
+    :visible="autocomplete.visible.value"
+    :x="dropdownPos.x"
+    :y="dropdownPos.y"
+    :candidates="autocomplete.candidates.value"
+    :active-index="autocomplete.activeIndex.value"
+    @select="handleAutocompleteSelect"
+    @close="autocomplete.close"
   />
 </template>

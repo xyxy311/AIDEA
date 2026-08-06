@@ -71,8 +71,9 @@ function estimateCharWidth(char: string, fontSize: number): number {
 /**
  * 测量单行文本宽度。
  * 优先使用 Canvas API 精确测量；不可用时回退到逐字符估算。
+ * 导出供 reference.ts 复用（节点引用文本布局）。
  */
-function measureLineWidth(text: string, fontSize: number, fontFamily: string): number {
+export function measureLineWidth(text: string, fontSize: number, fontFamily: string): number {
   if (!text) return 0
 
   const ctx = getMeasureCtx()

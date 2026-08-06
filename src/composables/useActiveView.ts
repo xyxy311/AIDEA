@@ -52,7 +52,7 @@ export function useActiveView() {
 
   /** 批量更新选中节点文本 */
   function updateSelectedNodesText(text: string): void {
-    commands.updateNodesText(Array.from(view().selectedNodeIds), text)
+    commands.setNodesText(Array.from(view().selectedNodeIds), text)
   }
 
   /** 批量更新选中连线样式 */

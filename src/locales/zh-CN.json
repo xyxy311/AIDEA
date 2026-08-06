@@ -43,7 +43,9 @@
     "presetBorderColor": "边框色",
     "cancel": "取消",
     "save": "保存",
-    "selectNodeHint": "选中一个节点以编辑属性"
+    "selectNodeHint": "选中一个节点以编辑属性",
+    "referenceNameConflict": "引用名「{name}」已被占用，请更换",
+    "referenceNoMatch": "无可引用节点"
   },
   "connectionEditor": {
     "unnamedNode": "未命名节点",

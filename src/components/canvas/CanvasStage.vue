@@ -18,6 +18,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useThemeStore } from '@/stores/theme'
+import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
@@ -65,6 +66,7 @@ const view = useViewStore(props.viewId)
 const nodeStore = useNodeStore()
 const theme = useThemeStore()
 const commands = useCommands()
+const project = useProjectStore()
 
 // ── Stage 尺寸 ──
 // 主视图用窗口尺寸；内联视图用容器尺寸（通过 props 传入）
@@ -369,6 +371,11 @@ function cancelTextEdit(): void {
   view.stopEditing()
 }
 
+/** 点击引用片段：跳转到被引用节点子视图 */
+function handleReferenceClick(targetNodeId: string): void {
+  project.switchView(targetNodeId)
+}
+
 // ── 连线选中 ──
 
 /** 连线点击：选中或取消选中（支持 Ctrl 多选） */
@@ -580,6 +587,7 @@ function handleStageMouseUp(e: unknown): void {
             :ref="(el: unknown) => setNodeRef(node.id, el)"
             :node-id="node.id"
             @dblclick="startTextEdit"
+            @reference-click="handleReferenceClick"
           />
         </template>
 

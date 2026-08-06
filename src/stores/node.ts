@@ -13,6 +13,7 @@ import { t } from '@/composables/useT'
 import { generateId } from '@/utils/id'
 import { createNode, createConnection } from '@/utils/factory'
 import { calculateTextContentSize } from '@/utils/geometry'
+import { extractReferenceName } from '@/utils/reference'
 
 /** 根/项目节点 ID（全局唯一，parentId === null） */
 export const ROOT_NODE_ID = 'root'
@@ -64,6 +65,21 @@ export const useNodeStore = defineStore('node', () => {
         if (arr) arr.push(n.id)
         else idx.set(n.parentId, [n.id])
       }
+    }
+    return idx
+  })
+
+  /**
+   * 引用名 -> 节点 ID 的派生索引（仅 text 以 # 开头的节点，根节点排除）。
+   * 冲突时先到先得（Map 迭代序，确定性）。
+   */
+  const referenceIndex = computed<Map<string, string>>(() => {
+    const idx = new Map<string, string>()
+    for (const n of nodes.values()) {
+      if (n.parentId === null) continue
+      const name = extractReferenceName(n.text)
+      if (!name) continue
+      if (!idx.has(name)) idx.set(name, n.id)
     }
     return idx
   })
@@ -145,6 +161,29 @@ export const useNodeStore = defineStore('node', () => {
       if (conn) return { parentId: nodeId, connection: conn }
     }
     return null
+  }
+
+  // ── 引用查询 ──
+
+  /** 按引用名查节点 ID；不存在返回 null */
+  function getReferenceNodeId(name: string): string | null {
+    return referenceIndex.value.get(name) ?? null
+  }
+
+  /** 所有可引用节点（引用名 -> 节点 ID），按引用名字典序排序 */
+  function referenceableNodes(): { name: string; nodeId: string }[] {
+    const result: { name: string; nodeId: string }[] = []
+    for (const [name, nodeId] of referenceIndex.value) {
+      result.push({ name, nodeId })
+    }
+    result.sort((a, b) => a.name.localeCompare(b.name))
+    return result
+  }
+
+  /** 引用名是否已被其他节点占用（排除 excludeNodeId 自身） */
+  function isReferenceNameTaken(name: string, excludeNodeId: string): boolean {
+    const nodeId = referenceIndex.value.get(name)
+    return nodeId !== undefined && nodeId !== excludeNodeId
   }
 
   // ── 节点 CRUD ──
@@ -290,16 +329,8 @@ export const useNodeStore = defineStore('node', () => {
 
   // ── 节点文本 ──
 
-  /** 设置节点文本并结束编辑态（编辑态清除由 viewStore 负责，此处仅改数据） */
+  /** 设置节点文本并结束编辑态 */
   function setNodeText(nodeId: string, text: string): void {
-    const node = nodes.get(nodeId)
-    if (!node) return
-    node.text = text
-    fitNodeToText(nodeId)
-  }
-
-  /** 更新节点文本（不改变编辑状态），供侧边栏属性编辑器使用 */
-  function updateNodeText(nodeId: string, text: string): void {
     const node = nodes.get(nodeId)
     if (!node) return
     node.text = text
@@ -341,7 +372,7 @@ export const useNodeStore = defineStore('node', () => {
   }
 
   /** 批量更新多个节点的文本内容（按 ID 列表） */
-  function updateNodesText(ids: string[], text: string): void {
+  function setNodesText(ids: string[], text: string): void {
     for (const id of ids) {
       const node = nodes.get(id)
       if (!node) continue
@@ -485,6 +516,7 @@ export const useNodeStore = defineStore('node', () => {
     nodes,
     // Getters
     childrenIndex,
+    referenceIndex,
     rootNode,
     // 查询
     getNode,
@@ -495,6 +527,10 @@ export const useNodeStore = defineStore('node', () => {
     pathToRoot,
     getConnections,
     findConnectionById,
+    // 引用查询
+    getReferenceNodeId,
+    referenceableNodes,
+    isReferenceNameTaken,
     // 节点 CRUD
     addNode,
     deleteNode,
@@ -505,13 +541,12 @@ export const useNodeStore = defineStore('node', () => {
     fitNodeToText,
     // 节点文本
     setNodeText,
-    updateNodeText,
     // 节点样式
     setNodeBorderColor,
     applyPresetStyle,
     resetNodeStyle,
     updateNodesStyle,
-    updateNodesText,
+    setNodesText,
     reparentNode,
     // 连线
     addConnection,

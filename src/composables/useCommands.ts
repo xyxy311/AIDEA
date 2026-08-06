@@ -15,6 +15,7 @@ import {
   type NodeChange,
   type ConnectionChange,
 } from '@/utils/command'
+import { extractReferenceName } from '@/utils/reference'
 
 /**
  * 命令层 - 数据写操作的统一入口
@@ -134,15 +135,24 @@ export function useCommands() {
   // ── 节点文本 ──
 
   /**
-   * 设置节点文本（内联编辑器保存）。
+   * 设置节点文本。
    * 会触发 fitNodeToText，old/new 含 fit 后的尺寸。
    * coalesceKey 用于属性面板连续输入合并。
+   *
+   * 重名校验：若新文本以 `#` 开头且引用名已被其他节点占用，则不执行写入、不入栈，
+   * 返回 `{ ok: false, conflictRef }`。否则正常执行并入栈，返回 `{ ok: true }`。
+   *
+   * @returns 是否成功；失败时携带冲突的引用名
    */
-  function setNodeText(nodeId: string, text: string): void {
+  function setNodeText(nodeId: string, text: string): { ok: boolean; conflictRef?: string } {
+    const refName = extractReferenceName(text)
+    if (refName && nodeStore.isReferenceNameTaken(refName, nodeId)) {
+      return { ok: false, conflictRef: refName }
+    }
     const oldFields = captureNodeFields(nodeStore, nodeId, ['text', 'width', 'height'])
     nodeStore.setNodeText(nodeId, text)
     const newFields = captureNodeFields(nodeStore, nodeId, ['text', 'width', 'height'])
-    if (oldFields?.text === newFields?.text) return
+    if (oldFields?.text === newFields?.text) return { ok: true }
     history.pushCommand(
       {
         nodeChanges: [
@@ -157,39 +167,33 @@ export function useCommands() {
       },
       { coalesceKey: `text-${nodeId}` },
     )
+    return { ok: true }
   }
 
   /**
-   * 更新节点文本（属性面板 / 侧边栏重命名）。
-   * 与 setNodeText 类似但用 updateNodeText（不改编辑状态）。
+   * 批量更新选中节点文本。
+   *
+   * 重名校验：若新文本以 `#` 开头且 ids 多于 1 个，则这些节点彼此重名，视为冲突整批失败；
+   * 若 ids 仅 1 个，则校验该节点是否与已有引用重名（排除自身）。
+   * 任一冲突都不执行写入、不入栈，返回 `{ ok: false, conflictRef }`。
+   *
+   * @returns 是否成功；失败时携带冲突的引用名
    */
-  function updateNodeText(nodeId: string, text: string): void {
-    const oldFields = captureNodeFields(nodeStore, nodeId, ['text', 'width', 'height'])
-    nodeStore.updateNodeText(nodeId, text)
-    const newFields = captureNodeFields(nodeStore, nodeId, ['text', 'width', 'height'])
-    history.pushCommand(
-      {
-        nodeChanges: [
-          {
-            type: 'modify',
-            id: nodeId,
-            old: oldFields ?? undefined,
-            new: newFields ?? undefined,
-          },
-        ],
-        connChanges: [],
-      },
-      { coalesceKey: `text-${nodeId}` },
-    )
-  }
-
-  /** 批量更新选中节点文本 */
-  function updateNodesText(ids: string[], text: string): void {
-    if (ids.length === 0) return
+  function setNodesText(ids: string[], text: string): { ok: boolean; conflictRef?: string } {
+    if (ids.length === 0) return { ok: true }
+    const refName = extractReferenceName(text)
+    if (refName) {
+      if (ids.length > 1) {
+        return { ok: false, conflictRef: refName }
+      }
+      if (nodeStore.isReferenceNameTaken(refName, ids[0])) {
+        return { ok: false, conflictRef: refName }
+      }
+    }
     const oldFieldsList = ids.map((id) =>
       captureNodeFields(nodeStore, id, ['text', 'width', 'height']),
     )
-    nodeStore.updateNodesText(ids, text)
+    nodeStore.setNodesText(ids, text)
     const newFieldsList = ids.map((id) =>
       captureNodeFields(nodeStore, id, ['text', 'width', 'height']),
     )
@@ -206,6 +210,7 @@ export function useCommands() {
       },
       { coalesceKey: `text-${sortedKey}` },
     )
+    return { ok: true }
   }
 
   // ── 节点样式 ──
@@ -855,8 +860,7 @@ export function useCommands() {
     deleteNodes,
     commitNodeMove,
     setNodeText,
-    updateNodeText,
-    updateNodesText,
+    setNodesText,
     updateNodesStyle,
     commitNodeResize,
     reparentNode,

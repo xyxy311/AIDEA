@@ -2,11 +2,15 @@
 /**
  * WhiteboardNode - 白板节点组件
  *
- * 单个可调整大小的白板节点，使用 vue-konva 的 v-group + v-rect + v-text 组合渲染。
+ * 单个可调整大小的白板节点，使用 vue-konva 的 v-group + v-rect + 多片段 v-text 组合渲染。
+ *
+ * 文本渲染：将节点文本解析为多行多片段（`@引用` 片段高亮、下划线、可点击跳转），
+ * 普通文本片段 `listening:false` 不拦截节点拖动/选中。
  *
  * 交互：
  * - 选中与拖动由 canvas 层的 useNodeDragging 统一处理
  * - 双击 → 开始文本编辑（emit dblclick）
+ * - 点击引用片段 → 跳转到被引用节点（emit referenceClick）
  * - Transformer → 调整大小（transformend 时同步尺寸到 store）
  */
 import { ref, computed } from 'vue'
@@ -16,6 +20,12 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
 import { useThemeStore } from '@/stores/theme'
 import { deriveBackgroundColor } from '@/utils/color'
+import {
+  parseReferenceSegments,
+  layoutReferenceText,
+  type Segment,
+} from '@/utils/reference'
+import { measureLineWidth } from '@/utils/geometry'
 import {
   DEFAULT_NODE_STYLE,
   NODE_PADDING,
@@ -32,6 +42,8 @@ const props = defineProps<{
 // ── Emits ──
 const emit = defineEmits<{
   dblclick: [nodeId: string]
+  /** 点击引用片段时触发，携带被引用节点 ID（由 CanvasStage 处理跳转） */
+  referenceClick: [targetNodeId: string]
 }>()
 
 // ── Store ──
@@ -71,30 +83,71 @@ const rectConfig = computed(() => {
   }
 })
 
-/** 节点文本配置 */
-const textConfig = computed(() => {
+/**
+ * 文本布局：把节点文本解析并布局为多行多片段，叠加 padding 与垂直居中偏移，
+ * 产出可直接给 v-text 用的绝对坐标（相对 group）。
+ *
+ * 每行内片段 x 由"行起点 + 该片段前所有片段宽度之和"累加计算。
+ */
+const layoutLines = computed(() => {
   const n = node.value
-  if (!n) return {}
-  const displayText: string = n.text || PLACEHOLDER_TEXT
-  const isPlaceholder: boolean = !n.text
-
-  return {
-    text: displayText,
-    width: n.width,
-    height: n.height,
-    align: 'center' as const,
-    verticalAlign: 'middle' as const,
-    fontSize: DEFAULT_NODE_STYLE.fontSize,
-    fontFamily: DEFAULT_NODE_STYLE.fontFamily,
-    lineHeight: NODE_LINE_HEIGHT,
-    // 按字符换行，确保中文也能正确断行
-    wrap: 'char' as const,
-    // 文字色随主题；占位符用灰色
-    fill: isPlaceholder ? PLACEHOLDER_TEXT_COLOR : themeStore.scheme.canvas.nodeTextColor,
-    padding: NODE_PADDING,
-  }
+  if (!n) return []
+  const isPlaceholder = !n.text
+  // 占位符不解析引用（整体作为普通文本）
+  const paragraphs = isPlaceholder
+    ? [[{ type: 'text' as const, text: PLACEHOLDER_TEXT }]]
+    : parseReferenceSegments(n.text)
+  const contentWidth = n.width - NODE_PADDING * 2
+  const fontSize = DEFAULT_NODE_STYLE.fontSize
+  const fontFamily = DEFAULT_NODE_STYLE.fontFamily
+  const lines = layoutReferenceText(paragraphs, contentWidth, fontSize, fontFamily, NODE_LINE_HEIGHT)
+  // 垂直居中：总高度，起始 y = (nodeHeight - totalHeight)/2（至少留 padding）
+  const totalHeight = lines.length * (fontSize * NODE_LINE_HEIGHT)
+  const offsetY = Math.max(NODE_PADDING, (n.height - totalHeight) / 2)
+  // 为每个片段计算绝对 x（行起点 + 行内累加宽度）
+  return lines.map((line) => {
+    let cursorX = NODE_PADDING + line.x
+    const segments = line.segments.map((seg) => {
+      const segWidth = measureLineWidth(seg.text, fontSize, fontFamily)
+      const segX = cursorX
+      cursorX += segWidth
+      return { seg, x: segX }
+    })
+    return { segments, y: offsetY + line.y }
+  })
 })
 
+/** 引用片段颜色：读主题主色（响应式，随主题/主色切换），回退绿色 */
+const refColor = computed(
+  () => themeStore.scheme.cssVars['--color-primary'] ?? '#10b981',
+)
+
+/** 单个片段的 Konva.Text 配置 */
+function buildSegConfig(item: { seg: Segment; x: number }, y: number) {
+  const fontSize = DEFAULT_NODE_STYLE.fontSize
+  const fontFamily = DEFAULT_NODE_STYLE.fontFamily
+  const isPlaceholder = !node.value?.text
+  const isRef = item.seg.type === 'ref'
+  return {
+    text: item.seg.text,
+    x: item.x,
+    y,
+    fontSize,
+    fontFamily,
+    lineHeight: NODE_LINE_HEIGHT,
+    // 单片段不换行（布局已拆好），禁用 wrap 避免重复换行
+    wrap: 'none' as const,
+    fill: isPlaceholder
+      ? PLACEHOLDER_TEXT_COLOR
+      : isRef
+        ? refColor.value
+        : themeStore.scheme.canvas.nodeTextColor,
+    // 引用片段加下划线（Konva Text 支持 textDecoration）
+    textDecoration: isRef ? ('underline' as const) : ('none' as const),
+    // 仅引用片段响应事件，普通文本穿透（避免影响节点拖动/选中）
+    listening: isRef,
+  }
+}
 
 // ── 事件处理 ──
 
@@ -102,6 +155,21 @@ const textConfig = computed(() => {
 function onDblClick(e: KonvaEventObject<MouseEvent>): void {
   if (e.evt.button !== 0) return
   emit('dblclick', props.nodeId)
+}
+
+/** 普通片段/引用片段 mousedown：引用片段阻止冒泡，避免触发节点拖动/选中 */
+function onSegMouseDown(e: KonvaEventObject<MouseEvent>, item: { seg: Segment; x: number }): void {
+  if (item.seg.type !== 'ref') return
+  e.cancelBubble = true // 阻止冒泡到 stage，避免 nodeDrag/marquee 接管
+}
+
+/** 普通片段/引用片段 click：引用片段跳转到被引用节点 */
+function onSegClick(item: { seg: Segment; x: number }): void {
+  if (item.seg.type !== 'ref' || !item.seg.refName) return
+  const targetId = nodeStore.getReferenceNodeId(item.seg.refName)
+  if (targetId) {
+    emit('referenceClick', targetId)
+  }
 }
 
 defineExpose({
@@ -121,6 +189,14 @@ defineExpose({
     @dblclick="onDblClick"
   >
     <v-rect ref="rectRef" :config="rectConfig" />
-    <v-text :config="textConfig" />
+    <template v-for="(line, lineIdx) in layoutLines" :key="lineIdx">
+      <v-text
+        v-for="(item, segIdx) in line.segments"
+        :key="`${lineIdx}-${segIdx}`"
+        :config="buildSegConfig(item, line.y)"
+        @mousedown="onSegMouseDown($event, item)"
+        @click="onSegClick(item)"
+      />
+    </template>
   </v-group>
 </template>

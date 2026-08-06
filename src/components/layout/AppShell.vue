@@ -21,6 +21,7 @@ import RightSidebar from '@/components/panels/RightSidebar.vue'
 import SettingsModal from '@/components/panels/SettingsModal.vue'
 import Toolbar from '@/components/toolbar/Toolbar.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
+import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
 
 // ── 侧边栏收起状态 ──
 const leftCollapsed = ref(false)
@@ -143,6 +144,9 @@ const showSettings = ref(false)
       :show="showSettings"
       @close="showSettings = false"
     />
+
+    <!-- 浮动属性编辑器（全局单实例挂载） -->
+    <FloatingPropertyEditor />
   </div>
 </template>
 

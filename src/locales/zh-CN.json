@@ -89,6 +89,26 @@
     "cut": "剪切",
     "paste": "粘贴"
   },
+  "floatingEditor": {
+    "nodeTitle": "节点",
+    "connectionTitle": "连线",
+    "color": "颜色",
+    "lineStyle": "线型",
+    "width": "粗细",
+    "directed": "有向",
+    "addPreset": "添加预设",
+    "edit": "编辑",
+    "delete": "删除",
+    "name": "名称",
+    "presetNamePlaceholder": "输入预设名称",
+    "cancel": "取消",
+    "save": "保存",
+    "newNodePreset": "新建节点预设",
+    "editNodePreset": "编辑节点预设",
+    "newConnPreset": "新建连线预设",
+    "editConnPreset": "编辑连线预设",
+    "presetBorderColor": "边框色"
+  },
   "common": {
     "untitledProject": "未命名项目"
   }

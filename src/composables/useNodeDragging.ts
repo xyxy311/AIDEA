@@ -15,6 +15,14 @@ import {
 } from '@/utils/view'
 
 /**
+ * 全局共享：当前是否正在拖拽节点（跨视图实例同步）。
+ * 每个 useNodeDragging 实例持有局部 isDragging，此处为模块级共享信号，
+ * 供浮动属性编辑器等全局 UI 感知拖拽状态（拖拽期间隐藏自身）。
+ * 同一时刻仅一个视图实例在拖拽，故单一布尔即可。
+ */
+export const globalIsDraggingNode = ref(false)
+
+/**
  * 节点拖动交互 Composable
  *
  * 以纯鼠标事件驱动节点拖拽（替代 Konva 原生 draggable），统一在
@@ -126,6 +134,7 @@ export function useNodeDragging(viewId: string) {
   /** 清理拖拽状态（含视图状态恢复） */
   function cleanupDragState(): void {
     isDragging.value = false
+    globalIsDraggingNode.value = false
     pendingNodeId = null
     pendingStart = null
     dragStartPositions.clear()
@@ -311,6 +320,7 @@ export function useNodeDragging(viewId: string) {
 
       // 激活拖动
       isDragging.value = true
+      globalIsDraggingNode.value = true
 
       // 若被拖节点未选中，单选它（拖动一个未选中节点意味着"我要移动这个节点"）
       if (!view.selectedNodeIds.has(pendingNodeId)) {

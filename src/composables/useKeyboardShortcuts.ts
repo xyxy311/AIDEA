@@ -170,7 +170,8 @@ export function useKeyboardShortcuts(
           e.preventDefault()
           commands.updateConnectionsStyleByIds(
             Array.from(view.selectedConnectionIds),
-            { lineStyle: preset.lineStyle, strokeWidth: preset.strokeWidth, strokeColor: preset.strokeColor, directed: preset.directed },
+            // applyText 为真时把预设名称写入连线文字
+            { lineStyle: preset.lineStyle, strokeWidth: preset.strokeWidth, strokeColor: preset.strokeColor, directed: preset.directed, ...(preset.applyText ? { text: preset.name } : {}) },
           )
         }
       }

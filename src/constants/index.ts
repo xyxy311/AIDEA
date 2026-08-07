@@ -131,23 +131,22 @@ export const BUILTIN_PRESET_GROUP_NAME: string = '内置'
 
 /** 默认节点预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
 export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type' | 'groupId'>[] = [
-  { name: '默认', borderColor: '#d1d5db' },
+  { name: '默认', borderColor: '#7d7d7dff' },
   { name: '蓝色', borderColor: '#3b82f6' },
   { name: '绿色', borderColor: '#22c55e' },
   { name: '黄色', borderColor: '#eab308' },
   { name: '红色', borderColor: '#ef4444' },
   { name: '紫色', borderColor: '#a855f7' },
-  { name: '灰色', borderColor: '#6b7280' },
   { name: '粉色', borderColor: '#ec4899' },
 ]
 
 /** 默认连线预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
 export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId'>[] = [
-  { name: '默认灰线', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true },
-  { name: '蓝色箭头', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true },
-  { name: '红色虚线', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true },
-  { name: '绿色无箭头', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false },
-  { name: '灰色点线', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false },
+  { name: '默认灰线', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
+  { name: '蓝色箭头', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },
+  { name: '红色虚线', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true, applyText: false },
+  { name: '绿色无箭头', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false, applyText: false },
+  { name: '灰色点线', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false, applyText: false },
 ]
 
 // ── 内联视图 ──

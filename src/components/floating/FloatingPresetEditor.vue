@@ -43,6 +43,7 @@ const formLineStyle = ref<LineStyle>('solid')
 const formStrokeWidth = ref(2)
 const formStrokeColor = ref('#6b7280')
 const formDirected = ref(true)
+const formApplyText = ref(true)
 
 watch(
   () => props.show,
@@ -54,6 +55,7 @@ watch(
     formStrokeWidth.value = 2
     formStrokeColor.value = '#6b7280'
     formDirected.value = true
+    formApplyText.value = true
     if (props.editing) {
       formName.value = props.editing.name
       if (props.type === 'node') {
@@ -64,6 +66,7 @@ watch(
         formStrokeWidth.value = e.strokeWidth
         formStrokeColor.value = e.strokeColor
         formDirected.value = e.directed
+        formApplyText.value = e.applyText
       }
     }
   },
@@ -93,6 +96,7 @@ function handleSave(): void {
       strokeWidth: formStrokeWidth.value,
       strokeColor: formStrokeColor.value,
       directed: formDirected.value,
+      applyText: formApplyText.value,
       groupId: presetsStore.currentConnectionGroupId,
     }
     if (id) {
@@ -146,6 +150,9 @@ function handleSave(): void {
         </NFormItem>
         <NFormItem>
           <NCheckbox v-model:checked="formDirected">{{ t('floatingEditor.directed') }}</NCheckbox>
+        </NFormItem>
+        <NFormItem>
+          <NCheckbox v-model:checked="formApplyText">{{ t('floatingEditor.applyText') }}</NCheckbox>
         </NFormItem>
       </template>
     </NForm>

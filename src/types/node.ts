@@ -96,6 +96,8 @@ export interface ConnectionPresetStyle {
   strokeWidth: number
   strokeColor: string
   directed: boolean
+  /** 应用预设时是否把预设名称写入连线文字（false = 不修改连线文字） */
+  applyText: boolean
   /** 所属分组 id；null = 未分组 */
   groupId: string | null
 }

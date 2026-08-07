@@ -86,7 +86,15 @@ function applyNodePreset(preset: NodePresetStyle | ConnectionPresetStyle): void 
 }
 
 function applyConnectionPreset(preset: NodePresetStyle | ConnectionPresetStyle): void {
-  active.updateSelectedConnectionsStyle(preset as ConnectionPresetStyle)
+  const p = preset as ConnectionPresetStyle
+  // 应用连线预设：applyText 为真时把预设名称写入连线文字
+  active.updateSelectedConnectionsStyle({
+    lineStyle: p.lineStyle,
+    strokeWidth: p.strokeWidth,
+    strokeColor: p.strokeColor,
+    directed: p.directed,
+    ...(p.applyText ? { text: p.name } : {}),
+  })
 }
 
 // ── 预设弹层 ──

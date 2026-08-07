@@ -99,9 +99,15 @@ function getDashArray(style: LineStyle): string {
   return '2,3'
 }
 
-/** 点击预设行 → 应用到选中连线 */
+/** 点击预设行 → 应用到选中连线（applyText 为真时把预设名称写入连线文字） */
 function applyPreset(preset: ConnectionPresetStyle): void {
-  active.updateSelectedConnectionsStyle(preset)
+  active.updateSelectedConnectionsStyle({
+    lineStyle: preset.lineStyle,
+    strokeWidth: preset.strokeWidth,
+    strokeColor: preset.strokeColor,
+    directed: preset.directed,
+    ...(preset.applyText ? { text: preset.name } : {}),
+  })
 }
 
 /** 删除预设 */
@@ -170,6 +176,7 @@ const formLineStyle = ref<LineStyle>('solid')
 const formStrokeWidth = ref(2)
 const formStrokeColor = ref('#6b7280')
 const formDirected = ref(true)
+const formApplyText = ref(true)
 
 function resetForm(): void {
   formName.value = ''
@@ -177,6 +184,7 @@ function resetForm(): void {
   formStrokeWidth.value = 2
   formStrokeColor.value = '#6b7280'
   formDirected.value = true
+  formApplyText.value = true
 }
 
 function openEdit(preset: ConnectionPresetStyle): void {
@@ -186,6 +194,7 @@ function openEdit(preset: ConnectionPresetStyle): void {
   formStrokeWidth.value = preset.strokeWidth
   formStrokeColor.value = preset.strokeColor
   formDirected.value = preset.directed
+  formApplyText.value = preset.applyText
   modalTitle.value = t('connectionEditor.editPreset')
   showModal.value = true
 }
@@ -200,6 +209,7 @@ function openCreate(): void {
 function openSaveCurrent(): void {
   editId.value = null
   formName.value = ''
+  formApplyText.value = true
   if (conn.value) {
     formLineStyle.value = conn.value.lineStyle
     formStrokeWidth.value = conn.value.strokeWidth
@@ -219,6 +229,7 @@ function handleSave(): void {
       strokeWidth: formStrokeWidth.value,
       strokeColor: formStrokeColor.value,
       directed: formDirected.value,
+      applyText: formApplyText.value,
     })
   } else {
     presetsStore.addConnectionPreset({
@@ -227,6 +238,7 @@ function handleSave(): void {
       strokeWidth: formStrokeWidth.value,
       strokeColor: formStrokeColor.value,
       directed: formDirected.value,
+      applyText: formApplyText.value,
       groupId: presetsStore.currentConnectionGroupId,
     })
   }
@@ -425,6 +437,9 @@ function handleSave(): void {
         </NFormItem>
         <NFormItem label="箭头">
           <NSwitch v-model:value="formDirected" />
+        </NFormItem>
+        <NFormItem :label="t('connectionEditor.applyText')">
+          <NSwitch v-model:value="formApplyText" />
         </NFormItem>
       </NForm>
       <template #footer>

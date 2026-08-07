@@ -120,6 +120,8 @@ function applyPreset(preset: NodePresetStyle | ConnectionPresetStyle): void {
       strokeWidth: p.strokeWidth,
       strokeColor: p.strokeColor,
       directed: p.directed,
+      // applyText 为真时把预设名称写入连线文字
+      ...(p.applyText ? { text: p.name } : {}),
     })
   }
 }
@@ -214,6 +216,7 @@ const formLineStyle = ref<LineStyle>('solid')
 const formStrokeWidth = ref(2)
 const formStrokeColor = ref('#6b7280')
 const formDirected = ref(true)
+const formApplyText = ref(true)
 const formGroupId = ref<string>(UNGROUPED_VALUE)
 
 /** 预设分组下拉：未分组 + 当前类型分组（含内置，便于编辑内置预设） */
@@ -233,6 +236,7 @@ function resetPresetForm(): void {
   formStrokeWidth.value = 2
   formStrokeColor.value = '#6b7280'
   formDirected.value = true
+  formApplyText.value = true
   formGroupId.value = defaultPresetGroupId()
 }
 
@@ -264,6 +268,7 @@ function openEdit(preset: NodePresetStyle | ConnectionPresetStyle): void {
     formStrokeWidth.value = preset.strokeWidth
     formStrokeColor.value = preset.strokeColor
     formDirected.value = preset.directed
+    formApplyText.value = preset.applyText
   }
   showPresetModal.value = true
 }
@@ -273,6 +278,7 @@ function openSaveCurrent(): void {
   editId.value = null
   formName.value = ''
   formGroupId.value = defaultPresetGroupId()
+  formApplyText.value = true
   if (activeType.value === 'node') {
     formBorderColor.value = selectedNode.value?.borderColor ?? '#d1d5db'
   } else if (selectedConn.value) {
@@ -302,6 +308,7 @@ function handleSavePreset(): void {
         strokeWidth: formStrokeWidth.value,
         strokeColor: formStrokeColor.value,
         directed: formDirected.value,
+        applyText: formApplyText.value,
         groupId,
       })
     } else {
@@ -311,6 +318,7 @@ function handleSavePreset(): void {
         strokeWidth: formStrokeWidth.value,
         strokeColor: formStrokeColor.value,
         directed: formDirected.value,
+        applyText: formApplyText.value,
         groupId,
       })
     }
@@ -554,6 +562,9 @@ function handleDeleteGroup(id: string): void {
           </NFormItem>
           <NFormItem :label="t('connectionEditor.directed')">
             <NSwitch v-model:value="formDirected" />
+          </NFormItem>
+          <NFormItem :label="t('connectionEditor.applyText')">
+            <NSwitch v-model:value="formApplyText" />
           </NFormItem>
         </template>
 

@@ -63,6 +63,7 @@ export const usePresetsStore = defineStore('presets', () => {
       localStorage.removeItem(key)
     } catch {
       /* 忽略清理失败 */
+      console.error('Failed to remove localStorage item:', key)
     }
     ref.value = fallback
   }
@@ -110,7 +111,15 @@ export const usePresetsStore = defineStore('presets', () => {
     ]
   }
 
+  /** 迁移旧版连线预设：补充缺失的 applyText 字段（默认 false，沿用旧行为：应用时写入连线文字） */
+  function migrateConnectionPresets(): void {
+    connectionPresets.value = connectionPresets.value.map((p) =>
+      typeof p.applyText === 'boolean' ? p : { ...p, applyText: false },
+    )
+  }
+
   function initDefaults(): void {
+    migrateConnectionPresets()
     validateStorages()
     ensureBuiltinGroup('node')
     ensureBuiltinGroup('connection')
@@ -350,7 +359,8 @@ function isValidPresetArray(value: unknown, type: 'node' | 'connection'): boolea
       typeof o.lineStyle === 'string' &&
       typeof o.strokeWidth === 'number' &&
       typeof o.strokeColor === 'string' &&
-      typeof o.directed === 'boolean'
+      typeof o.directed === 'boolean' &&
+      typeof o.applyText === 'boolean'
     )
   })
 }

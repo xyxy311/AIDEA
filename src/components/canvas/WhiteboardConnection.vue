@@ -20,6 +20,8 @@ import {
   LINE_STYLE_DASH_MAP,
   CONNECTION_ARROW_SIZE,
   CONNECTION_SELECTED_STROKE_WIDTH,
+  CONNECTION_SELECTED_LINER_PADDING,
+  CONNECTION_SELECTED_LINER_OPACITY,
   CONNECTION_LABEL_FONT_SIZE,
   CONNECTION_LABEL_LINE_HEIGHT,
   CONNECTION_LABEL_PADDING,
@@ -79,6 +81,8 @@ const geometry = computed(() => {
 })
 
 // ── 连线主体 Konva 配置 ──
+// 始终使用用户原色原粗细；选中态高亮由底层衬线（linerConfig）承担，
+// 不再用主题色替换本条线，避免干扰用户原样式。
 const lineConfig = computed(() => {
   const conn = connection.value
   const g = geometry.value
@@ -88,15 +92,44 @@ const lineConfig = computed(() => {
 
   return {
     points: [g.fx, g.fy, g.tx, g.ty],
-    stroke: props.isSelected
-      ? theme.scheme.canvas.connectionSelected
-      : conn.strokeColor,
-    strokeWidth: props.isSelected
-      ? CONNECTION_SELECTED_STROKE_WIDTH
-      : conn.strokeWidth,
+    stroke: conn.strokeColor,
+    strokeWidth: conn.strokeWidth,
     name: conn.id,
     hitStrokeWidth: 10,
     dash: dash.length > 1 ? dash : undefined,
+  }
+})
+
+// ── 选中态高亮衬线（方案 A · 高亮衬里） ──
+/**
+ * 选中时在用户原线下方叠加一层加粗、半透明的主题选中色衬线作为选中标识；
+ * 未选中时通过 visible 隐藏。宽度 = 用户粗细 + 四周扩展增量，且不低于最小选中标识宽度。
+ * 虚线样式与上层原线保持一致，保证虚实对齐、整体协调。
+ * 注意：必须"始终渲染"本节点并用 visible 切换，而非 v-if 动态创建/销毁——
+ * 否则选中时新创建的节点会被 Konva add 到 layer 末尾（最上层），高亮反而覆盖用户原线。
+ * listening:false —— 点击仍命中上层原线（事件监听保留在用户可点击的原线上）。
+ */
+const linerConfig = computed(() => {
+  const conn = connection.value
+  const g = geometry.value
+  if (!conn || !g) return { visible: false }
+
+  const dash = LINE_STYLE_DASH_MAP[conn.lineStyle]
+  const linerWidth = Math.max(
+    conn.strokeWidth + CONNECTION_SELECTED_LINER_PADDING,
+    CONNECTION_SELECTED_STROKE_WIDTH,
+  )
+
+  return {
+    visible: props.isSelected,
+    points: [g.fx, g.fy, g.tx, g.ty],
+    stroke: theme.scheme.canvas.connectionSelected,
+    strokeWidth: linerWidth,
+    opacity: CONNECTION_SELECTED_LINER_OPACITY,
+    dash: dash.length > 1 ? dash : undefined,
+    name: conn.id,
+    listening: false,
+    hitStrokeWidth: 0,
   }
 })
 
@@ -248,6 +281,9 @@ function onDblClick(e: KonvaEventObject<MouseEvent>): void {
 </script>
 
 <template>
+  <!-- 选中态衬线：始终渲染（不得用 v-if），保证 z-order 恒在底层，点击仍命中上层原线 -->
+  <v-line :config="linerConfig" />
+  <!-- 上层原线：保留用户原色原粗细与事件监听 -->
   <v-line :config="lineConfig" @click="onClick" @dblclick="onDblClick" />
   <v-line v-if="connection?.directed" :config="arrow1Config" />
   <template v-if="labelConfig">

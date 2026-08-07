@@ -106,8 +106,14 @@ export const CONNECTION_TEMP_DASH = [6, 4]
 /** 连线箭头大小 */
 export const CONNECTION_ARROW_SIZE = 8
 
-/** 选中连线的描边宽度 */
+/** 选中连线的描边宽度（现作为选中衬线的最小宽度，保证细线也有清晰选中标识） */
 export const CONNECTION_SELECTED_STROKE_WIDTH = 3
+
+/** 选中态衬线在用户原粗细基础上四周扩展的宽度增量（px） */
+export const CONNECTION_SELECTED_LINER_PADDING: number = 4
+
+/** 选中态衬线透明度（半透明，突出选中标识但不遮蔽用户原色） */
+export const CONNECTION_SELECTED_LINER_OPACITY: number = 0.6
 
 /** 连线标签文字字号（px，世界坐标） */
 export const CONNECTION_LABEL_FONT_SIZE: number = 14

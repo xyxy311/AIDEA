@@ -148,4 +148,32 @@ describe('searchNodes', () => {
     const nodes = [makeNode({ id: 'a', text: 'abc' })]
     expect(searchNodes(nodes, 'xyz')).toEqual([])
   })
+
+  it("默认 scope 保持 'project' 全项目行为", () => {
+    const nodes = [
+      makeNode({ id: 'root', text: '项目名', parentId: null }),
+      makeNode({ id: 'a', text: '需求分析' }),
+      makeNode({ id: 'b', text: '别的需求' }),
+    ]
+    // 未传 options 时默认全项目（排除根节点）
+    const res = searchNodes(nodes, '需求')
+    expect(res.map((r) => r.nodeId)).toEqual(['a', 'b'])
+  })
+
+  it("scope='view' 时只返回当前视图直接子级", () => {
+    // 三级树：root 下 a 和 b，a 下 c
+    const nodes = [
+      makeNode({ id: 'root', text: '项目名', parentId: null }),
+      makeNode({ id: 'a', text: '甲级节点' }),
+      makeNode({ id: 'b', text: '乙级节点' }),
+      makeNode({ id: 'c', text: '丙级节点', parentId: 'a' }),
+    ]
+    // project 范围：能命中全部非根节点
+    const projectRes = searchNodes(nodes, '节点')
+    expect(projectRes.map((r) => r.nodeId)).toEqual(['a', 'b', 'c'])
+
+    // view 范围（viewedNodeId='a'）：只取 a 的直接子级 c 命中，a 与 b 不命中
+    const viewRes = searchNodes(nodes, '节点', { scope: 'view', viewedNodeId: 'a' })
+    expect(viewRes.map((r) => r.nodeId)).toEqual(['c'])
+  })
 })

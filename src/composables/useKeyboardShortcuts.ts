@@ -4,6 +4,8 @@ import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useCommands } from '@/composables/useCommands'
 import { useProjectStore } from '@/stores/project'
 import { usePresetsStore } from '@/stores/presets'
+import { useLayoutStore } from '@/stores/layout'
+import { requestSearchFocus } from '@/composables/useSearchFocus'
 
 /**
  * 全局键盘快捷键
@@ -42,6 +44,7 @@ export function useKeyboardShortcuts(
   const link = useNodeViewLink('main')
   const commands = useCommands()
   const presets = usePresetsStore()
+  const layout = useLayoutStore()
 
   function onKeydown(e: KeyboardEvent) {
     // ── 文件操作快捷键（置于编辑判定之前，编辑状态下也可保存 / 打开 / 新建）──
@@ -60,6 +63,17 @@ export function useKeyboardShortcuts(
       if (key === 'n' && projectFile) {
         e.preventDefault()
         projectFile.newProject()
+        return
+      }
+    }
+
+    // Ctrl/Cmd + F：打开搜索面板并聚焦搜索输入框（置于输入框焦点守卫之前，编辑文本时也可触发）
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase()
+      if (key === 'f') {
+        e.preventDefault()
+        layout.setActive('search')
+        requestSearchFocus()
         return
       }
     }

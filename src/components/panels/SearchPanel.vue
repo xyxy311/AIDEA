@@ -9,25 +9,55 @@
  *
  * 搜索逻辑为纯函数（utils/search.ts），本组件只负责输入、渲染与导航。
  */
-import { ref, computed } from 'vue'
-import { NInput, NScrollbar, NEmpty } from 'naive-ui'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { NInput, NScrollbar, NEmpty, NSelect } from 'naive-ui'
 import { SearchOutline } from '@vicons/ionicons5'
 import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
-import { searchNodes } from '@/utils/search'
+import { searchNodes, type SearchScope } from '@/utils/search'
 import { t } from '@/composables/useT'
+import { pendingSearchFocus } from '@/composables/useSearchFocus'
 
 const project = useProjectStore()
 const nodeStore = useNodeStore()
 
 const query = ref('')
 
+/** 搜索范围：整个项目 / 当前视图 */
+const scope = ref<SearchScope>('project')
+
+/** 范围下拉选项 */
+const scopeOptions = computed(() => [
+  { label: t('leftSidebar.searchScopeProject'), value: 'project' },
+  { label: t('leftSidebar.searchScopeView'), value: 'view' },
+])
+
+/** 搜索输入框 ref（供聚焦） */
+const inputEl = ref<InstanceType<typeof NInput> | null>(null)
+
+/** 消费待处理聚焦标志并聚焦到输入框（下一帧执行，确保输入框已渲染） */
+function consumeFocus(): void {
+  if (!pendingSearchFocus.value) return
+  pendingSearchFocus.value = false
+  nextTick(() => inputEl.value?.focus?.())
+}
+
+// 面板已打开时：Ctrl/Cmd + F 触发 watch 聚焦
+watch(pendingSearchFocus, consumeFocus)
+
+// 面板收起时未挂载、watch 未生效；挂载后消费待处理标志，保证按一次 Ctrl+F 即聚焦
+onMounted(consumeFocus)
+
 /**
  * 搜索结果。
  * nodeStore.nodes 为 reactive(Map)，文本修改 / 增删节点会自动触发重算。
+ * scope='view' 时仅搜索当前视图（project.currentNodeId）的直接子级。
  */
 const results = computed(() =>
-  searchNodes(Array.from(nodeStore.nodes.values()), query.value),
+  searchNodes(Array.from(nodeStore.nodes.values()), query.value, {
+    scope: scope.value,
+    viewedNodeId: project.currentNodeId,
+  }),
 )
 
 function handleSwitch(nodeId: string): void {
@@ -42,9 +72,18 @@ function handleSwitch(nodeId: string): void {
       <span class="panel-title">{{ t('leftSidebar.search') }}</span>
     </div>
 
-    <!-- 搜索输入框 -->
+    <!-- 搜索区域 -->
     <div class="search-input-wrap">
+      <div class="search-toolbar">
+        <NSelect
+          v-model:value="scope"
+          :options="scopeOptions"
+          size="small"
+          class="scope-select"
+        />
+      </div>
       <NInput
+        ref="inputEl"
         v-model:value="query"
         class="search-input"
         size="small"
@@ -123,10 +162,27 @@ function handleSwitch(nodeId: string): void {
   flex-shrink: 0;
 }
 
-/* 搜索输入框 */
+/* 搜索区域 */
 .search-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px;
   border-bottom: 1px solid var(--color-border);
+}
+
+/* 范围下拉工具行 */
+.search-toolbar {
+  display: flex;
+  align-items: center;
+}
+
+.scope-select {
+  width: 100%;
+}
+
+.search-input {
+  width: 100%;
 }
 
 .search-icon {

@@ -52,6 +52,19 @@ export function highlightLine(line: string, query: string): HighlightSegment[] {
 /** 默认最长可显示字符数（超出部分用省略号，命中片段保证完整可见） */
 const DEFAULT_MAX_CHARS = 60
 
+/** 搜索范围：'project' 全项目 / 'view' 当前视图 */
+export type SearchScope = 'project' | 'view'
+
+/** 搜索选项 */
+export interface SearchOptions {
+  /** 搜索范围：'project' 全项目 / 'view' 当前视图 */
+  scope?: SearchScope
+  /** scope='view' 时，当前查看的节点 ID（取其直接子级作为搜索结果集） */
+  viewedNodeId?: string
+  /** 最长可显示字符数 */
+  maxChars?: number
+}
+
 /**
  * 构建单行展示用的分段。
  * 长度 ≤ maxChars 时直接返回整行高亮；超长时以命中点为中心取窗口，
@@ -120,17 +133,20 @@ export function buildSearchLines(
 /**
  * 全树搜索（排除根节点），query 为空 / 全空白返回 []。
  * 搜索整个 node.text（含多行），大小写不敏感。
+ * options.scope='view' 时仅搜索指定视图（viewedNodeId）的直接子级。
  */
 export function searchNodes(
   nodes: WhiteboardNode[],
   query: string,
-  maxChars: number = DEFAULT_MAX_CHARS,
+  options: SearchOptions = {},
 ): SearchNodeResult[] {
+  const { scope = 'project', viewedNodeId = '', maxChars = DEFAULT_MAX_CHARS } = options
   const q = query.trim().toLowerCase()
   if (!q) return []
   const results: SearchNodeResult[] = []
   for (const node of nodes) {
     if (node.parentId === null) continue
+    if (scope === 'view' && node.parentId !== viewedNodeId) continue
     if (node.text.toLowerCase().includes(q)) {
       const { title, body } = buildSearchLines(node.text, query, maxChars)
       results.push({ nodeId: node.id, title, body })

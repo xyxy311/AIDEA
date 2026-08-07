@@ -90,6 +90,9 @@
     "searchPlaceholder": "搜索节点…",
     "searchHint": "输入关键字搜索节点",
     "searchEmpty": "暂无匹配节点",
+    "searchScope": "搜索范围",
+    "searchScopeProject": "整个项目",
+    "searchScopeView": "当前视图",
     "presets": "预设管理"
   },
   "presetPanel": {

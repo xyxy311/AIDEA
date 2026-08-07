@@ -123,8 +123,14 @@ export const CONNECTION_LABEL_RADIUS: number = 4
 
 // ── 预设样式系统 ──
 
-/** 默认节点预设（不含 id，由 store 初始化时分配 id） */
-export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type'>[] = [
+/** 内置保留分组 id（内置预设默认归入此分组，不可删除/改名） */
+export const BUILTIN_PRESET_GROUP_ID: string = 'builtin'
+
+/** 内置保留分组名称 */
+export const BUILTIN_PRESET_GROUP_NAME: string = '内置'
+
+/** 默认节点预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
+export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type' | 'groupId'>[] = [
   { name: '默认', borderColor: '#d1d5db' },
   { name: '蓝色', borderColor: '#3b82f6' },
   { name: '绿色', borderColor: '#22c55e' },
@@ -135,8 +141,8 @@ export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type'>[] = [
   { name: '粉色', borderColor: '#ec4899' },
 ]
 
-/** 默认连线预设（不含 id，由 store 初始化时分配 id） */
-export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type'>[] = [
+/** 默认连线预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
+export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId'>[] = [
   { name: '默认灰线', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true },
   { name: '蓝色箭头', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true },
   { name: '红色虚线', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true },

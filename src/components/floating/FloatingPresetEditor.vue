@@ -84,7 +84,7 @@ function handleSave(): void {
     if (id) {
       presetsStore.updateNodePreset(id, { name, borderColor: formBorderColor.value })
     } else {
-      presetsStore.addNodePreset({ name, borderColor: formBorderColor.value })
+      presetsStore.addNodePreset({ name, borderColor: formBorderColor.value, groupId: presetsStore.currentNodeGroupId })
     }
   } else {
     const payload = {
@@ -93,6 +93,7 @@ function handleSave(): void {
       strokeWidth: formStrokeWidth.value,
       strokeColor: formStrokeColor.value,
       directed: formDirected.value,
+      groupId: presetsStore.currentConnectionGroupId,
     }
     if (id) {
       presetsStore.updateConnectionPreset(id, payload)

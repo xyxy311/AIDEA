@@ -37,7 +37,7 @@ locales/    UI 文本 zh-CN.json（i18n 占位层）
 stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex) / view(工厂，视口/选中/编辑，不存数据)
             / project(导航+快照+销毁内联实例) / presets / history(undo+patch+batch+coalesce) / theme / layout(活动栏顺序/激活)
 composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
-components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel
+components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel
              / right:NodePropertyEditor/ConnectionPropertyEditor) / layout(ActivityBar/MenuBar/AppShell)
              / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
 ```
@@ -66,6 +66,15 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **拖拽排序**：HTML5 drag（dragstart/dragover/drop）调 `layout.reorder`；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位，抑制拖拽后误触 click 切换面板。内存态，不持久化。
 - layout store：`panels`（顺序）/`activePanelId`/`lastPanelId`（收起后 `expand()` 恢复）/`togglePanel`/`setActive`/`reorder`/`collapse`/`expand`。
 - 新增面板只需在 `constants/panels.ts` 注册，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。
+
+### 预设样式系统（presets store）
+
+- **独立两组数据**：节点预设 `nodePresets` 与连线预设 `connectionPresets` 各自 CRUD/排序；**节点与连线分组完全独立**（`nodeGroups`/`connectionGroups`，各自 localStorage 与 CRUD，互不影响）。预设项含 `groupId`（`null`=未分组）。
+- **分组筛选（可见列表）**：`nodeGroupFilter`/`connectionGroupFilter` 各自决定可见列表 `visibleNodePresets`/`visibleConnectionPresets`；`currentNodeGroupId`/`currentConnectionGroupId` 是新建预设默认分组（当前筛选为具体分组时归入，否则未分组）。
+- **1-9 快捷键**：作用于当前分组筛选下的可见列表（`visibleNodePresets`/`visibleConnectionPresets` 的对应索引项），随筛选联动。
+- **可见列表内重排**：`reorderVisibleNodePresets`/`reorderVisibleConnectionPresets` 在筛选视图内排序，再经 `reorderVisible` 合并回全列表（保持未显示项相对位置）。
+- **持久化与自愈（无旧版兼容）**：`useStorage` 写入 localStorage；`validateStorages` 对每项做结构校验，JSON 解析失败或结构不符 → `localStorage.removeItem` 删除坏文件并回退默认值；`sanitizeFilters` 清理指向不存在分组的孤儿筛选；`initDefaults` 确保"内置"保留分组存在、预设为空时用默认预设初始化。
+- **单一数据源**：右侧属性编辑器、浮动编辑器、左侧预设管理面板共用 presetsStore，增删改同步。
 
 ### 内联视图（DOM 覆盖层渲染）
 
@@ -108,4 +117,5 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 
 - **浮动属性编辑器**：Word 风格浮层，选中节点/连线即在选中物旁弹出（归属整个应用，不做视图判定）。Teleport 到 body + `position:fixed`；头部可拖动（无位置记忆，每次选中重锚定）；鼠标移开面板半透明；拖拽节点时经 `useNodeDragging` 的全局信号 `globalIsDraggingNode` 隐藏。面板固定宽度 300px，预设横条 `NScrollbar` 在面板内滚动。节点：自由改色 + 色条；连线：色条（带小样，点击应用完整预设）+ 线型 `NSelect` + 粗细 `NInputNumber` + 有向 `NCheckbox`（非开关）。预设共用 presetsStore，`+` 添加、右键编辑/删除。详见 `docs/浮动属性编辑器.md`。
 - **节点搜索面板**：`SearchPanel`（左侧活动栏面板，`'search'`）。搜索逻辑在纯函数层 `utils/search.ts`（`searchNodes`/`buildSearchLines`/`buildDisplayLine`/`highlightLine`），不依赖 store，可单测。搜索整个 `node.text`（含多行）大小写不敏感，**排除根节点**（`parentId === null`）。结果两行展示：标题行（首行）+ 命中行居中片段（命中在首行时 `body=null` 不重复），超长以命中点为中心取窗口 + `…`（命中完整可见）。高亮用 `var(--color-primary-soft)` 淡底 + `var(--color-primary-pressed)` 文字。点击行 `project.switchView(nodeId)` 进入子视图。新增面板只需在 `constants/panels.ts` 注册 id + 图标 + 组件（活动栏/容器/拖拽/收起自动生效）。详见 `docs/节点搜索功能.md`。
+- **预设管理面板**：左侧活动栏面板（id `'presets'`，图标 `ColorPaletteOutline`），集中管理节点/连线预设与分组：节点/连线 Tab 切换、分组下拉筛选（节点与连线分组独立）、序号徽标（1-9 快捷键提示，仅前 9 项）、可见列表内拖拽排序、新建/保存当前为预设（默认归入当前分组，弹层内可当场新建分组）、分组管理弹窗（内置"内置"分组不可删/改名）。浮动编辑器预设条（`FloatingColorStrip`）与面板同步，展示当前分组可见列表。详见 `docs/预设管理.md`。
 - **项目文件（新建 / 保存 / 打开）**：JSON 带版本号（`.aidea.json`）序列化节点树+项目名+视图状态；序列化/解析纯函数 `utils/projectFile.ts`，编排层 `composables/useProjectFile.ts`。Chromium 用 File System Access API 记忆文件句柄（打开后 Ctrl+S 直接覆盖原文件），Safari/Firefox 回退下载/上传。dirty 经 `history` 写操作 → `utils/dirtyMarker` → `fileStore.dirty`。详见 `docs/项目文件.md`。

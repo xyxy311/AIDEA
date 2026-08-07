@@ -32,10 +32,11 @@ const emit = defineEmits<{
 const presetsStore = usePresetsStore()
 const contextMenu = useContextMenu()
 
+/** 与左侧预设管理面板同步：展示当前分组筛选下的可见预设列表 */
 const list = computed(() =>
   props.type === 'node'
-    ? (presetsStore.nodePresets as NodePresetStyle[])
-    : (presetsStore.connectionPresets as ConnectionPresetStyle[]),
+    ? (presetsStore.visibleNodePresets as NodePresetStyle[])
+    : (presetsStore.visibleConnectionPresets as ConnectionPresetStyle[]),
 )
 
 /** 连线预设迷你小样的 dasharray（小尺寸线段需较小 dash） */

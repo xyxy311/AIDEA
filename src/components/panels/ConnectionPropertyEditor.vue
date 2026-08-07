@@ -227,6 +227,7 @@ function handleSave(): void {
       strokeWidth: formStrokeWidth.value,
       strokeColor: formStrokeColor.value,
       directed: formDirected.value,
+      groupId: presetsStore.currentConnectionGroupId,
     })
   }
   showModal.value = false

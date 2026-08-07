@@ -248,6 +248,7 @@ function handleSave(): void {
     presetsStore.addNodePreset({
       name: formName.value.trim(),
       borderColor: formBorderColor.value,
+      groupId: presetsStore.currentNodeGroupId,
     })
   }
   showModal.value = false

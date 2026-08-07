@@ -152,11 +152,11 @@ export function useKeyboardShortcuts(
       }
     }
 
-    // 数字键 1-9：对选中节点/连线快速应用对应序号的预设
+    // 数字键 1-9：对选中节点/连线快速应用当前"可见列表"（受分组筛选影响）中对应序号的预设
     if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
       const index = Number(e.key) - 1
       if (view.selectedNodeIds.size > 0) {
-        const preset = presets.nodePresets[index]
+        const preset = presets.visibleNodePresets[index]
         if (preset) {
           e.preventDefault()
           commands.updateNodesStyle(
@@ -165,7 +165,7 @@ export function useKeyboardShortcuts(
           )
         }
       } else if (view.selectedConnectionIds.size > 0) {
-        const preset = presets.connectionPresets[index]
+        const preset = presets.visibleConnectionPresets[index]
         if (preset) {
           e.preventDefault()
           commands.updateConnectionsStyleByIds(

@@ -84,7 +84,11 @@
     "deleteConfirmCurrent": "确定删除当前节点及其所有子节点？",
     "deleteConfirmNode": "确定删除此节点及其所有子节点？",
     "refsEmpty": "暂无引用节点",
-    "deleteConfirmReference": "确定删除引用「{name}」及其所有子节点？"
+    "deleteConfirmReference": "确定删除引用「{name}」及其所有子节点？",
+    "search": "搜索",
+    "searchPlaceholder": "搜索节点…",
+    "searchHint": "输入关键字搜索节点",
+    "searchEmpty": "暂无匹配节点"
   },
   "rightSidebar": {
     "connectionProps": "连线属性",

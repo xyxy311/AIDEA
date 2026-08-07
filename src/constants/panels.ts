@@ -1,8 +1,9 @@
 import type { Component } from 'vue'
 import { defineComponent, h } from 'vue'
-import { ListOutline } from '@vicons/ionicons5'
+import { ListOutline, SearchOutline } from '@vicons/ionicons5'
 import NodeTreePanel from '@/components/panels/NodeTreePanel.vue'
 import ReferencesPanel from '@/components/panels/ReferencesPanel.vue'
+import SearchPanel from '@/components/panels/SearchPanel.vue'
 
 /**
  * 引用定义图标（#）。
@@ -42,7 +43,7 @@ const HashIcon = defineComponent({
  * 新增面板只需在此注册 id + 图标 + 组件，活动栏与面板容器自动渲染。
  * 面板顺序（拖拽排序）与激活状态由 layout store 管理，不在此处持久化。
  */
-export type PanelId = 'nodeTree' | 'references'
+export type PanelId = 'nodeTree' | 'references' | 'search'
 
 /** 面板元信息 */
 export interface PanelMeta {
@@ -57,10 +58,12 @@ export interface PanelMeta {
 export const PANEL_REGISTRY: PanelMeta[] = [
   { id: 'nodeTree', titleKey: 'leftSidebar.nodeTree', icon: ListOutline },
   { id: 'references', titleKey: 'leftSidebar.references', icon: HashIcon },
+  { id: 'search', titleKey: 'leftSidebar.search', icon: SearchOutline },
 ]
 
 /** 面板 id -> 渲染组件 */
 export const PANEL_COMPONENTS: Record<PanelId, Component> = {
   nodeTree: NodeTreePanel,
   references: ReferencesPanel,
+  search: SearchPanel,
 }

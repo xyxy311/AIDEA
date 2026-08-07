@@ -37,7 +37,7 @@ locales/    UI 文本 zh-CN.json（i18n 占位层）
 stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex) / view(工厂，视口/选中/编辑，不存数据)
             / project(导航+快照+销毁内联实例) / presets / history(undo+patch+batch+coalesce) / theme / layout(活动栏顺序/激活)
 composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
-components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel
+components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel
              / right:NodePropertyEditor/ConnectionPropertyEditor) / layout(ActivityBar/MenuBar/AppShell)
              / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
 ```
@@ -65,7 +65,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **收起/展开只经活动栏**：点击图标 = `layout.togglePanel(id)`（同 id → 收起，激活由 `activePanelId` 驱动，null=收起）。面板组件**无 header**，内部自带 `panel-header` 标题栏。
 - **拖拽排序**：HTML5 drag（dragstart/dragover/drop）调 `layout.reorder`；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位，抑制拖拽后误触 click 切换面板。内存态，不持久化。
 - layout store：`panels`（顺序）/`activePanelId`/`lastPanelId`（收起后 `expand()` 恢复）/`togglePanel`/`setActive`/`reorder`/`collapse`/`expand`。
-- 引用面板（ReferencesPanel）：`#` = 引用定义符号，`@名` = 在别处引用。双击编辑保留 `#` 前缀与正文（`pendingBody` 暂存非首行拼回）。
+- 新增面板只需在 `constants/panels.ts` 注册，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。
 
 ### 内联视图（DOM 覆盖层渲染）
 
@@ -76,18 +76,6 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - 展开/收起为视图操作（右键菜单，仅主视图），不入 undo。
 - `project.switchView(id)` = 存快照 -> 销毁全部内联实例 -> 改 viewedNodeId -> 恢复快照。任意时刻仅一套内联实例存活。
 - 三个 composable（useNodeDragging / useMarqueeSelection / useConnectionCreation）须注册 window mouseup 兜底（覆盖层阻断 stage 事件）。
-
-### 浮动属性编辑器（Word 风格浮层）
-
-- 归属整个应用，**不做视图判定**：只要主视图全局选中（`mainView.selectedNodeIds/selectedConnectionIds.size > 0`）即弹出，Teleport 到 body + `position:fixed`，避免被 `overflow:hidden` 裁切。
-- 挂载点：`AppShell.vue` 单实例 `<FloatingPropertyEditor />`；逻辑在 `composables/useFloatingPropertyEditor.ts`。
-- **锚点**：先解析选中项在哪个视图渲染（`resolveRenderView(parentId)`：`mainView.inlineViews` 中 `nodeId === parentId` 的内联视图，否则主视图），用该视图 `containerEl.getBoundingClientRect()` + stage 变换换算屏幕坐标（内联视图额外乘宿主缩放）。节点=顶部居中上方；连线=两端节点中心中点。`translate(-50%,-100%)` 居中偏上 + 视口 8px 夹取。
-- **拖动**：头部为把手（pointer + `setPointerCapture`），`offset` ref 记录位移，最终位置 = 锚点 + offset + 夹取。**无位置记忆**：`watch(selectionKey)` 选中变化时 offset 归零，每次重锚定。
-- **面板固定宽度 300px**（非内容撑开）：横条 `NScrollbar x-scrollable` 用 `flex:1; min-width:0` 占满可用宽并在面板内滚动，避免预设增多撑宽面板、滚动条不可见。
-- **半透明**：鼠标不在面板上时 `.is-dimmed { opacity: 0.25 }`（`@mouseenter/@mouseleave` 切 `isHovered`），移入恢复。
-- **拖拽节点时隐藏**：`useNodeDragging.ts` 导出模块级共享信号 `globalIsDraggingNode`（激活置 true、`cleanupDragState` 置 false），`hasSelection` 并入 `&& !globalIsDraggingNode.value`。拖拽激活期间面板以 `v-if` 隐藏，结束自动恢复。
-- 选中节点：自由改色（NColorPicker，hex+alpha）+ 节点预设横条（纯色圆点）；选中连线：自由改色（hex）+ 连线预设横条（迷你线段小样，点击应用完整预设）+ 线型 `NSelect` + 粗细 `NInputNumber(show-button)` + 有向 `NCheckbox`（**非 NSwitch**）。
-- 预设横条：`+` 添加、右键色块弹 ContextMenu（编辑/删除），共用 presetsStore（与右侧边栏同源）。文案进 `floatingEditor` locale 段。
 
 ### 多语言（i18n 占位层）
 
@@ -115,5 +103,9 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **命令层约束**：数据写操作必须经 `useCommands`，不能直接调 nodeStore 写 action（否则不进历史栈）。Exception：拖拽/缩放实时渲染。
 - **主题响应式**：`scheme.canvas.*` 色值必须在响应式上下文（computed/template）使用，不能赋给普通 const config。
 - **文本与颜色独立访问**：文本经 `t()`；自定义组件色值用 `var(--color-*)`，Konva chrome 色读 `themeStore.scheme.canvas.*`。
-- **浮动面板宽度固定**：`.float-editor` 用固定 `width: 300px` 而非内容撑开，否则预设增多会把面板撑宽、横条滚动条不可见。横条滚动需 `NScrollbar` 且色块 `flex-shrink:0`、内容行 `width:max-content`。
-- **浮动面板显隐**：全局共享的 `globalIsDraggingNode` 信号驱动"拖拽节点时隐藏面板"；面板是 DOM 覆盖层，点击其上控件不冒泡到 Konva stage，不会清选中。
+
+## 其它
+
+- **浮动属性编辑器**：Word 风格浮层，选中节点/连线即在选中物旁弹出（归属整个应用，不做视图判定）。Teleport 到 body + `position:fixed`；头部可拖动（无位置记忆，每次选中重锚定）；鼠标移开面板半透明；拖拽节点时经 `useNodeDragging` 的全局信号 `globalIsDraggingNode` 隐藏。面板固定宽度 300px，预设横条 `NScrollbar` 在面板内滚动。节点：自由改色 + 色条；连线：色条（带小样，点击应用完整预设）+ 线型 `NSelect` + 粗细 `NInputNumber` + 有向 `NCheckbox`（非开关）。预设共用 presetsStore，`+` 添加、右键编辑/删除。详见 `docs/浮动属性编辑器.md`。
+- **节点搜索面板**：`SearchPanel`（左侧活动栏面板，`'search'`）。搜索逻辑在纯函数层 `utils/search.ts`（`searchNodes`/`buildSearchLines`/`buildDisplayLine`/`highlightLine`），不依赖 store，可单测。搜索整个 `node.text`（含多行）大小写不敏感，**排除根节点**（`parentId === null`）。结果两行展示：标题行（首行）+ 命中行居中片段（命中在首行时 `body=null` 不重复），超长以命中点为中心取窗口 + `…`（命中完整可见）。高亮用 `var(--color-primary-soft)` 淡底 + `var(--color-primary-pressed)` 文字。点击行 `project.switchView(nodeId)` 进入子视图。新增面板只需在 `constants/panels.ts` 注册 id + 图标 + 组件（活动栏/容器/拖拽/收起自动生效）。详见 `docs/节点搜索功能.md`。
+- **项目文件（新建 / 保存 / 打开）**：JSON 带版本号（`.aidea.json`）序列化节点树+项目名+视图状态；序列化/解析纯函数 `utils/projectFile.ts`，编排层 `composables/useProjectFile.ts`。Chromium 用 File System Access API 记忆文件句柄（打开后 Ctrl+S 直接覆盖原文件），Safari/Firefox 回退下载/上传。dirty 经 `history` 写操作 → `utils/dirtyMarker` → `fileStore.dirty`。详见 `docs/项目文件.md`。

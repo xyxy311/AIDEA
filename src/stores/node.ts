@@ -409,12 +409,13 @@ export const useNodeStore = defineStore('node', () => {
   // ===== 连线操作（均作用于持有连线的父节点） =====
 
   /** 添加连线（加到 parentId 节点的 connections） */
-  function addConnection(parentId: string, fromNodeId: string, toNodeId: string): void {
+  function addConnection(parentId: string, fromNodeId: string, toNodeId: string): string | null {
     const parent = nodes.get(parentId)
-    if (!parent) return
+    if (!parent) return null
     const conn = createConnection({ fromNodeId, toNodeId })
-    if (parent.connections.some((c) => c.id === conn.id)) return
+    if (parent.connections.some((c) => c.id === conn.id)) return conn.id
     parent.connections.push(conn)
+    return conn.id
   }
 
   /** 删除单条连线 */

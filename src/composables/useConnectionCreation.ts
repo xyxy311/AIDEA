@@ -120,10 +120,10 @@ export function useConnectionCreation(viewId: string) {
     if (!startNodeCreated) {
       commands.beginBatch()
     }
-
+    let connId: string | null = null
     if (targetNodeId && targetNodeId !== fromNodeId) {
       // 命中已有节点 -> 直接连线
-      commands.addConnection(view.viewedNodeId, fromNodeId, targetNodeId)
+      connId = commands.addConnection(view.viewedNodeId, fromNodeId, targetNodeId)
     } else if (!targetNodeId) {
       // 结束位置无节点 -> 在指针处创建节点作为结束，再连线
       const stage = e.target.getStage()
@@ -140,10 +140,13 @@ export function useConnectionCreation(viewId: string) {
         pos.y - DEFAULT_NODE_HEIGHT / 2,
       )
       if (newId !== fromNodeId) {
-        commands.addConnection(view.viewedNodeId, fromNodeId, newId)
+        connId = commands.addConnection(view.viewedNodeId, fromNodeId, newId)
       }
     }
-
+    if (connId) {
+      view.selectConnection(connId)
+    }
+    
     // 提交复合命令（创建节点 + 创建连线合并为单条历史）
     commands.commitBatch()
     startNodeCreated = false

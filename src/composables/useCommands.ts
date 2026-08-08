@@ -372,26 +372,28 @@ export function useCommands() {
   // ── 连线操作 ──
 
   /** 创建连线 */
-  function addConnection(parentId: string, fromNodeId: string, toNodeId: string): void {
-    nodeStore.addConnection(parentId, fromNodeId, toNodeId)
+  function addConnection(parentId: string, fromNodeId: string, toNodeId: string): string | null {
+    const connId = nodeStore.addConnection(parentId, fromNodeId, toNodeId)
     // 捕获新创建的连线
     const conns = nodeStore.getConnections(parentId)
     const conn = conns.find(
-      (c) => c.fromNodeId === fromNodeId && c.toNodeId === toNodeId,
+      (c) => c.id === connId,
     )
-    if (conn) {
-      history.pushCommand({
-        nodeChanges: [],
-        connChanges: [
-          {
-            type: 'add',
-            parentId,
-            connectionId: conn.id,
-            connection: deepClone(conn),
-          },
-        ],
-      })
-    }
+    if (!conn) 
+      return null
+    
+    history.pushCommand({
+      nodeChanges: [],
+      connChanges: [
+        {
+          type: 'add',
+          parentId,
+          connectionId: conn.id,
+          connection: deepClone(conn),
+        },
+      ],
+    })
+    return connId
   }
 
   /** 删除连线 */

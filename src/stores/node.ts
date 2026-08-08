@@ -7,6 +7,8 @@ import {
   MIN_NODE_HEIGHT,
   NODE_PADDING,
   NODE_LINE_HEIGHT,
+  TAG_CAPSULE_HEIGHT,
+  TAG_CAPSULE_BOTTOM_GAP,
   type PresetStyle,
 } from '@/constants'
 import { t } from '@/composables/useT'
@@ -81,6 +83,24 @@ export const useNodeStore = defineStore('node', () => {
       const name = extractReferenceName(n.text)
       if (!name) continue
       if (!idx.has(name)) idx.set(name, n.id)
+    }
+    return idx
+  })
+
+  /**
+   * tagId -> 节点 id[] 的派生索引（用于反向查询：哪些节点打了某标签）。
+   * 根节点排除；仅在 tagIds 关系变化时重算。
+   */
+  const tagIndex = computed<Map<string, string[]>>(() => {
+    const idx = new Map<string, string[]>()
+    for (const n of nodes.values()) {
+      if (n.parentId === null) continue
+      if (!n.tagIds || n.tagIds.length === 0) continue
+      for (const tagId of n.tagIds) {
+        const arr = idx.get(tagId)
+        if (arr) arr.push(n.id)
+        else idx.set(tagId, [n.id])
+      }
     }
     return idx
   })
@@ -332,7 +352,16 @@ export const useNodeStore = defineStore('node', () => {
     }
 
     const minFitHeight = padding * 2 + Math.ceil(fontSize * lineHeight)
-    const requiredHeight = Math.max(contentSize.height + padding * 2, minFitHeight)
+    // 底部预留：有标签时让出胶囊高度 + 与文本间距（与 WhiteboardNode.layoutLines 一致）。
+    // 用 node.tagIds.length > 0 判断（不过滤悬空引用，保守预留，即使标签全悬空也无害）
+    const hasTags = node.tagIds && node.tagIds.length > 0
+    const reservedBottom = hasTags
+      ? NODE_PADDING + TAG_CAPSULE_HEIGHT + TAG_CAPSULE_BOTTOM_GAP
+      : 0
+    const requiredHeight = Math.max(
+      contentSize.height + padding * 2 + reservedBottom,
+      minFitHeight + reservedBottom,
+    )
     if (requiredHeight > node.height) {
       node.height = requiredHeight
     }
@@ -390,6 +419,56 @@ export const useNodeStore = defineStore('node', () => {
       node.text = text
       fitNodeToText(id)
     }
+  }
+
+  // ── 节点标签 ──
+
+  /** 批量设置节点的标签 id 列表（整体替换） */
+  function updateNodesTags(ids: string[], tagIds: string[]): void {
+    // 防御调用方传重复 id：去重后再写入
+    const deduped = [...new Set(tagIds)]
+    for (const id of ids) {
+      const node = nodes.get(id)
+      if (!node) continue
+      node.tagIds = [...deduped]
+      // 打/取消标签后重新 fit，使节点高度正确为胶囊预留底部空间
+      // （fitNodeToText 只扩大不缩小，取消标签不会缩小变更前已扩大的高度，无害）
+      fitNodeToText(id)
+    }
+  }
+
+  /** 按节点分别设置标签 id 列表（整体替换，各节点独立），改后重新 fit */
+  function updateNodesTagsPerNode(ids: string[], tagIdsPerNode: string[][]): void {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i]
+      const node = nodes.get(id)
+      if (!node) continue
+      const tags = tagIdsPerNode[i] ?? []
+      node.tagIds = [...new Set(tags)]
+      fitNodeToText(id)
+    }
+  }
+
+  /** 从所有节点的 tagIds 中移除某标签（标签定义被删除时调用） */
+  function stripTagFromAllNodes(tagId: string): void {
+    // for (const n of nodes.values()) {
+    //   // 与 tagIndex 一致：排除根节点
+    //   if (n.parentId === null) continue
+    //   if (!n.tagIds || n.tagIds.length === 0) continue
+    //   if (n.tagIds.includes(tagId)) {
+    //     n.tagIds = n.tagIds.filter((id) => id !== tagId)
+    //   }
+    // }
+    tagIndex.value.get(tagId)?.forEach((id) => {
+      const node = nodes.get(id)
+      if (!node) return
+      node.tagIds = node.tagIds.filter((id) => id !== tagId)
+    })
+  }
+
+  /** 打了某标签的节点 id 列表（反向查询） */
+  function nodesWithTag(tagId: string): string[] {
+    return tagIndex.value.get(tagId) ?? []
   }
 
   /**
@@ -615,6 +694,7 @@ export const useNodeStore = defineStore('node', () => {
     // Getters
     childrenIndex,
     referenceIndex,
+    tagIndex,
     rootNode,
     // 查询
     getNode,
@@ -647,6 +727,11 @@ export const useNodeStore = defineStore('node', () => {
     updateNodesStyle,
     setNodesText,
     reparentNode,
+    // 节点标签
+    updateNodesTags,
+    updateNodesTagsPerNode,
+    stripTagFromAllNodes,
+    nodesWithTag,
     // 连线
     addConnection,
     deleteConnection,

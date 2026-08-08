@@ -4,7 +4,7 @@
  *
  * 当选中节点时，可修改节点的文本内容和外观样式。
  */
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, h } from 'vue'
 import type { NodePresetStyle } from '@/types'
 import {
   NInput,
@@ -17,11 +17,13 @@ import {
   NTag,
   NModal,
   NPopconfirm,
+  NSelect,
 } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import { usePresetsStore } from '@/stores/presets'
+import { useTagsStore } from '@/stores/tags'
 import { useThemeStore } from '@/stores/theme'
 import { useNodeStore } from '@/stores/node'
 import { deriveBackgroundColor } from '@/utils/color'
@@ -32,6 +34,7 @@ import TextAutocomplete from '@/components/canvas/TextAutocomplete.vue'
 
 const active = useActiveView()
 const presetsStore = usePresetsStore()
+const tagsStore = useTagsStore()
 const themeStore = useThemeStore()
 const message = useMessage()
 const nodeStore = useNodeStore()
@@ -126,6 +129,76 @@ const currentBorderColor = computed({
 })
 
 const colorPickerMode = 'hex' as const
+
+// ── 标签（单选节点可编辑；多选节点禁用并提示） ──
+
+/** 标签下拉选项：label=名称带色点，value=标签 id */
+const tagOptions = computed(() =>
+  tagsStore.tagList.map((tag) => ({
+    label: tag.name,
+    value: tag.id,
+    tagColor: tag.color,
+  })),
+)
+
+/**
+ * 当前节点的标签 id 集合（可写）。
+ * 取/写都过滤悬空引用（可能含已删除标签的 id，见 types/node.ts 注释），
+ * 渲染时用 getTag 过滤 undefined，避免下拉出现无效 chip。
+ */
+const selectedTagIds = computed({
+  // 多选时返回所有选中节点共同包含的标签（交集）；单选即该节点自身标签。过滤悬空引用。
+  get: () => {
+    const ids = Array.from(active.view.selectedNodeIds)
+    if (ids.length === 0) return []
+    let common: string[] | null = null
+    for (const id of ids) {
+      const n = active.nodeStore.getNode(id)
+      const tags: string[] = (n?.tagIds ?? []).filter((tid) => tagsStore.getTag(tid))
+      if (common === null) common = [...tags]
+      else common = common.filter((tid) => tags.includes(tid))
+    }
+    return common ?? []
+  },
+  set: (val: string[]) => {
+    const ids = Array.from(active.view.selectedNodeIds)
+    if (ids.length === 0) return
+    // 变更前各节点共同标签（用于判定用户取消勾选的标签）
+    const prevCommon = selectedTagIds.value
+    const perNode = ids.map((id) => {
+      const n = active.nodeStore.getNode(id)
+      const cur = n?.tagIds ?? []
+      // 移除「原本共同含、本次被取消」的标签
+      const removed = prevCommon.filter((tid) => !val.includes(tid))
+      // 补上选中的、该节点尚未含的标签
+      const next = cur.filter((tid) => !removed.includes(tid))
+      for (const tid of val) if (!next.includes(tid)) next.push(tid)
+      return next
+    })
+    active.updateSelectedNodesTagsPerNode(perNode)
+  },
+})
+
+/** 取下拉选项的自定义色点色（Vue 模板不支持类型断言，故抽取为函数） */
+function tagOptionColor(option: { tagColor?: string }): string {
+  return option.tagColor ?? '#9ca3af'
+}
+
+/** 标签下拉选项渲染：名称前附色点（数据色，来自 Tag.color） */
+function renderTagLabel(option: { label: string; tagColor?: string }) {
+  return h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: '6px' } }, [
+    h('span', {
+      style: {
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: tagOptionColor(option),
+        flexShrink: '0',
+      },
+    }),
+    option.label,
+  ])
+}
 
 // ── 节点预设管理 ──
 
@@ -303,6 +376,28 @@ function handleSave(): void {
       </NFormItem>
     </NForm>
 
+    <!-- 标签区 -->
+    <NDivider style="margin: 8px 0" />
+    <NText depth="3" class="section-title">{{ t('nodeEditor.tags') }}</NText>
+
+    <!-- 无标签定义 -->
+    <div v-if="tagsStore.tagList.length === 0" class="tag-hint">
+      <NText depth="3">{{ t('nodeEditor.tagsEmpty') }}</NText>
+    </div>
+
+    <!-- 任意选中数均可编辑 -->
+    <NSelect
+      v-else
+      v-model:value="selectedTagIds"
+      multiple
+      filterable
+      clearable
+      size="small"
+      :options="tagOptions"
+      :render-label="renderTagLabel"
+      :placeholder="t('nodeEditor.tagsPlaceholder')"
+    />
+
     <!-- 节点预设管理区 -->
     <NDivider style="margin: 8px 0" />
     <NText depth="3" class="section-title">{{ t('nodeEditor.presets') }}</NText>
@@ -419,6 +514,13 @@ function handleSave(): void {
   font-size: 12px;
   font-weight: 600;
   margin: 8px 0;
+}
+
+/* ── 标签区 ── */
+
+.tag-hint {
+  padding: 6px 2px;
+  font-size: 12px;
 }
 
 .multi-select-hint {

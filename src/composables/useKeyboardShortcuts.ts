@@ -5,6 +5,8 @@ import { useCommands } from '@/composables/useCommands'
 import { useProjectStore } from '@/stores/project'
 import { usePresetsStore } from '@/stores/presets'
 import { useLayoutStore } from '@/stores/layout'
+import { useTagsStore } from '@/stores/tags'
+import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
 
 /**
@@ -23,6 +25,7 @@ import { requestSearchFocus } from '@/composables/useSearchFocus'
  * A                  - 进入选中节点的子级视图（任何节点均可进入）
  * Ctrl/Cmd + G       - 组合选中节点
  * 1-9                - 对选中节点/连线应用对应序号预设
+ * T + 1-9            - 按住 t 时按数字，对选中节点批量添加/删除"标签列表"中对应序号标签
  * Tab                - 单选节点时展开/收起内联视图
  * R                  - 选中内联视图时自适应视图（以宽度为基准调整缩放与高度）
  * Ctrl/Cmd + S       - 保存项目
@@ -45,6 +48,10 @@ export function useKeyboardShortcuts(
   const commands = useCommands()
   const presets = usePresetsStore()
   const layout = useLayoutStore()
+  const tagsStore = useTagsStore()
+
+  /** t 键是否处于按下状态（作为"t + 数字"打标签的修饰） */
+  let tHeld = false
 
   function onKeydown(e: KeyboardEvent) {
     // ── 文件操作快捷键（置于编辑判定之前，编辑状态下也可保存 / 打开 / 新建）──
@@ -83,6 +90,9 @@ export function useKeyboardShortcuts(
 
     // 编辑状态下不触发快捷键
     if (isEditing.value) return
+
+    // 记录 t 键按下状态（作为"t + 数字"打标签的修饰）
+    if (e.key.toLowerCase() === 't') tHeld = true
 
     const view = active.view
 
@@ -167,7 +177,8 @@ export function useKeyboardShortcuts(
     }
 
     // 数字键 1-9：对选中节点/连线快速应用当前"可见列表"（受分组筛选影响）中对应序号的预设
-    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
+    // （按住 t 时数字键用于打标签，故假设 !tHeld 才走预设）
+    if (!tHeld && !e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
       const index = Number(e.key) - 1
       if (view.selectedNodeIds.size > 0) {
         const preset = presets.visibleNodePresets[index]
@@ -189,6 +200,32 @@ export function useKeyboardShortcuts(
           )
         }
       }
+    }
+
+    // T + 数字 1-9：按住 t 时按数字键，对选中节点批量添加/删除"标签列表"中对应序号的标签
+    // （纯数字 1-9 已用于应用预设，这里用"按住 t"作为修饰，避免与 Ctrl 快捷键冲突）
+    if (tHeld && !e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
+      const index = Number(e.key) - 1
+      const tag = tagsStore.tagList[index]
+      if (tag && view.selectedNodeIds.size > 0) {
+        e.preventDefault()
+        const ids = Array.from(view.selectedNodeIds)
+        const nodes = ids
+          .map((id) => active.nodeStore.getNode(id))
+          .filter((n): n is WhiteboardNode => !!n)
+        if (nodes.length === 0) return
+        // 全含则从所有节点移除，否则添加到所有节点；各节点保留自有其它标签
+        const allHave = nodes.every((n) => (n.tagIds ?? []).includes(tag.id))
+        const apply = !allHave
+        const perNode = nodes.map((n) => {
+          const cur = n.tagIds ?? []
+          const has = cur.includes(tag.id)
+          if (apply) return has ? cur : [...cur, tag.id]
+          return has ? cur.filter((id) => id !== tag.id) : cur
+        })
+        commands.updateNodesTagsPerNode(ids, perNode)
+      }
+      return
     }
 
     // Tab：单选节点时展开/收起内联视图（仅主视图）
@@ -213,9 +250,16 @@ export function useKeyboardShortcuts(
 
   onMounted(() => {
     window.addEventListener('keydown', onKeydown)
+    window.addEventListener('keyup', onKeyup)
   })
 
   onUnmounted(() => {
     window.removeEventListener('keydown', onKeydown)
+    window.removeEventListener('keyup', onKeyup)
   })
+
+  /** keyup：释放 t 键时复位 tHeld，避免"按住 t + 数字"后再按数字误触发 */
+  function onKeyup(e: KeyboardEvent) {
+    if (e.key.toLowerCase() === 't') tHeld = false
+  }
 }

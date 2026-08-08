@@ -19,7 +19,8 @@ import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
 import { useThemeStore } from '@/stores/theme'
-import { deriveBackgroundColor } from '@/utils/color'
+import { useTagsStore } from '@/stores/tags'
+import { deriveBackgroundColor, getContrastTextColor } from '@/utils/color'
 import {
   parseReferenceSegments,
   layoutReferenceText,
@@ -32,6 +33,13 @@ import {
   NODE_LINE_HEIGHT,
   PLACEHOLDER_TEXT,
   PLACEHOLDER_TEXT_COLOR,
+  TAG_CAPSULE_HEIGHT,
+  TAG_CAPSULE_FONT_SIZE,
+  TAG_CAPSULE_PADDING_X,
+  TAG_CAPSULE_GAP,
+  TAG_CAPSULE_RADIUS,
+  TAG_CAPSULE_BOTTOM_GAP,
+  TAG_CAPSULE_MAX,
 } from '@/constants'
 
 // ── Props ──
@@ -49,6 +57,7 @@ const emit = defineEmits<{
 // ── Store ──
 const nodeStore = useNodeStore()
 const themeStore = useThemeStore()
+const tagsStore = useTagsStore()
 
 // ── Refs ──
 const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
@@ -88,6 +97,9 @@ const rectConfig = computed(() => {
  * 产出可直接给 v-text 用的绝对坐标（相对 group）。
  *
  * 每行内片段 x 由"行起点 + 该片段前所有片段宽度之和"累加计算。
+ *
+ * 当节点带标签时，为底部标签胶囊预留空间（胶囊高度 + 下间距），
+ * 使文本垂直居中于胶囊上方的可用区域，避免与胶囊重叠。
  */
 const layoutLines = computed(() => {
   const n = node.value
@@ -101,9 +113,14 @@ const layoutLines = computed(() => {
   const fontSize = DEFAULT_NODE_STYLE.fontSize
   const fontFamily = DEFAULT_NODE_STYLE.fontFamily
   const lines = layoutReferenceText(paragraphs, contentWidth, fontSize, fontFamily, NODE_LINE_HEIGHT)
-  // 垂直居中：总高度，起始 y = (nodeHeight - totalHeight)/2（至少留 padding）
+  // 垂直居中：总高度，起始 y = (可用高度 - 总高度)/2（至少留 padding）
   const totalHeight = lines.length * (fontSize * NODE_LINE_HEIGHT)
-  const offsetY = Math.max(NODE_PADDING, (n.height - totalHeight) / 2)
+  // 底部预留：有标签时让出胶囊高度 + 与文本的间距
+  const reservedBottom = hasTags.value
+    ? NODE_PADDING + TAG_CAPSULE_HEIGHT + TAG_CAPSULE_BOTTOM_GAP
+    : 0
+  const availableHeight = n.height - reservedBottom
+  const offsetY = Math.max(NODE_PADDING, (availableHeight - totalHeight) / 2)
   // 为每个片段计算绝对 x（行起点 + 行内累加宽度）
   return lines.map((line) => {
     let cursorX = NODE_PADDING + line.x
@@ -115,6 +132,91 @@ const layoutLines = computed(() => {
     })
     return { segments, y: offsetY + line.y }
   })
+})
+
+// ── 标签（节点右下角胶囊） ──
+
+/**
+ * 节点有效标签（悬空引用容错）：node.tagIds 中可能含已删除标签的 id
+ * （undo 跨删标签边界场景），渲染时用 tagsStore.getTag 过滤 undefined。
+ */
+const nodeTags = computed(() => {
+  const tagIds = node.value?.tagIds ?? []
+  return tagIds.map((id) => tagsStore.getTag(id)).filter((t): t is NonNullable<typeof t> => !!t)
+})
+
+/** 是否有标签（决定文本是否让出底部空间） */
+const hasTags = computed(() => nodeTags.value.length > 0)
+
+/** 底部溢出胶囊的填充色（chrome 色，随主题明暗） */
+const overflowFill = computed(() =>
+  themeStore.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.08)',
+)
+
+/** 溢出胶囊文字色（随主题） */
+const overflowText = computed(() => themeStore.scheme.canvas.nodeTextColor)
+
+/** 标签胶囊布局片段（含绝对坐标） */
+interface CapsulePiece {
+  type: 'tag' | 'overflow'
+  id?: string
+  name?: string
+  color?: string
+  count?: number
+  text: string
+  width: number
+  x: number
+  y: number
+  height: number
+}
+
+/** 节点右下角标签胶囊的绝对布局（相对 group，右对齐） */
+const capsuleLayout = computed(() => {
+  const n = node.value
+  if (!n) return []
+  const fontSize = TAG_CAPSULE_FONT_SIZE
+  const fontFamily = DEFAULT_NODE_STYLE.fontFamily
+
+  const capsuleY = n.height - NODE_PADDING - TAG_CAPSULE_HEIGHT
+
+  // 溢出计数会改变溢出胶囊宽度 → 影响可放置标签数 → 又反过来影响溢出计数，
+  // 迭代至稳定（溢出计数单调不减，收敛于 total 上限）。
+  // 保持右对齐、最多显示 TAG_CAPSULE_MAX 个标签 + 可选溢出 "+M" 胶囊。
+  let overflow = 0
+  let laid: CapsulePiece[] = []
+  for (;;) {
+    // 从右往左：先放溢出胶囊（占最右），其左侧空间放标签
+    let cursorX = n.width - NODE_PADDING
+    const temp: CapsulePiece[] = []
+    if (overflow > 0) {
+      const text = `+${overflow}`
+      const width = TAG_CAPSULE_PADDING_X * 2 + measureLineWidth(text, fontSize, fontFamily)
+      const x = cursorX - width
+      if (x >= NODE_PADDING) {
+        temp.push({ type: 'overflow', count: overflow, text, width, x, y: capsuleY, height: TAG_CAPSULE_HEIGHT })
+        cursorX = x - TAG_CAPSULE_GAP
+      }
+    }
+    // 放标签胶囊（最多 TAG_CAPSULE_MAX 个），放不下即截断
+    let placedCount = 0
+    for (const tag of nodeTags.value.slice(0, TAG_CAPSULE_MAX)) {
+      const width = TAG_CAPSULE_PADDING_X * 2 + measureLineWidth(tag.name, fontSize, fontFamily)
+      const x = cursorX - width
+      if (x < NODE_PADDING) break
+      temp.push({ type: 'tag', id: tag.id, name: tag.name, color: tag.color, text: tag.name, width, x, y: capsuleY, height: TAG_CAPSULE_HEIGHT })
+      cursorX = x - TAG_CAPSULE_GAP
+      placedCount++
+    }
+    // 溢出数 = 总标签数 - 实际放置的标签胶囊数（不含溢出胶囊本身）
+    const newOverflow = nodeTags.value.length - placedCount
+    if (newOverflow === overflow) {
+      laid = temp
+      break
+    }
+    overflow = newOverflow
+  }
+  // 从右往左收集，反转回从左到右（渲染顺序不影响，仅为可读性）
+  return laid.reverse()
 })
 
 /** 引用片段颜色：读主题主色（响应式，随主题/主色切换），回退绿色 */
@@ -146,6 +248,37 @@ function buildSegConfig(item: { seg: Segment; x: number }, y: number) {
     textDecoration: isRef ? ('underline' as const) : ('none' as const),
     // 仅引用片段响应事件，普通文本穿透（避免影响节点拖动/选中）
     listening: isRef,
+  }
+}
+
+/** 单个标签胶囊的 Konva.Rect 配置（胶囊为纯装饰，不响应事件） */
+function buildCapsuleRectConfig(piece: (typeof capsuleLayout.value)[number]) {
+  return {
+    x: piece.x,
+    y: piece.y,
+    width: piece.width,
+    height: piece.height,
+    cornerRadius: TAG_CAPSULE_RADIUS,
+    // 标签为数据色（Tag.color）；溢出胶囊用随主题的 chrome 色
+    fill: piece.type === 'tag' ? piece.color : overflowFill.value,
+    listening: false,
+  }
+}
+
+/** 单个标签胶囊的 Konva.Text 配置（文字对比色由背景亮度决定） */
+function buildCapsuleTextConfig(piece: (typeof capsuleLayout.value)[number]) {
+  return {
+    text: piece.text,
+    x: piece.x + TAG_CAPSULE_PADDING_X,
+    y: piece.y + (TAG_CAPSULE_HEIGHT - TAG_CAPSULE_FONT_SIZE * 1.2) / 2,
+    fontSize: TAG_CAPSULE_FONT_SIZE,
+    fontFamily: DEFAULT_NODE_STYLE.fontFamily,
+    fill:
+      piece.type === 'tag'
+        ? getContrastTextColor(piece.color ?? '#ffffff')
+        : overflowText.value,
+    // 胶囊文字不响应事件，避免拦截节点拖动/选中
+    listening: false,
   }
 }
 
@@ -197,6 +330,12 @@ defineExpose({
         @mousedown="onSegMouseDown($event, item)"
         @click="onSegClick(item)"
       />
+    </template>
+
+    <!-- 标签胶囊（节点右下角，右对齐，纯装饰不响应事件） -->
+    <template v-for="(piece, idx) in capsuleLayout" :key="`capsule-${idx}`">
+      <v-rect :config="buildCapsuleRectConfig(piece)" />
+      <v-text :config="buildCapsuleTextConfig(piece)" />
     </template>
   </v-group>
 </template>

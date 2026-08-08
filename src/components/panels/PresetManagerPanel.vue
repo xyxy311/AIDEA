@@ -32,6 +32,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import type { NodePresetStyle, ConnectionPresetStyle, LineStyle } from '@/types'
+import DraggableSortList from '@/components/common/DraggableSortList.vue'
 import { usePresetsStore } from '@/stores/presets'
 import { useThemeStore } from '@/stores/theme'
 import { useActiveView } from '@/composables/useActiveView'
@@ -158,49 +159,9 @@ function handleDelete(preset: NodePresetStyle | ConnectionPresetStyle): void {
 
 // ── 拖拽排序（可见列表内） ──
 
-const draggedIndex = ref<number | null>(null)
-const dragOverIndex = ref<number | null>(null)
-
-function onDragStart(index: number, e: DragEvent): void {
-  draggedIndex.value = index
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', String(index))
-  }
-}
-
-function onDragOver(index: number, e: DragEvent): void {
-  e.preventDefault()
-  if (draggedIndex.value === null || draggedIndex.value === index) return
-  dragOverIndex.value = index
-}
-
-function onDrop(index: number, e: DragEvent): void {
-  e.preventDefault()
-  const fromIndex = draggedIndex.value
-  if (fromIndex === null) {
-    dragOverIndex.value = null
-    return
-  }
-  if (fromIndex !== index) {
-    if (activeType.value === 'node') presetsStore.reorderVisibleNodePresets(fromIndex, index)
-    else presetsStore.reorderVisibleConnectionPresets(fromIndex, index)
-  }
-  dragOverIndex.value = null
-  draggedIndex.value = null
-}
-
-function onDragEnd(): void {
-  draggedIndex.value = null
-  dragOverIndex.value = null
-}
-
-function onDragLeave(index: number, e: DragEvent): void {
-  const target = e.target as HTMLElement
-  const relatedTarget = e.relatedTarget as HTMLElement | null
-  if (!relatedTarget || !target.contains(relatedTarget)) {
-    if (dragOverIndex.value === index) dragOverIndex.value = null
-  }
+function handleReorder(fromIndex: number, toIndex: number): void {
+  if (activeType.value === 'node') presetsStore.reorderVisibleNodePresets(fromIndex, toIndex)
+  else presetsStore.reorderVisibleConnectionPresets(fromIndex, toIndex)
 }
 
 // ── 预设 Modal 表单 ──
@@ -435,38 +396,13 @@ function handleDeleteGroup(id: string): void {
 
     <!-- 预设列表 -->
     <NScrollbar class="preset-scroll">
-      <div class="preset-list">
-        <div
-          v-for="(preset, index) in visiblePresets"
-          :key="preset.id"
-          class="preset-row"
-          :class="{
-            'is-dragging': draggedIndex === index,
-            'is-drag-over': dragOverIndex === index && draggedIndex !== null && draggedIndex !== index,
-          }"
-          @click="applyPreset(preset)"
-          @dragover="onDragOver(index, $event)"
-          @drop="onDrop(index, $event)"
-          @dragenter.prevent="dragOverIndex = index"
-          @dragleave="onDragLeave(index, $event)"
-          @dragend="onDragEnd"
-        >
-          <!-- 拖拽手柄 -->
-          <span
-            class="drag-handle"
-            draggable="true"
-            @dragstart.stop="onDragStart(index, $event)"
-            @dragend.stop="onDragEnd"
-            @click.stop
-          >
-            ⋮⋮
-          </span>
-
-          <!-- 序号徽标（快捷键 1-9，仅前 9 项） -->
-          <span v-if="index < 9" class="shortcut-badge" :title="t('presetPanel.shortcut')">
-            {{ index + 1 }}
-          </span>
-
+      <DraggableSortList
+        :items="visiblePresets"
+        :shortcut-title="t('presetPanel.shortcut')"
+        @reorder="handleReorder"
+        @row-click="applyPreset"
+      >
+        <template #default="{ item: preset }">
           <!-- 节点色块预览 -->
           <div v-if="preset.type === 'node'" class="node-preview-block" @click.stop
             :style="previewStyle(preset)"
@@ -484,10 +420,7 @@ function handleDeleteGroup(id: string): void {
             @click.stop
           >
             <line
-              x1="0"
-              y1="7"
-              x2="48"
-              y2="7"
+              x1="0" y1="7" x2="48" y2="7"
               :stroke="preset.strokeColor"
               :stroke-width="Math.min(preset.strokeWidth, 5)"
               :stroke-dasharray="getDashArray(preset.lineStyle)"
@@ -500,12 +433,7 @@ function handleDeleteGroup(id: string): void {
           <NText class="preset-name" depth="2">{{ preset.name }}</NText>
 
           <!-- 分组标签 -->
-          <NTag
-            v-if="groupTagLabel(preset)"
-            size="tiny"
-            :bordered="false"
-            class="group-tag"
-          >
+          <NTag v-if="groupTagLabel(preset)" size="tiny" :bordered="false" class="group-tag">
             {{ groupTagLabel(preset) }}
           </NTag>
 
@@ -515,19 +443,24 @@ function handleDeleteGroup(id: string): void {
           </NButton>
 
           <!-- 删除（带确认） -->
-          <NPopconfirm :positive-text="t('presetPanel.confirm')" :negative-text="t('presetPanel.cancel')" @positive-click="handleDelete(preset)">
+          <NPopconfirm
+            :positive-text="t('presetPanel.confirm')"
+            :negative-text="t('presetPanel.cancel')"
+            @positive-click="handleDelete(preset)"
+          >
             <template #trigger>
               <NButton size="tiny" quaternary class="action-btn" @click.stop>✕</NButton>
             </template>
             {{ t('presetPanel.deletePresetConfirm', { name: preset.name }) }}
           </NPopconfirm>
-        </div>
+        </template>
 
-        <!-- 空状态 -->
-        <div v-if="visiblePresets.length === 0" class="preset-empty">
-          <NText depth="3">{{ emptyMessage }}</NText>
-        </div>
-      </div>
+        <template #empty>
+          <div class="preset-empty">
+            <NText depth="3">{{ emptyMessage }}</NText>
+          </div>
+        </template>
+      </DraggableSortList>
     </NScrollbar>
 
     <!-- 新建 / 编辑 / 保存当前为预设 Modal -->
@@ -737,79 +670,6 @@ function handleDeleteGroup(id: string): void {
 /* 预设列表 */
 .preset-scroll {
   flex: 1;
-}
-
-.preset-list {
-  padding: 4px;
-}
-
-.preset-row {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 4px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-  gap: 5px;
-  position: relative;
-  user-select: none;
-}
-
-.preset-row:hover {
-  background-color: var(--color-hover);
-}
-
-.preset-row.is-dragging {
-  opacity: 0.35;
-}
-
-.preset-row.is-drag-over::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  background-color: var(--color-primary);
-  border-radius: 1px;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.drag-handle {
-  cursor: grab;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  letter-spacing: -3px;
-  padding: 0 2px;
-  flex-shrink: 0;
-  line-height: 1;
-  user-select: none;
-}
-
-.drag-handle:hover {
-  color: var(--color-text-secondary);
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-/* 序号徽标（快捷键 1-9） */
-.shortcut-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  background: var(--color-primary-faint);
-  color: var(--color-primary);
-  font-size: 10px;
-  font-weight: 700;
-  flex-shrink: 0;
-  line-height: 1;
 }
 
 .node-preview-block {

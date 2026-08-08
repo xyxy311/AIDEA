@@ -1,4 +1,4 @@
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode, Tag } from '@/types'
 import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
 
@@ -10,6 +10,7 @@ import { ROOT_NODE_ID } from '@/stores/node'
  *   "version": 1,
  *   "projectName": string,          // 根节点 text
  *   "nodes": WhiteboardNode[],      // 数组，含根节点（id='root', parentId=null）
+ *   "tags": Tag[],                  // 项目级标签定义
  *   "viewState": {
  *     "viewedNodeId", "stageX", "stageY", "stageScale",
  *     "expandedIds", "inlineViews", "selectedNodeIds", "selectedConnectionIds"
@@ -40,6 +41,7 @@ export interface ProjectFileData {
   version: number
   projectName: string
   nodes: WhiteboardNode[]
+  tags: Tag[]
   viewState: ProjectViewState
 }
 
@@ -47,6 +49,7 @@ export interface ProjectFileData {
 export interface ParsedProject {
   projectName: string
   nodes: WhiteboardNode[]
+  tags: Tag[]
   viewState: ProjectViewState
 }
 
@@ -55,11 +58,13 @@ export function serializeProject(
   nodes: WhiteboardNode[],
   projectName: string,
   viewState: ProjectViewState,
+  tags: Tag[],
 ): string {
   const data: ProjectFileData = {
     version: PROJECT_FILE_VERSION,
     projectName,
     nodes,
+    tags,
     viewState,
   }
   return JSON.stringify(data)
@@ -107,8 +112,26 @@ export function parseProjectFile(json: string): ParsedProject {
     if (!Array.isArray(n.connections)) {
       ;(n as { connections: unknown }).connections = []
     }
+    // 确保 tagIds 字段存在且为数组（旧文件可能缺失）
+    if (!Array.isArray(n.tagIds)) {
+      ;(n as { tagIds: unknown }).tagIds = []
+    }
     nodeById.set(n.id, n)
   }
+
+  // —— 解析并校验标签定义 ——
+  const tags: Tag[] = Array.isArray(raw.tags)
+    ? (raw.tags as unknown[]).filter((item): item is Tag => {
+        if (!item || typeof item !== 'object') return false
+        const o = item as Record<string, unknown>
+        return (
+          typeof o.id === 'string' &&
+          typeof o.name === 'string' &&
+          typeof o.color === 'string'
+        )
+      })
+    : []
+  const tagById = new Map(tags.map((tag) => [tag.id, tag]))
 
   // —— 确保根节点存在 ——
   let projectName = typeof raw.projectName === 'string' ? raw.projectName.trim() : ''
@@ -133,6 +156,8 @@ export function parseProjectFile(json: string): ParsedProject {
     n.connections = n.connections.filter(
       (c) => !!c && nodeById.has(c.fromNodeId) && nodeById.has(c.toNodeId),
     )
+    // —— 裁剪标签自愈：仅保留存在于标签定义中的 id（剔除悬空引用） ——
+    n.tagIds = n.tagIds.filter((id) => tagById.has(id))
   }
 
   // —— 构建 viewState（逐字段校验并提供默认值） ——
@@ -164,5 +189,5 @@ export function parseProjectFile(json: string): ParsedProject {
       : [],
   }
 
-  return { projectName, nodes, viewState }
+  return { projectName, nodes, tags, viewState }
 }

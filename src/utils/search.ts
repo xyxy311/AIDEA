@@ -61,6 +61,11 @@ export interface SearchOptions {
   scope?: SearchScope
   /** scope='view' 时，当前查看的节点 ID（取其直接子级作为搜索结果集） */
   viewedNodeId?: string
+  /**
+   * 按标签过滤：节点须同时包含全部所选标签（AND 语义）。
+   * 空数组 / undefined 表示不过滤。
+   */
+  tagIds?: string[]
   /** 最长可显示字符数 */
   maxChars?: number
 }
@@ -140,13 +145,16 @@ export function searchNodes(
   query: string,
   options: SearchOptions = {},
 ): SearchNodeResult[] {
-  const { scope = 'project', viewedNodeId = '', maxChars = DEFAULT_MAX_CHARS } = options
+  const { scope = 'project', viewedNodeId = '', tagIds = [], maxChars = DEFAULT_MAX_CHARS } = options
   const q = query.trim().toLowerCase()
   if (!q) return []
   const results: SearchNodeResult[] = []
   for (const node of nodes) {
     if (node.parentId === null) continue
     if (scope === 'view' && node.parentId !== viewedNodeId) continue
+    // 标签过滤：仅当 tagIds 非空时启用；节点须同时包含全部所选标签（AND）。
+    // 用 node.tagIds?.includes 容错节点可能缺 tagIds 字段。
+    if (tagIds.length > 0 && !(tagIds.every((tid) => node.tagIds?.includes(tid)))) continue
     if (node.text.toLowerCase().includes(q)) {
       const { title, body } = buildSearchLines(node.text, query, maxChars)
       results.push({ nodeId: node.id, title, body })

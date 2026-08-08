@@ -71,6 +71,11 @@ export function useActiveView() {
     )
   }
 
+  /** 按节点分别设置标签（多选时各节点独立标签集合） */
+  function updateSelectedNodesTagsPerNode(tagIdsPerNode: string[][]): void {
+    commands.updateNodesTagsPerNode(Array.from(view().selectedNodeIds), tagIdsPerNode)
+  }
+
   /**
    * 删除所有选中节点（含各自子树）。
    * 视图协调（销毁 viewStore、活跃视图回退）已由命令层 + history store 处理。
@@ -133,6 +138,7 @@ export function useActiveView() {
     updateSelectedNodesStyle,
     updateSelectedNodesText,
     updateSelectedConnectionsStyle,
+    updateSelectedNodesTagsPerNode,
     deleteSelectedNodes,
     deleteSelectedConnections,
     // 剪贴板

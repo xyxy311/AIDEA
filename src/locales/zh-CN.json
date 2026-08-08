@@ -53,7 +53,10 @@
     "save": "保存",
     "selectNodeHint": "选中一个节点以编辑属性",
     "referenceNameConflict": "引用名「{name}」已被占用，请更换",
-    "referenceNoMatch": "无可引用节点"
+    "referenceNoMatch": "无可引用节点",
+    "tags": "标签",
+    "tagsEmpty": "暂无标签",
+    "tagsPlaceholder": "选择标签…"
   },
   "connectionEditor": {
     "unnamedNode": "未命名节点",
@@ -93,7 +96,9 @@
     "searchScope": "搜索范围",
     "searchScopeProject": "整个项目",
     "searchScopeView": "当前视图",
-    "presets": "预设管理"
+    "searchTagPlaceholder": "按标签过滤…",
+    "presets": "预设管理",
+    "tags": "标签管理"
   },
   "presetPanel": {
     "nodeTab": "节点",
@@ -124,6 +129,21 @@
     "builtin": "内置",
     "builtinGroupHint": "内置分组不可删除或改名",
     "noSelection": "请先在画布中选中对应对象",
+    "cancel": "取消",
+    "save": "保存",
+    "confirm": "确定"
+  },
+  "tagsPanel": {
+    "tagName": "标签名称",
+    "tagNamePlaceholder": "输入标签名称",
+    "tagColor": "标签颜色",
+    "addTag": "添加",
+    "editTag": "编辑标签",
+    "deleteTagConfirm": "确定删除标签「{name}」？",
+    "empty": "暂无标签，请在顶部新建",
+    "nameRequired": "请先输入标签名称",
+    "noSelection": "请先在画布中选中一个或多个节点",
+    "applyToSelected": "点击为选中节点添加/移除该标签",
     "cancel": "取消",
     "save": "保存",
     "confirm": "确定"

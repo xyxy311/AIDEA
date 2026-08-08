@@ -34,12 +34,12 @@ constants/  设计 token：尺寸/几何/节点连线数据色与预设样式/�
 utils/      纯函数（generateId, calculateTextContentSize, command, reference[引用名提取/片段解析/布局]）
 config/     配色 colorSchemes.ts：亮/暗（Naive theme + overrides + CSS 变量 + 画布 chrome 色）
 locales/    UI 文本 zh-CN.json（i18n 占位层）
-stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex) / view(工厂，视口/选中/编辑，不存数据)
+stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex/tagIndex) / tags(项目级标签定义) / view(工厂，视口/选中/编辑，不存数据)
             / project(导航+快照+销毁内联实例) / presets / history(undo+patch+batch+coalesce) / theme / layout(活动栏顺序/激活)
 composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
-components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel
+components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
              / right:NodePropertyEditor/ConnectionPropertyEditor) / layout(ActivityBar/MenuBar/AppShell)
-             / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
+             / common(DraggableSortList — 通用可拖拽排序列表) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
 ```
 
 组件通常经 `useActiveView()` 统一访问 nodeStore / project / view。
@@ -75,6 +75,13 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **可见列表内重排**：`reorderVisibleNodePresets`/`reorderVisibleConnectionPresets` 在筛选视图内排序，再经 `reorderVisible` 合并回全列表（保持未显示项相对位置）。
 - **持久化与自愈（无旧版兼容）**：`useStorage` 写入 localStorage；`validateStorages` 对每项做结构校验，JSON 解析失败或结构不符 → `localStorage.removeItem` 删除坏文件并回退默认值；`sanitizeFilters` 清理指向不存在分组的孤儿筛选；`initDefaults` 确保"内置"保留分组存在、预设为空时用默认预设初始化。
 - **单一数据源**：右侧属性编辑器、浮动编辑器、左侧预设管理面板共用 presetsStore，增删改同步。
+
+### 可拖拽排序列表组件（DraggableSortList）
+
+- **通用可拖拽排序列表**：`src/components/common/DraggableSortList.vue`，封装 HTML5 拖拽排序（拖拽手柄、拖拽状态、放置行高亮）与 1-9 序号徽标，供各面板复用。
+- **使用方式（面板经插槽封装列表项）**：`:items` 传列表数据（元素须含 `id`）；列表项内容经**默认作用域插槽** `#default="{ item }"` 传入，空态经 `#empty` 插槽。拖拽落点触发 `@reorder(from, to)`，面板据此调用对应 store 的 reorder 方法；整行点击触发 `@row-click="(item) => ..."`（可选）。`:show-shortcut-badge` 控制序号徽标显隐（默认 true）、`:shortcut-title` 设徽标 hover 提示。
+- **已使用面板**：`PresetManagerPanel`（预设列表，开启序号徽标）、`TagsPanel`（标签列表，关闭徽标）。
+- **复用约定**：**后续新增/改造面板的纵向可拖拽排序列表一律优先复用该组件**，只把「每行内容」封装进作用域插槽，不要在面板内重写拖拽逻辑/样式。行内操作按钮（编辑/删除/改色）需 `@click.stop` 与行点击隔离，避免误触发 `@row-click`。
 
 ### 内联视图（DOM 覆盖层渲染）
 
@@ -119,3 +126,4 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **节点搜索面板**：`SearchPanel`（左侧活动栏面板，`'search'`）。搜索逻辑在纯函数层 `utils/search.ts`（`searchNodes`/`buildSearchLines`/`buildDisplayLine`/`highlightLine`），不依赖 store，可单测。搜索整个 `node.text`（含多行）大小写不敏感，**排除根节点**（`parentId === null`）。结果两行展示：标题行（首行）+ 命中行居中片段（命中在首行时 `body=null` 不重复），超长以命中点为中心取窗口 + `…`（命中完整可见）。高亮用 `var(--color-primary-soft)` 淡底 + `var(--color-primary-pressed)` 文字。点击行 `project.switchView(nodeId)` 进入子视图。新增面板只需在 `constants/panels.ts` 注册 id + 图标 + 组件（活动栏/容器/拖拽/收起自动生效）。详见 `docs/节点搜索功能.md`。
 - **预设管理面板**：左侧活动栏面板（id `'presets'`，图标 `ColorPaletteOutline`），集中管理节点/连线预设与分组：节点/连线 Tab 切换、分组下拉筛选（节点与连线分组独立）、序号徽标（1-9 快捷键提示，仅前 9 项）、可见列表内拖拽排序、新建/保存当前为预设（默认归入当前分组，弹层内可当场新建分组）、分组管理弹窗（内置"内置"分组不可删/改名）。浮动编辑器预设条（`FloatingColorStrip`）与面板同步，展示当前分组可见列表。详见 `docs/预设管理.md`。
 - **项目文件（新建 / 保存 / 打开）**：JSON 带版本号（`.aidea.json`）序列化节点树+项目名+视图状态；序列化/解析纯函数 `utils/projectFile.ts`，编排层 `composables/useProjectFile.ts`。Chromium 用 File System Access API 记忆文件句柄（打开后 Ctrl+S 直接覆盖原文件），Safari/Firefox 回退下载/上传。dirty 经 `history` 写操作 → `utils/dirtyMarker` → `fileStore.dirty`。详见 `docs/项目文件.md`。
+- **标签系统**：项目级标签定义（`stores/tags.ts` 的 `tags: Map<tagId, Tag={id,name,color}>`，随项目文件序列化，不入 localStorage）+ 节点内联 `tagIds: string[]`（与 `connections` 同模式，随子树迁移）。节点右下角渲染标签胶囊（数据色底 + WCAG 对比字，右对齐最多 4 个 + `+N` 溢出；`layoutLines`/`fitNodeToText` 用同一 `reservedBottom` 公式预留底部防文本重叠）。左侧标签管理面板（id `'tags'`，`PricetagsOutline`）行内色块用 `#trigger` 插槽小圆点（NColorPicker 根自带 `width:100%` 会撑满 flex 行），点击标签项（色点+名称主体）可给选中节点批量添加/移除该标签（toggle：全含则移除、否则添加，支持多选，各节点保留自有其它标签，走命令层可撤销；高亮分全含 active / 部分含 partial）；右侧属性面板「标签」区 `NSelect multiple` 打标签（多选时显示共同标签交集，批量写入）；搜索可按标签 AND 过滤。**快捷键**：`T + 1-9` —— 按住 t 时按数字，对选中节点批量添加/删除标签列表中对应序号标签（与纯数字 `1-9` 应用预设区分）。**撤销策略**：标签定义 CRUD 不可撤销（直接改 store + `markDataDirty`），仅「节点打标签」经 `useCommands.updateNodesTagsPerNode`（modify `tagIds`，按节点分别设置）可撤销，故不改 `history.ts`。消费 `tagIds` 处须用 `tagsStore.getTag(id)` 过滤悬空引用。详见 `docs/标签系统.md`。`parseProjectFile` 裁剪非存在标签 id 自愈。

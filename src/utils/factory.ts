@@ -24,6 +24,7 @@ export interface CreateNodeOptions {
   text?: string
   borderColor?: string
   connections?: Connection[]
+  tagIds?: string[]
 }
 
 /**
@@ -44,6 +45,7 @@ export function createNode(options: CreateNodeOptions = {}): WhiteboardNode {
     text = DEFAULT_NODE_TEXT,
     borderColor = DEFAULT_NODE_STYLE.borderColor,
     connections = [],
+    tagIds = [],
   } = options
   return {
     id,
@@ -55,6 +57,7 @@ export function createNode(options: CreateNodeOptions = {}): WhiteboardNode {
     text,
     borderColor,
     connections,
+    tagIds,
   }
 }
 

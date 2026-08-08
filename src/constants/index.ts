@@ -174,3 +174,26 @@ export const INLINE_VIEW_MIN_HEIGHT: number = 150
 
 /** 内联视图自适应的边距比例（节点包围盒四周留白，0.12 = 12%） */
 export const INLINE_VIEW_FIT_PADDING: number = 0.12
+
+// ── 标签胶囊（节点右下角） ──
+
+/** 单个标签胶囊高度（世界坐标 px） */
+export const TAG_CAPSULE_HEIGHT: number = 18
+
+/** 标签胶囊文字字号（世界坐标 px） */
+export const TAG_CAPSULE_FONT_SIZE: number = 11
+
+/** 标签胶囊左右内边距（世界坐标 px） */
+export const TAG_CAPSULE_PADDING_X: number = 6
+
+/** 相邻标签胶囊间距（世界坐标 px） */
+export const TAG_CAPSULE_GAP: number = 4
+
+/** 标签胶囊圆角（世界坐标 px） */
+export const TAG_CAPSULE_RADIUS: number = 9
+
+/** 标签胶囊与文本区底部的间距（世界坐标 px） */
+export const TAG_CAPSULE_BOTTOM_GAP: number = 6
+
+/** 节点右下角最多渲染的标签胶囊数，超出后以溢出计数 "+N" 示意 */
+export const TAG_CAPSULE_MAX: number = 4

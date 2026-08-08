@@ -176,4 +176,75 @@ describe('searchNodes', () => {
     const viewRes = searchNodes(nodes, '节点', { scope: 'view', viewedNodeId: 'a' })
     expect(viewRes.map((r) => r.nodeId)).toEqual(['c'])
   })
+
+  // ---- 按标签过滤 ----
+
+  it('按单标签过滤：只返回打了该标签的节点', () => {
+    const nodes = [
+      makeNode({ id: 'root', text: '项目名', parentId: null, tagIds: ['t1'] }),
+      makeNode({ id: 'a', text: '需求', tagIds: ['t1'] }),
+      makeNode({ id: 'b', text: '需求', tagIds: ['t2'] }),
+      makeNode({ id: 'c', text: '需求', tagIds: ['t1'] }),
+    ]
+    const res = searchNodes(nodes, '需求', { tagIds: ['t2'] })
+    // 仅 b 打了 t2（同时 text 命中"需求"）
+    expect(res.map((r) => r.nodeId)).toEqual(['b'])
+  })
+
+  it('按多标签 AND 过滤：节点须同时含全部所选标签', () => {
+    const nodes = [
+      makeNode({ id: 'a', text: '需求', tagIds: ['t1', 't2'] }),
+      makeNode({ id: 'b', text: '需求', tagIds: ['t1'] }),
+      makeNode({ id: 'c', text: '需求', tagIds: ['t2'] }),
+    ]
+    const res = searchNodes(nodes, '需求', { tagIds: ['t1', 't2'] })
+    // 仅 a 同时含 t1 与 t2
+    expect(res.map((r) => r.nodeId)).toEqual(['a'])
+  })
+
+  it('tagIds 为空数组 / undefined：不过滤（返回全部匹配）', () => {
+    const nodes = [
+      makeNode({ id: 'a', text: '需求', tagIds: ['t1'] }),
+      makeNode({ id: 'b', text: '需求', tagIds: [] }),
+    ]
+    expect(searchNodes(nodes, '需求', { tagIds: [] })).toHaveLength(2)
+    expect(searchNodes(nodes, '需求', { tagIds: undefined })).toHaveLength(2)
+  })
+
+  it('标签过滤与关键字叠加：同时按标签与 text 关键字过滤', () => {
+    const nodes = [
+      makeNode({ id: 'a', text: '需求分析', tagIds: ['t1'] }),
+      makeNode({ id: 'b', text: '需求设计', tagIds: ['t1'] }),
+      makeNode({ id: 'c', text: '需求分析', tagIds: ['t2'] }),
+    ]
+    const res = searchNodes(nodes, '分析', { tagIds: ['t1'] })
+    // 同时命中关键字"分析"且含标签 t1
+    expect(res.map((r) => r.nodeId)).toEqual(['a'])
+  })
+
+  it('根节点排除：即使根节点 tagIds 含目标标签也不返回', () => {
+    const nodes = [
+      makeNode({ id: 'root', text: '需求', parentId: null, tagIds: ['t1'] }),
+      makeNode({ id: 'a', text: '需求', tagIds: ['t1'] }),
+    ]
+    const res = searchNodes(nodes, '需求', { tagIds: ['t1'] })
+    // 仅 a，根节点不返回（不回归）
+    expect(res.map((r) => r.nodeId)).toEqual(['a'])
+  })
+
+  it('悬空 / 缺失 tagIds：节点无 tagIds 字段时容错不崩溃', () => {
+    // 显式构造无 tagIds 字段的节点（模拟旧数据/类型断言）
+    const nodeA = makeNode({ id: 'a', text: '需求' }) as WhiteboardNode
+    delete (nodeA as { tagIds?: string[] }).tagIds
+    const nodes = [
+      nodeA,
+      makeNode({ id: 'b', text: '需求', tagIds: ['t1'] }),
+    ]
+    // 带标签过滤：无 tagIds 的 a 不匹配 t1，不崩溃
+    const tagged = searchNodes(nodes, '需求', { tagIds: ['t1'] })
+    expect(tagged.map((r) => r.nodeId)).toEqual(['b'])
+    // 不带标签过滤：a 正常返回
+    const plain = searchNodes(nodes, '需求')
+    expect(plain.map((r) => r.nodeId)).toEqual(['a', 'b'])
+  })
 })

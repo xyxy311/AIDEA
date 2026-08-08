@@ -243,6 +243,37 @@ export function useCommands() {
     )
   }
 
+  // ── 节点标签 ──
+
+  /**
+   * 按节点分别设置标签（modify 每个节点各自的 tagIds，可撤销；支持多选）。
+   * tagIdsPerNode 与 ids 等长，逐节点整体替换为该节点自己的标签集合。
+   * coalesceKey 按 id 集合合并连续编辑。
+   */
+  function updateNodesTagsPerNode(ids: string[], tagIdsPerNode: string[][]): void {
+    if (ids.length === 0) return
+    const oldTags = ids.map((id) => captureNodeFields(nodeStore, id, ['tagIds']))
+    nodeStore.updateNodesTagsPerNode(ids, tagIdsPerNode)
+    const sortedKey = [...ids].sort().join(',')
+    history.pushCommand(
+      {
+        nodeChanges: ids.map((id, i) => ({
+          type: 'modify' as const,
+          id,
+          old: oldTags[i] ?? undefined,
+          new: { tagIds: [...(tagIdsPerNode[i] ?? [])] },
+        })),
+        connChanges: [],
+      },
+      { coalesceKey: `tags-${sortedKey}` },
+    )
+  }
+
+  /** 给所有目标节点设置同一组标签（整体替换） */
+  function updateSelectedNodesTags(ids: string[], tagIds: string[]): void {
+    updateNodesTagsPerNode(ids, ids.map(() => tagIds))
+  }
+
   // ── 节点 resize ──
 
   /**
@@ -715,6 +746,8 @@ export function useCommands() {
     setNodeText,
     setNodesText,
     updateNodesStyle,
+    updateSelectedNodesTags,
+    updateNodesTagsPerNode,
     commitNodeResize,
     reparentTo,
     // 连线

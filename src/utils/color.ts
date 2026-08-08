@@ -150,3 +150,24 @@ export function deriveBackgroundColor(borderColor: string, isDark: boolean): str
   const rgb = hslToRgb(h, newS, newL)
   return rgbaToString({ r: rgb.r, g: rgb.g, b: rgb.b, a })
 }
+
+/**
+ * 计算在给定背景色上可读的文字颜色（深 / 浅）。
+ *
+ * 标签胶囊背景为数据色（Tag.color，不随主题），其内部文字需要根据背景亮度
+ * 选择深色或浅色以保证对比度。基于 WCAG 相对亮度（sRGB 线性化）判断：
+ * 背景较亮 → 深色文字；背景较暗 → 浅色文字。
+ *
+ * @param bgColor 背景颜色（支持 #hex / #hex8 / rgba()）
+ * @returns 深色文字 '#1f2937' 或浅色文字 '#ffffff'
+ */
+export function getContrastTextColor(bgColor: string): string {
+  const { r, g, b } = parseColor(bgColor)
+  const srgb = (c: number): number => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  const luminance = 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b)
+  // 阈值 0.5：亮度超过则用深色文字，否则用浅色
+  return luminance > 0.5 ? '#1f2937' : '#ffffff'
+}

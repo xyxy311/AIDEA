@@ -14,6 +14,10 @@ export interface WhiteboardNode {
   height: number
   text: string
   /**
+   * 本节点打上的标签 id 列表（引用 Tag 定义，见 tags store）。
+   */
+  tagIds: string[]
+  /**
    * 边框颜色（始终有值，默认值由工厂函数 createNode 填充）。
    * 支持透明度（#rrggbbaa / rgba）。节点的唯一可定制样式字段——
    * 文字色随主题（见 CanvasColors.nodeTextColor），
@@ -70,6 +74,17 @@ export interface Connection {
    * 双击连线可编辑，也可在右侧边栏修改。
    */
   text: string | null
+}
+
+/**
+ * 标签定义（项目级，随项目文件序列化）。
+ * 节点通过 WhiteboardNode.tagIds 引用标签 id。
+ */
+export interface Tag {
+  id: string
+  name: string
+  /** 标签颜色（hex） */
+  color: string
 }
 
 // ===== 预设样式系统 =====

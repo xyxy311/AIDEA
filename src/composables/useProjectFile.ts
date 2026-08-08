@@ -3,6 +3,7 @@ import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import { useViewStore } from '@/stores/view'
 import { useFileStore } from '@/stores/file'
+import { useTagsStore } from '@/stores/tags'
 import { useCommands } from '@/composables/useCommands'
 import { useMessage } from 'naive-ui'
 import { t } from '@/composables/useT'
@@ -13,7 +14,7 @@ import {
 } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode, Tag } from '@/types'
 
 /**
  * useProjectFile - 项目文件编排层（新建 / 保存 / 打开）
@@ -52,6 +53,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   const history = useHistoryStore()
   const commands = useCommands()
   const fileStore = useFileStore()
+  const tagsStore = useTagsStore()
   const message = useMessage()
 
   const confirm = options?.confirm
@@ -89,6 +91,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   function loadProjectIntoApp(data: {
     projectName: string
     nodes: WhiteboardNode[]
+    tags?: Tag[]
     viewState: ProjectViewState
   }): void {
     // 1. 整树替换，确保根节点存在
@@ -101,6 +104,9 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       )
     }
     nodeStore.replaceNodes(map)
+
+    // 1.5 替换标签定义（打开项目时恢复；新建时 data.tags 为空数组）
+    tagsStore.replaceTags(data.tags ?? [])
 
     // 2. 清空撤销栈（整树替换不可撤销）
     commands.clearHistory()
@@ -165,7 +171,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     const nodes = Array.from(nodeStore.nodes.values())
     const projectName = nodeStore.rootNode?.text || t('common.untitledProject')
     const viewState = collectViewState()
-    return serializeProject(nodes, projectName, viewState)
+    const tags = tagsStore.tagList
+    return serializeProject(nodes, projectName, viewState, tags)
   }
 
   /** 默认保存文件名（项目名 + '.aidea.json'） */
@@ -259,6 +266,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       },
     })
     fileStore.resetFileState()
+    // 标签定义已由 loadProjectIntoApp 的 `tags ?? []` 兜底清空（无需重复 clearTags）
     message.success(t('menuBar.newProjectDone'))
   }
 

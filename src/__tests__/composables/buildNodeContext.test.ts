@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
-import { buildNodeContext } from '@/composables/useAIAssist'
+import { buildNodeContext, collectSubtree } from '@/composables/useAIAssist'
 
 describe('buildNodeContext', () => {
   let store: ReturnType<typeof useNodeStore>
@@ -146,5 +146,56 @@ describe('buildNodeContext', () => {
     expect(output).toContain('目标 (N1)')
     expect(output).toContain('子1 (C1)')
     expect(output).not.toContain('副标题')
+  })
+})
+
+describe('collectSubtree', () => {
+  let store: ReturnType<typeof useNodeStore>
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useNodeStore()
+  })
+
+  /** 构造：根 → A(含 a1 → a11) → A2(含 a21) */
+  function buildTree(): { a: string; a1: string } {
+    const a = store.addNode(ROOT_NODE_ID, 0, 0, 'A')
+    const a1 = store.addNode(a, 0, 0, 'A1')
+    store.addNode(a1, 0, 0, 'A11')
+    store.addNode(a, 0, 0, 'A2')
+    return { a, a1 }
+  }
+
+  it('默认收集所有层，完整递归', () => {
+    const { a } = buildTree()
+    expect(collectSubtree(store, a)).toEqual(['A1', '  A11', 'A2'])
+  })
+
+  it('maxDepth=1 只收集第一层子级', () => {
+    const { a } = buildTree()
+    expect(collectSubtree(store, a, { maxDepth: 1 })).toEqual(['A1', 'A2'])
+  })
+
+  it('maxDepth=2 收集两层', () => {
+    const { a } = buildTree()
+    expect(collectSubtree(store, a, { maxDepth: 2 })).toEqual(['A1', '  A11', 'A2'])
+  })
+
+  it('baseIndent 调整第一层缩进层级', () => {
+    const { a } = buildTree()
+    expect(collectSubtree(store, a, { baseIndent: 1 })).toEqual(['  A1', '    A11', '  A2'])
+  })
+
+  it('无子级时返回空数组', () => {
+    const a = store.addNode(ROOT_NODE_ID, 0, 0, 'A')
+    const a1 = store.addNode(a, 0, 0, 'A1')
+    const a11 = store.addNode(a1, 0, 0, 'A11')
+    expect(collectSubtree(store, a11)).toEqual([])
+  })
+
+  it('不包含节点自身', () => {
+    const { a } = buildTree()
+    const lines = collectSubtree(store, a)
+    expect(lines.some((l) => l === 'A')).toBe(false)
   })
 })

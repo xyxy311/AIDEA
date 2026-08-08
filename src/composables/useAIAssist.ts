@@ -35,7 +35,11 @@
  *   解析到被引用的可引用节点（# 起始），递归输出其完整子树（无限深度）。
  */
 import type { WhiteboardNode } from '@/types'
-import type { useNodeStore } from '@/stores/node'
+import { useNodeStore } from '@/stores/node'
+import { useProjectStore } from '@/stores/project'
+import { useAIConfigStore } from '@/stores/ai'
+import { createOpenAIProvider } from '@/provider/openai'
+import { AI_SYSTEM_PROMPT, AI_WORD_PROMPT } from '@/constants/ai'
 import { parseReferenceSegments } from '@/utils/reference'
 
 type NodeStore = ReturnType<typeof useNodeStore>
@@ -77,20 +81,47 @@ function collectRefNames(
   }
 }
 
+/** 收集子树选项 */
+export interface CollectSubtreeOptions {
+  /**
+   * 最大收集深度（指"子级层数"）：1 = 只收集第一层子级；
+   * undefined = 收集所有层（完整递归）。
+   */
+  maxDepth?: number
+  /** 第一层子级的缩进层级（0 = 无缩进）。默认 0 */
+  baseIndent?: number
+}
+
 /**
- * 递归输出被引用节点的完整子树（# 设定 部分）。
- * @param depth 当前缩进层级（顶层被引用节点为 0）
+ * 收集给定节点的所有子级，按缩进格式构成字符串行。
+ *
+ * 每行已带缩进（第一层子级缩进 baseIndent 级，往下一级 +1）。
+ * 不包含节点自身，只收集其子级。
+ *
+ * @param nodeStore - 节点 store 实例（只读）
+ * @param nodeId    - 父节点 ID
+ * @param options   - 控制深度与起始缩进
+ * @returns 带缩进的子级文本行数组（按 childrenOf 顺序）
  */
-function appendRefSubtree(
+export function collectSubtree(
   nodeStore: NodeStore,
   nodeId: string,
-  depth: number,
-  lines: string[],
-): void {
-  for (const child of nodeStore.childrenOf(nodeId)) {
-    lines.push(INDENT.repeat(depth) + firstLine(child.text))
-    appendRefSubtree(nodeStore, child.id, depth + 1, lines)
+  options: CollectSubtreeOptions = {},
+): string[] {
+  const { maxDepth, baseIndent = 0 } = options
+  const lines: string[] = []
+
+  const walk = (parentId: string, depth: number): void => {
+    for (const child of nodeStore.childrenOf(parentId)) {
+      lines.push(INDENT.repeat(baseIndent + depth - 1) + firstLine(child.text))
+      if (maxDepth === undefined || depth < maxDepth) {
+        walk(child.id, depth + 1)
+      }
+    }
   }
+
+  walk(nodeId, 1)
+  return lines
 }
 
 /**
@@ -137,7 +168,7 @@ export function buildNodeContext(
     const refNode = nodeStore.getNode(refNodeId)
     if (!refNode) continue
     lines.push(name.startsWith('#') ? name : `#${name}`)
-    appendRefSubtree(nodeStore, refNode.id, 1, lines)
+    lines.push(...collectSubtree(nodeStore, refNode.id, { baseIndent: 1 }))
   }
 
   // ── ## 节点树 ──
@@ -182,4 +213,92 @@ export function buildNodeContext(
   }
 
   return lines.join('\n')
+}
+
+/**
+ * 调用本地 Ollama 大模型，把当前视图上下文发给模型并打印回复到控制台。
+ *
+ * 编排流程：
+ *   1. 取目标节点（默认当前查看节点 project.currentNodeId）
+ *   2. 用 buildNodeContext 生成结构化上下文
+ *   3. 读取 aiConfig store 配置，创建 OpenAI 兼容 provider
+ *   4. 以 system（AI_SYSTEM_PROMPT）+ user（上下文）调用 chat
+ *   5. console.log 打印回复并返回供调用方使用
+ *
+ * 本次只打印到控制台，不渲染到画布。
+ *
+ * @param targetNodeId - 目标节点 ID；缺省用当前查看节点
+ * @returns 模型回复文本
+ * @throws 上下文中空时返回空字符串；调用失败时 re-throw
+ */
+export async function runAIAssist(targetNodeId?: string): Promise<string> {
+  const project = useProjectStore()
+  const targetId = targetNodeId ?? project.currentNodeId
+
+  const nodeStore = useNodeStore()
+  const context = buildNodeContext(nodeStore, targetId)
+  if (!context) {
+    console.warn('[AI] 当前视图上下文为空')
+    return ''
+  }
+
+  const aiConfig = useAIConfigStore()
+  const provider = createOpenAIProvider(aiConfig.providerConfig())
+
+  try {
+    const reply = await provider.chat([
+      { role: 'system', content: AI_SYSTEM_PROMPT },
+      { role: 'user', content: context },
+    ])
+    console.log('[AI 回复]', reply)
+    return reply
+  } catch (err) {
+    console.error('[AI 调用失败]', err)
+    throw err
+  }
+}
+
+/**
+ * AI 词生成工作流：把当前视图展示的节点（视口一层深度子级）发给模型，
+ * 让模型随机生成 10 个词（换行分隔，无序号等其它信息），打印到控制台。
+ *
+ * 编排流程：
+ *   1. 取目标节点（默认当前查看节点 project.currentNodeId）
+ *   2. 用 collectSubtree(targetId, { maxDepth: 1 }) 收集视口展示的所有节点（一层深度）
+ *   3. 读取 aiConfig store 配置，创建 OpenAI 兼容 provider
+ *   4. 以 system（AI_WORD_PROMPT）+ user（节点列表）调用 chat
+ *   5. console.log 打印模型回复并返回供调用方使用
+ *
+ * 本次只打印到控制台，不渲染到画布。
+ *
+ * @param targetNodeId - 目标节点 ID；缺省用当前查看节点
+ * @returns 模型回复文本（每行一个词）
+ * @throws 上下文为空时返回空字符串；调用失败时 re-throw
+ */
+export async function runAIWordGeneration(targetNodeId?: string): Promise<string> {
+  const project = useProjectStore()
+  const targetId = targetNodeId ?? project.currentNodeId
+
+  const nodeStore = useNodeStore()
+  const nodes = collectSubtree(nodeStore, targetId, { maxDepth: 1 })
+  if (nodes.length === 0) {
+    console.warn('[AI] 当前视图无子级节点')
+    return ''
+  }
+  const context = nodes.join('\n')
+
+  const aiConfig = useAIConfigStore()
+  const provider = createOpenAIProvider(aiConfig.providerConfig())
+
+  try {
+    const reply = await provider.chat([
+      { role: 'system', content: AI_WORD_PROMPT },
+      { role: 'user', content: context },
+    ])
+    console.log('[AI 词生成回复]', reply)
+    return reply
+  } catch (err) {
+    console.error('[AI 词生成失败]', err)
+    throw err
+  }
 }

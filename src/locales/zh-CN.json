@@ -188,5 +188,17 @@
     "untitledProject": "未命名项目",
     "confirm": "确定",
     "cancel": "取消"
+  },
+  "aiWord": {
+    "title": "AI 生成词",
+    "generateBtn": "AI 生成词",
+    "loading": "正在生成…",
+    "error": "生成失败：{message}",
+    "empty": "暂无结果，请重新生成",
+    "add": "添加",
+    "addAll": "全部添加",
+    "regenerate": "重新生成",
+    "close": "关闭",
+    "retry": "重试"
   }
 }

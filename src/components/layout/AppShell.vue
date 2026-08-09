@@ -33,6 +33,7 @@ import SettingsModal from '@/components/panels/SettingsModal.vue'
 import Toolbar from '@/components/toolbar/Toolbar.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
+import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
 
 // ── 侧边栏收起状态 ──
 const layout = useLayoutStore()
@@ -195,6 +196,9 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
     <!-- 浮动属性编辑器（全局单实例挂载） -->
     <FloatingPropertyEditor />
+
+    <!-- AI 生成词浮动面板（全局单实例挂载） -->
+    <FloatingAIWordPanel />
   </div>
 </template>
 

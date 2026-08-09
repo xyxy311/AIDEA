@@ -6,15 +6,19 @@
  * 通过 useWhiteboardStore 直接操作状态。
  */
 import { computed } from 'vue'
+import { SparklesOutline } from '@vicons/ionicons5'
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
+import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { t } from '@/composables/useT'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 const active = useActiveView()
 const commands = useCommands()
 const { stageWidth, stageHeight } = useStageSize()
+// 顶层解构：loading 为 ref，模板自动解包；open 为函数
+const { open: openAIWordPanel, loading: aiWordLoading } = useAIWordPanel()
 
 /** 当前视图的节点列表 */
 const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentNodeId))
@@ -72,6 +76,13 @@ function debugPrint() {
           />
         </svg>
         {{ t('toolbar.addNode') }}
+      </button>
+      <button
+        class="btn btn-primary"
+        :disabled="aiWordLoading"
+        @click="openAIWordPanel"
+      >
+        {{ t('aiWord.generateBtn') }}
       </button>
       <button class="btn btn-primary" @click="debugPrint">
         {{ t('toolbar.debug') }}
@@ -141,11 +152,6 @@ function debugPrint() {
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.btn-icon {
-  flex-shrink: 0;
-  display: block;
 }
 
 /* ── 主要按钮（添加节点） ── */

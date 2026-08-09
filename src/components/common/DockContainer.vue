@@ -8,17 +8,16 @@
  * - 作为跨容器 drop zone 接收来自左侧活动栏的面板
  * - 空态提示
  *
+ * 每个面板由 DockPanel 统一外壳渲染（标题/图标/关闭/拖拽手柄），
  * 状态全部来自 layout store，本组件不持有布局数据。
  */
 import { ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { useLayoutStore } from '@/stores/layout'
-import { PANEL_REGISTRY, PANEL_COMPONENTS, type PanelId } from '@/constants/panels'
+import type { PanelId } from '@/constants/panels'
+import { readPanelDrag, writePanelDrag, type PanelDragData } from '@/utils/dock'
 import { t } from '@/composables/useT'
 import DockPanel from './DockPanel.vue'
-
-/** 跨容器拖拽数据 MIME 类型（全项目统一协议） */
-const IDS = 'aidea-panel'
 
 const layout = useLayoutStore()
 
@@ -26,12 +25,8 @@ const layout = useLayoutStore()
 const containerEl = ref<HTMLElement | null>(null)
 
 // ── 拖拽换位状态 ──
-interface DragSource {
-  panelId: PanelId
-  from: 'left' | 'right'
-}
 /** 当前拖拽源信息（仅同容器内拖拽时在本地维护；跨容器靠 dataTransfer） */
-const dragSource = ref<DragSource | null>(null)
+const dragSource = ref<PanelDragData | null>(null)
 /** 当前 hover 的目标面板索引（用于指示条） */
 const dragOverIndex = ref<number | null>(null)
 
@@ -42,19 +37,6 @@ const resizeStartB = ref(1)
 const resizeTotal = ref(2)
 const resizeScale = ref(1)
 
-/** 读取 dataTransfer 中的统一拖拽信息，容错返回 null */
-function readDrag(e: DragEvent): DragSource | null {
-  const raw = e.dataTransfer?.getData(IDS)
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as DragSource
-    if (parsed && typeof parsed.panelId === 'string') return parsed
-    return null
-  } catch {
-    return null
-  }
-}
-
 /** 重置本地拖拽指示状态 */
 function resetDrag(): void {
   dragSource.value = null
@@ -64,10 +46,7 @@ function resetDrag(): void {
 /** DockPanel 拖拽起始（同容器内） */
 function onPanelDragStart(panelId: PanelId, ev: DragEvent): void {
   dragSource.value = { panelId, from: 'right' }
-  if (ev.dataTransfer) {
-    ev.dataTransfer.effectAllowed = 'move'
-    ev.dataTransfer.setData(IDS, JSON.stringify({ panelId, from: 'right' }))
-  }
+  writePanelDrag(ev, { panelId, from: 'right' })
 }
 
 /** 面板条目 dragover：允许 drop 并记录 hover 索引 */
@@ -81,7 +60,7 @@ function onPanelDragOver(index: number, e: DragEvent): void {
 function onPanelDrop(index: number, e: DragEvent): void {
   e.preventDefault()
   e.stopPropagation()
-  const payload = readDrag(e)
+  const payload = readPanelDrag(e)
   if (!payload) {
     resetDrag()
     return
@@ -98,7 +77,7 @@ function onPanelDrop(index: number, e: DragEvent): void {
 /** 容器级 drop（空隙 / resize handle / 空态）→ 追加到末尾 */
 function onContainerDrop(e: DragEvent): void {
   e.preventDefault()
-  const payload = readDrag(e)
+  const payload = readPanelDrag(e)
   if (!payload) {
     resetDrag()
     return
@@ -163,16 +142,7 @@ useEventListener('pointerup', () => {
   resizeIndex.value = null
 })
 
-/** 解析面板标题：property 面板统一用「属性」，其余取注册表 titleKey */
-function resolveTitle(id: PanelId): string {
-  if (id === 'property') {
-    return t('rightSidebar.property')
-  }
-  const meta = PANEL_REGISTRY.find((p) => p.id === id)
-  return meta ? t(meta.titleKey) : id
-}
-
-/** 面板关闭 → 从 dock 移除 */
+/** 面板关闭 → 从 dock 移除（回未放置状态） */
 function onPanelClose(panelId: PanelId): void {
   layout.removePanel(panelId)
 }
@@ -203,15 +173,9 @@ function onPanelClose(panelId: PanelId): void {
         >
           <DockPanel
             :panel-id="id"
-            :title="resolveTitle(id)"
             @drag-start="onPanelDragStart"
             @close="onPanelClose"
-          >
-            <component
-              :is="PANEL_COMPONENTS[id]"
-              :hide-header="id !== 'property'"
-            />
-          </DockPanel>
+          />
         </div>
         <!-- 面板间 resize handle -->
         <div

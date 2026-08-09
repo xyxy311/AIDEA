@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { PanelId } from '@/constants/panels'
+import { DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS } from '@/constants/panels'
 import {
-  defaultLeftPanels,
   defaultRightSizes,
   defaultDockState,
   normalizeDockState,
@@ -10,7 +10,6 @@ import {
   reorderRightCore,
   removePanelCore,
   setRightSizeCore,
-  DEFAULT_RIGHT,
   DEFAULT_SIZE,
   type DockState,
 } from '@/utils/dock'
@@ -18,13 +17,13 @@ import {
 const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property']
 
 function baseState(): DockState {
-  return defaultDockState(REGISTRY)
+  return defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
 }
 
 describe('dock 纯函数', () => {
   describe('默认布局', () => {
-    it('defaultLeftPanels 排除右侧默认面板（property）', () => {
-      expect(defaultLeftPanels(REGISTRY)).toEqual([
+    it('DEFAULT_LEFT_PANELS 排除右锁默认面板（property）', () => {
+      expect(DEFAULT_LEFT_PANELS).toEqual([
         'nodeTree',
         'references',
         'search',
@@ -34,9 +33,9 @@ describe('dock 纯函数', () => {
     })
 
     it('defaultDockState：左侧为全部注册-右侧默认[-property-]，尺寸默认 1', () => {
-      const s = defaultDockState(REGISTRY)
-      expect(s.leftPanels).toEqual(defaultLeftPanels(REGISTRY))
-      expect(s.rightPanels).toEqual(DEFAULT_RIGHT)
+      const s = defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
+      expect(s.leftPanels).toEqual(DEFAULT_LEFT_PANELS)
+      expect(s.rightPanels).toEqual(DEFAULT_RIGHT_PANELS)
       expect(s.rightSizes).toEqual({ property: DEFAULT_SIZE })
     })
   })

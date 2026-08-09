@@ -9,22 +9,23 @@
  * - 拖拽结束时抑制随后的 click，避免误切换面板
  *
  * 面板列表与顺序来自 layout store（内存态，不持久化），
- * 渲染顺序 = layout.panels（受拖拽 reorder 影响），元信息从 PANEL_REGISTRY 解析。
+ * 渲染顺序 = layout.panels（受拖拽 reorder 影响），元信息从 PANEL_CATALOG 解析。
  */
 import { computed, ref } from 'vue'
 import { NTooltip, NDropdown } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { useLayoutStore } from '@/stores/layout'
-import { PANEL_REGISTRY, type PanelId, type PanelMeta } from '@/constants/panels'
+import { PANEL_CATALOG, type PanelId, type PanelDef } from '@/constants/panels'
+import { readPanelDrag, writePanelDrag } from '@/utils/dock'
 import { t } from '@/composables/useT'
 
 const layout = useLayoutStore()
 
-/** 按 layout store 的面板顺序，解析每个面板的元信息 */
-const orderedPanels = computed<PanelMeta[]>(() =>
+/** 按 layout store 的面板顺序，解析每个面板的元信息（品类表单一来源） */
+const orderedPanels = computed<PanelDef[]>(() =>
   layout.panels
-    .map((id) => PANEL_REGISTRY.find((p) => p.id === id))
-    .filter((p): p is PanelMeta => !!p),
+    .map((id) => PANEL_CATALOG.find((p) => p.id === id))
+    .filter((p): p is PanelDef => !!p),
 )
 
 // ── HTML5 拖拽排序状态 ──
@@ -34,35 +35,11 @@ const dropIndex = ref<number | null>(null)
 /** 拖拽刚结束时抑制紧随其后的 click，避免误切换面板 */
 const suppressClick = ref(false)
 
-/** 拖拽共享协议（全项目一致）：左右 dock 互通时写入/读取的 dataTransfer key */
-const IDS = 'aidea-panel'
-
-/** 面板拖拽数据结构 */
-interface PanelDragData {
-  panelId: PanelId
-  from: 'left' | 'right'
-}
-
-/** 从 dataTransfer 解析面板拖拽数据；解析失败返回 null（容错） */
-function parsePanelDrag(e: DragEvent): PanelDragData | null {
-  const raw = e.dataTransfer?.getData(IDS)
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as PanelDragData
-  } catch {
-    return null
-  }
-}
-
-function onDragStart(index: number, panel: PanelMeta, e: DragEvent): void {
+function onDragStart(index: number, panel: PanelDef, e: DragEvent): void {
   dragIndex.value = index
   suppressClick.value = true
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', String(index))
-    // 同时写入共享协议，供右侧 dock 接收本面板
-    e.dataTransfer.setData(IDS, JSON.stringify({ panelId: panel.id, from: 'left' }))
-  }
+  // 写入统一跨容器拖拽协议，供右侧 dock 接收本面板
+  writePanelDrag(e, { panelId: panel.id, from: 'left' })
 }
 
 // ── 活动栏容器作为拖拽目标（接收来自右侧 dock 的面板）──
@@ -72,11 +49,11 @@ const isDropTarget = ref(false)
 
 function onContainerDragOver(e: DragEvent): void {
   // 仅当拖拽来自右侧 dock 时高亮可投放
-  isDropTarget.value = parsePanelDrag(e)?.from === 'right'
+  isDropTarget.value = readPanelDrag(e)?.from === 'right'
 }
 
 function onContainerDrop(e: DragEvent): void {
-  const data = parsePanelDrag(e)
+  const data = readPanelDrag(e)
   if (data && data.from === 'right') {
     layout.moveToLeft(data.panelId)
   }
@@ -89,9 +66,9 @@ function onContainerDragLeave(): void {
 
 // ── 底部「添加面板」─ 浮层列出未放置面板 ──
 
-/** 未放置的面板：既不在左侧也不在右侧的注册表面板 */
-const unplacedPanels = computed<PanelMeta[]>(() =>
-  PANEL_REGISTRY.filter(
+/** 未放置的面板：既不在左侧也不在右侧的品类型面板 */
+const unplacedPanels = computed<PanelDef[]>(() =>
+  PANEL_CATALOG.filter(
     (p) => !layout.panels.includes(p.id) && !layout.rightPanels.includes(p.id),
   ),
 )

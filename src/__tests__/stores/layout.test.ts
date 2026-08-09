@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useLayoutStore } from '@/stores/layout'
-import { PANEL_REGISTRY } from '@/constants/panels'
+import { PANEL_CATALOG } from '@/constants/panels'
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
@@ -10,15 +10,15 @@ describe('useLayoutStore', () => {
 
   it('初始激活第一个注册面板，且默认展开', () => {
     const layout = useLayoutStore()
-    expect(layout.activeId).toBe(PANEL_REGISTRY[0].id)
+    expect(layout.activeId).toBe(PANEL_CATALOG[0].id)
     expect(layout.collapsed).toBe(false)
-    expect(layout.activeMeta?.id).toBe(PANEL_REGISTRY[0].id)
+    expect(layout.activeMeta?.id).toBe(PANEL_CATALOG[0].id)
   })
 
   it('togglePanel：点击激活项 → 收起；再点同项 → 展开', () => {
     const layout = useLayoutStore()
-    const firstId = PANEL_REGISTRY[0].id
-    const secondId = PANEL_REGISTRY[1].id
+    const firstId = PANEL_CATALOG[0].id
+    const secondId = PANEL_CATALOG[1].id
 
     // 切到第二个面板（展开）
     layout.togglePanel(secondId)
@@ -38,12 +38,12 @@ describe('useLayoutStore', () => {
 
   it('setActive：激活指定面板；无效 id 忽略', () => {
     const layout = useLayoutStore()
-    layout.setActive(PANEL_REGISTRY[1].id)
-    expect(layout.activeId).toBe(PANEL_REGISTRY[1].id)
+    layout.setActive(PANEL_CATALOG[1].id)
+    expect(layout.activeId).toBe(PANEL_CATALOG[1].id)
 
     // 无效 id 不改变状态
     layout.setActive('nope' as never)
-    expect(layout.activeId).toBe(PANEL_REGISTRY[1].id)
+    expect(layout.activeId).toBe(PANEL_CATALOG[1].id)
   })
 
   it('reorder：调整活动栏顺序', () => {
@@ -65,8 +65,8 @@ describe('useLayoutStore', () => {
   it('reorder 后激活面板仍归属 panels（activeId 不变）', () => {
     const layout = useLayoutStore()
     layout.reorder(0, 1)
-    layout.setActive(PANEL_REGISTRY[0].id)
-    expect(layout.activeId).toBe(PANEL_REGISTRY[0].id)
+    layout.setActive(PANEL_CATALOG[0].id)
+    expect(layout.activeId).toBe(PANEL_CATALOG[0].id)
     expect(layout.panels.includes(layout.activeId!)).toBe(true)
   })
 
@@ -79,7 +79,7 @@ describe('useLayoutStore', () => {
 
   it('collapse 后 expand 恢复最近激活的面板', () => {
     const layout = useLayoutStore()
-    const secondId = PANEL_REGISTRY[1].id
+    const secondId = PANEL_CATALOG[1].id
     layout.setActive(secondId)
     layout.collapse()
     expect(layout.collapsed).toBe(true)
@@ -90,7 +90,7 @@ describe('useLayoutStore', () => {
 
   it('togglePanel 收起后 expand 恢复同一面板', () => {
     const layout = useLayoutStore()
-    const secondId = PANEL_REGISTRY[1].id
+    const secondId = PANEL_CATALOG[1].id
     layout.togglePanel(secondId)
     layout.togglePanel(secondId) // 收起
     expect(layout.collapsed).toBe(true)

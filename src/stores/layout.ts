@@ -1,9 +1,14 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
-import { PANEL_REGISTRY, type PanelId } from '@/constants/panels'
 import {
-  defaultLeftPanels,
+  PANEL_CATALOG,
+  DEFAULT_LEFT_PANELS,
+  DEFAULT_RIGHT_PANELS,
+  type PanelId,
+} from '@/constants/panels'
+import {
+  defaultDockState,
   defaultRightSizes,
   normalizeDockState,
   moveToLeftCore,
@@ -11,7 +16,6 @@ import {
   reorderRightCore,
   removePanelCore,
   setRightSizeCore,
-  DEFAULT_RIGHT,
   type DockState,
 } from '@/utils/dock'
 
@@ -38,17 +42,17 @@ const STORAGE_SIZES = 'aidea-dock-sizes'
  * 纯状态转换逻辑位于 utils/dock.ts（可单测）。
  */
 export const useLayoutStore = defineStore('layout', () => {
-  const allPanelIds = PANEL_REGISTRY.map((p) => p.id)
+  const allPanelIds = PANEL_CATALOG.map((p) => p.id)
 
   // ── 持久化状态（localStorage）──
-  /** 活动栏面板顺序（默认 = 注册表顺序，排除右侧默认面板） */
-  const panels = useStorage<PanelId[]>(STORAGE_LEFT, defaultLeftPanels(allPanelIds))
-  /** 右侧 dock 面板顺序（默认 = [property]） */
-  const rightPanels = useStorage<PanelId[]>(STORAGE_RIGHT, [...DEFAULT_RIGHT])
+  /** 活动栏面板顺序（默认 = 品类表 defaultPlacement='left'） */
+  const panels = useStorage<PanelId[]>(STORAGE_LEFT, [...DEFAULT_LEFT_PANELS])
+  /** 右侧 dock 面板顺序（默认 = 品类表 defaultPlacement='right'） */
+  const rightPanels = useStorage<PanelId[]>(STORAGE_RIGHT, [...DEFAULT_RIGHT_PANELS])
   /** 右侧各面板高度比例 */
   const rightSizes = useStorage<Record<string, number>>(
     STORAGE_SIZES,
-    defaultRightSizes(DEFAULT_RIGHT),
+    defaultRightSizes(DEFAULT_RIGHT_PANELS),
   )
 
   // ── 加载时归一化（清理脏数据 / 保证互斥）──
@@ -66,16 +70,16 @@ export const useLayoutStore = defineStore('layout', () => {
 
   // ── 左侧激活面板（内存态，不持久化）──
   /** 当前激活面板 id；null = 面板区收起 */
-  const activePanelId = ref<PanelId | null>(PANEL_REGISTRY[0]?.id ?? null)
+  const activePanelId = ref<PanelId | null>(PANEL_CATALOG[0]?.id ?? null)
   /** 最近一次激活的面板 id（收起后用于恢复展开） */
-  const lastPanelId = ref<PanelId | null>(PANEL_REGISTRY[0]?.id ?? null)
+  const lastPanelId = ref<PanelId | null>(PANEL_CATALOG[0]?.id ?? null)
 
   /** 面板区是否收起（activePanelId 为 null） */
   const collapsed = computed(() => activePanelId.value === null)
 
   /** 激活面板元信息（收起时为 null） */
   const activeMeta = computed(
-    () => PANEL_REGISTRY.find((p) => p.id === activePanelId.value) ?? null,
+    () => PANEL_CATALOG.find((p) => p.id === activePanelId.value) ?? null,
   )
 
   /** 激活面板 id 是否在 panels 顺序中（防止 reorder 后引用失效） */
@@ -200,11 +204,12 @@ export const useLayoutStore = defineStore('layout', () => {
     localStorage.removeItem(STORAGE_LEFT)
     localStorage.removeItem(STORAGE_RIGHT)
     localStorage.removeItem(STORAGE_SIZES)
-    panels.value = defaultLeftPanels(allPanelIds)
-    rightPanels.value = [...DEFAULT_RIGHT]
-    rightSizes.value = defaultRightSizes(DEFAULT_RIGHT)
-    activePanelId.value = PANEL_REGISTRY[0]?.id ?? null
-    lastPanelId.value = PANEL_REGISTRY[0]?.id ?? null
+    const d = defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
+    panels.value = d.leftPanels
+    rightPanels.value = d.rightPanels
+    rightSizes.value = d.rightSizes
+    activePanelId.value = PANEL_CATALOG[0]?.id ?? null
+    lastPanelId.value = PANEL_CATALOG[0]?.id ?? null
   }
 
   return {

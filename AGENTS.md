@@ -26,7 +26,7 @@ npm run build        # type-check + vite build
 
 `konva` + `vue-konva` v3（`v-` 前缀）｜`naive-ui` + `@vicons/ionicons5`｜`pinia` setup store（node/view/project/history）｜`@vueuse/core`、`nanoid`｜vitest + happy-dom。别名 `@/` -> `src/`。
 
-## 目录
+## 项目目录
 
 ```
 types/      纯接口
@@ -39,8 +39,8 @@ stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex/tagI
 composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
             / useAIAssist(AI上下文解析+调用：buildNodeContext 把根→目标路径+子级+连线表转结构化语言描述供模型输入，collectSubtree 收集子树按缩进成行，只读 nodeStore；runAIAssist 发散当前视图、runAIWordGeneration 生成10个词，调 provider 后打印到控制台)
 components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
-             / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/MenuBar/AppShell)
-             / common(DraggableSortList — 通用可拖拽排序列表 / DockPanel+DockContainer — 右侧多面板 dock) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
+             / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/MenuBar/AppShell/LeftSidebar/RightSidebar)
+             / common(DraggableSortList — 通用可拖拽排序列表 / DockPanel — 通用面板外壳(两侧共用) / DockContainer — 右侧多面板 dock) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
 ```
 
 组件通常经 `useActiveView()` 统一访问 nodeStore / project / view。
@@ -62,19 +62,19 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 ### 左侧活动栏与面板
 
 - 布局：`ActivityBar`（固定 48px 竖向条，始终可见）+ `LeftSidebar`（面板容器，可 resize，收起=宽度 0 完全隐藏）。
-- **活动栏**：图标序列渲染 `layout.panels`（顺序受拖拽 reorder 影响），元信息从 `PANEL_REGISTRY` 解析（`constants/panels.ts`：id/icon/titleKey + `PANEL_COMPONENTS` 组件映射）。新增面板只需在 registry 注册。
-- **收起/展开只经活动栏**：点击图标 = `layout.togglePanel(id)`（同 id → 收起，激活由 `activePanelId` 驱动，null=收起）。面板组件**无 header**，内部自带 `panel-header` 标题栏。
+- **活动栏**：图标序列渲染 `layout.panels`（顺序受拖拽 reorder 影响），元信息从 `PANEL_CATALOG` 解析（`constants/panels.ts`：id/icon/titleKey/component + `defaultPlacement`）。新增面板只需在品类表登记。
+- **收起/展开只经活动栏**：点击图标 = `layout.togglePanel(id)`（同 id → 收起，激活由 `activePanelId` 驱动，null=收起）。面板统一由 `DockPanel` 外壳提供标题栏/图标/关闭/拖拽手柄，面板组件本身**无 header**。
 - **拖拽排序**：HTML5 drag（dragstart/dragover/drop）调 `layout.reorder`；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位，抑制拖拽后误触 click 切换面板。内存态，不持久化。
 - layout store：`panels`（顺序）/`activePanelId`/`lastPanelId`（收起后 `expand()` 恢复）/`togglePanel`/`setActive`/`reorder`/`collapse`/`expand`。
-- 新增面板只需在 `constants/panels.ts` 注册，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。
+- 新增面板只需在 `constants/panels.ts` 品类表登记，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。
 
 ### 可拖拽面板与左右侧边栏（dock）
 
 - **右侧是多面板 dock**（PS/Blender 式）：`RightSidebar` 外壳内渲染 `DockContainer`，垂直堆叠多个 `DockPanel`；面板间有可上下拖拽的 resize handle 调整高度比例，面板可拖拽换位、可关闭。
-- **通用组件**：`common/DockPanel.vue`（统一 header：拖拽手柄 + 标题 + 关闭按钮，内容走插槽，滚动用 `NScrollbar x-scrollable`）；`common/DockContainer.vue`（垂直堆叠 + resize + reorder + 空态）。
-- **左右互通**：面板可在左侧（活动栏）与右侧（dock）之间拖拽移动。统一 HTML5 drag 协议 `dataTransfer` 携带 `{panelId, from:'left'|'right'}`（MIME `aidea-panel`）：右侧面板拖到活动栏 → `moveToLeft`；活动栏图标拖到右侧 dock → `moveToRight`。活动栏底部「+」可把未放置面板加回左侧。
-- **面板复用**：左侧面板（NodeTree/References/Search/Presets/Tags）支持 `hideHeader` prop，作为 dock 面板时隐藏自带标题栏避免双标题；`property` 面板（`PropertyPanel`，按选中自动切节点/连线属性编辑器）默认常驻右侧。
-- **layout store**：`rightPanels`（右侧顺序）/`rightSizes`（各面板 flex 比例）/`moveToLeft`/`moveToRight`/`reorderRight`/`setRightSize`/`removePanel`/`resetDock`。纯状态转换在 `utils/dock.ts`（可单测）。归属/顺序/高度持久化到 localStorage，设置「恢复默认布局」一键重置。
+- **通用外壳 `DockPanel`**：`common/DockPanel.vue`（唯一面板包裹层，两侧共用）：标题栏显隐 `showHeader`、活动栏图标（从品类表 `PANEL_INDEX` 读，与 ActivityBar 同源）、标题（品类表 `titleKey`，可用 `title` prop 覆盖）、关闭按钮 `showClose`、拖拽手柄 `draggable`、滚动 `NScrollbar x-scrollable`。面板内容组件由品类表 `component` 提供（纯内容，无自带 header）。左侧 `LeftSidebar` 与右侧 `DockContainer` 均只放 `<DockPanel :panel-id="...">`。
+- **面板纯化**：`panels/` 下面板为纯内容组件，**不携带 header/hideHeader/title**；标题、图标、关闭、拖拽全由外层 `DockPanel` 提供。
+- **左右互通**：面板可在左侧（活动栏/单面板区）与右侧（dock）之间拖拽移动。统一 HTML5 drag 协议由 `utils/dock.ts` 的 `PANEL_DRAG_MIME`/`writePanelDrag`/`readPanelDrag` 提供（dataTransfer 携带 `{panelId, from:'left'|'right'}`，MIME `aidea-panel`）：右侧面板拖到活动栏 → `moveToLeft`；活动栏图标/左侧面板拖到右侧 dock → `moveToRight`。活动栏底部「+」可把未放置面板加回左侧。
+- **layout store**：`rightPanels`（右侧顺序）/`rightSizes`（各面板 flex 比例）/`moveToLeft`/`moveToRight`/`reorderRight`/`setRightSize`/`removePanel`/`resetDock`。纯状态转换在 `utils/dock.ts`（可单测）。默认左右面板由品类表 `defaultPlacement` 派生（不硬编码）。归属/顺序/高度持久化到 localStorage，设置「恢复默认布局」一键重置。
 - 详见 `docs/可拖拽面板与左右侧边栏.md`。
 
 ### 预设样式系统（presets store）
@@ -90,7 +90,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 
 - **通用可拖拽排序列表**：`src/components/common/DraggableSortList.vue`，封装 HTML5 拖拽排序（拖拽手柄、拖拽状态、放置行高亮）与 1-9 序号徽标，供各面板复用。
 - **使用方式（面板经插槽封装列表项）**：`:items` 传列表数据（元素须含 `id`）；列表项内容经**默认作用域插槽** `#default="{ item }"` 传入，空态经 `#empty` 插槽。拖拽落点触发 `@reorder(from, to)`，面板据此调用对应 store 的 reorder 方法；整行点击触发 `@row-click="(item) => ..."`（可选）。`:show-shortcut-badge` 控制序号徽标显隐（默认 true）、`:shortcut-title` 设徽标 hover 提示。
-- **已使用面板**：`PresetManagerPanel`（预设列表，开启序号徽标）、`TagsPanel`（标签列表，关闭徽标）。
+- **面板使用案例**：`PresetManagerPanel`（预设列表，开启序号徽标）、`TagsPanel`（标签列表，关闭徽标）。
 - **复用约定**：**后续新增/改造面板的纵向可拖拽排序列表一律优先复用该组件**，只把「每行内容」封装进作用域插槽，不要在面板内重写拖拽逻辑/样式。行内操作按钮（编辑/删除/改色）需 `@click.stop` 与行点击隔离，避免误触发 `@row-click`。
 
 ### 内联视图（DOM 覆盖层渲染）

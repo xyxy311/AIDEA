@@ -12,6 +12,9 @@ import type { PanelId } from '@/constants/panels'
  * - rightSizes：右侧各面板的高度比例（flex-grow），key=panelId
  *
  * 约束：一个面板同一时刻只能归属于一侧（left ∪ right = 已放置面板）。
+ *
+ * 默认布局（哪些面板默认放哪侧）由面板品类表 constants/panels.ts 的
+ * defaultPlacement 派生，本文件不硬编码任何面板 id。
  */
 
 /** Dock 侧标识 */
@@ -27,32 +30,27 @@ export interface DockState {
 /** 默认高度比例 */
 export const DEFAULT_SIZE = 1
 
-/** 默认右侧 dock 面板（属性编辑器常驻示例） */
-export const DEFAULT_RIGHT: PanelId[] = ['property']
-
 /**
- * 计算默认左侧活动栏顺序：注册面板中排除右侧默认面板（property）。
- * @param registry 全部面板 id 列表（registry 顺序即默认顺序）
+ * 创建默认布局状态。
+ * @param leftPanels 左侧活动栏默认面板顺序（来自品类表 DEFAULT_LEFT_PANELS）
+ * @param rightPanels 右侧 dock 默认面板顺序（来自品类表 DEFAULT_RIGHT_PANELS）
  */
-export function defaultLeftPanels(registry: PanelId[]): PanelId[] {
-  return registry.filter((id) => !DEFAULT_RIGHT.includes(id))
+export function defaultDockState(
+  leftPanels: PanelId[],
+  rightPanels: PanelId[],
+): DockState {
+  return {
+    leftPanels: [...leftPanels],
+    rightPanels: [...rightPanels],
+    rightSizes: defaultRightSizes(rightPanels),
+  }
 }
 
-/** 计算右侧默认尺寸：与 DEFAULT_RIGHT 一一对应 */
+/** 计算右侧默认尺寸：与 rightPanels 一一对应 */
 export function defaultRightSizes(rightPanels: PanelId[]): Record<string, number> {
   const sizes: Record<string, number> = {}
   for (const id of rightPanels) sizes[id] = DEFAULT_SIZE
   return sizes
-}
-
-/** 创建默认布局状态 */
-export function defaultDockState(registry: PanelId[]): DockState {
-  const rightPanels = [...DEFAULT_RIGHT]
-  return {
-    leftPanels: defaultLeftPanels(registry),
-    rightPanels,
-    rightSizes: defaultRightSizes(rightPanels),
-  }
 }
 
 /** 有效 id 集（用于过滤脏数据） */
@@ -162,4 +160,36 @@ function dropSize(sizes: Record<string, number>, panelId: PanelId): Record<strin
   const next = { ...sizes }
   delete next[panelId]
   return next
+}
+
+// ── 统一拖拽协议（全项目一致） ──
+
+/** 面板拖拽 dataTransfer MIME 类型 */
+export const PANEL_DRAG_MIME = 'aidea-panel'
+
+/** 面板拖拽数据（跨容器移动时携带） */
+export interface PanelDragData {
+  panelId: PanelId
+  from: 'left' | 'right'
+}
+
+/** 写入面板拖拽数据到 dataTransfer（容错缺少 dataTransfer） */
+export function writePanelDrag(e: { dataTransfer: DataTransfer | null }, data: PanelDragData): void {
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData(PANEL_DRAG_MIME, JSON.stringify(data))
+  }
+}
+
+/** 从 dataTransfer 解析面板拖拽数据；解析失败 / 缺失返回 null */
+export function readPanelDrag(e: DragEvent): PanelDragData | null {
+  const raw = e.dataTransfer?.getData(PANEL_DRAG_MIME)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as PanelDragData
+    if (parsed && typeof parsed.panelId === 'string') return parsed
+    return null
+  } catch {
+    return null
+  }
 }

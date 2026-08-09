@@ -20,11 +20,6 @@ import { useNodeStore } from '@/stores/node'
 import { useNodeTree } from '@/composables/useNodeTree'
 import { t } from '@/composables/useT'
 
-/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
-defineProps<{
-  hideHeader?: boolean
-}>()
-
 const project = useProjectStore()
 const nodeStore = useNodeStore()
 const { deleteNodeRecursive, renameNode, rootViewId } = useNodeTree()
@@ -83,11 +78,6 @@ function cancelRename(): void {
 
 <template>
   <div class="refs-panel">
-    <!-- 面板标题栏 -->
-    <div v-if="!hideHeader" class="panel-header">
-      <span class="panel-title">{{ t('leftSidebar.references') }}</span>
-    </div>
-
     <NScrollbar class="refs-scroll">
       <div v-if="refs.length === 0" class="refs-empty">
         <NEmpty :description="t('leftSidebar.refsEmpty')" size="small" />
@@ -139,26 +129,6 @@ function cancelRename(): void {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-/* 标题栏 */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.panel-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .refs-hint {

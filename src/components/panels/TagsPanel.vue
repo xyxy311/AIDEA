@@ -19,11 +19,6 @@ import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import type { Tag, WhiteboardNode } from '@/types'
 
-/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
-defineProps<{
-  hideHeader?: boolean
-}>()
-
 const tagsStore = useTagsStore()
 const active = useActiveView()
 const message = useMessage()
@@ -150,11 +145,6 @@ function nextQuickColor(): string {
 
 <template>
   <div class="tags-panel">
-    <!-- 面板标题栏 -->
-    <div v-if="!hideHeader" class="panel-header">
-      <span class="panel-title">{{ t('leftSidebar.tags') }}</span>
-    </div>
-
     <!-- 顶部快速新建 -->
     <div class="quick-add">
       <NInput
@@ -268,25 +258,6 @@ function nextQuickColor(): string {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-/* 标题栏 */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.panel-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 
 /* 顶部快速新建：名称输入独占一行，颜色 + 添加按钮在下一行 */

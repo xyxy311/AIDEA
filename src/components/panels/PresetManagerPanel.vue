@@ -40,11 +40,6 @@ import { t } from '@/composables/useT'
 import { deriveBackgroundColor } from '@/utils/color'
 import { LINE_STYLE_OPTIONS, CONNECTION_MAX_STROKE_WIDTH } from '@/constants'
 
-/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
-defineProps<{
-  hideHeader?: boolean
-}>()
-
 const presetsStore = usePresetsStore()
 const themeStore = useThemeStore()
 const active = useActiveView()
@@ -352,11 +347,6 @@ function handleDeleteGroup(id: string): void {
 
 <template>
   <div class="preset-panel">
-    <!-- 面板标题栏 -->
-    <div v-if="!hideHeader" class="panel-header">
-      <span class="panel-title">{{ t('leftSidebar.presets') }}</span>
-    </div>
-
     <!-- 类型切换（分段按钮） -->
     <div class="tab-switch">
       <button
@@ -599,25 +589,6 @@ function handleDeleteGroup(id: string): void {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-/* 标题栏 */
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.panel-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
 }
 
 /* 类型切换 */

@@ -1,6 +1,12 @@
 import type { Component } from 'vue'
 import { defineComponent, h } from 'vue'
-import { ListOutline, SearchOutline, ColorPaletteOutline, PricetagsOutline, OptionsOutline } from '@vicons/ionicons5'
+import {
+  ListOutline,
+  SearchOutline,
+  ColorPaletteOutline,
+  PricetagsOutline,
+  OptionsOutline,
+} from '@vicons/ionicons5'
 import NodeTreePanel from '@/components/panels/NodeTreePanel.vue'
 import ReferencesPanel from '@/components/panels/ReferencesPanel.vue'
 import SearchPanel from '@/components/panels/SearchPanel.vue'
@@ -37,43 +43,63 @@ const HashIcon = defineComponent({
 })
 
 /**
- * 左侧活动栏面板注册表
+ * 全量面板品类表（单一数据源）
  *
- * 面板注册表 = 单一数据源：
- * - PANEL_REGISTRY：活动栏上展示的图标 / 标题（顺序即默认展示顺序）
- * - PANEL_COMPONENTS：面板 id -> 渲染组件
+ * 所有面板地位等价，仅在布局层决定放左侧还是右侧。本表只描述「面板是什么」，
+ * 不绑定任何布局区：
+ * - id：面板标识
+ * - titleKey：标题 i18n key（经 t() 读取显示文案）
+ * - icon：活动栏 / 面板标题栏共用的图标（单一来源）
+ * - component：面板内容组件（纯内容，无自带 header）
+ * - defaultPlacement：默认放置侧（'left' 活动栏单面板区 / 'right' 多面板 dock）
  *
- * 新增面板只需在此注册 id + 图标 + 组件，活动栏与面板容器自动渲染。
- * 面板顺序（拖拽排序）与激活状态由 layout store 管理，不在此处持久化。
+ * 新增面板只需在此登记，活动栏图标、左侧面板区、右侧 dock、左右互通自动生效。
+ * 面板归属 / 顺序 / 激活等布局状态由 layout store 管理，不在此持久化。
  */
 export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property'
 
-/** 面板元信息 */
-export interface PanelMeta {
+/** 面板默认放置侧 */
+export type PanelPlacement = 'left' | 'right'
+
+/** 面板品类定义 */
+export interface PanelDef {
   id: PanelId
   /** i18n key（经 t() 读取显示文案） */
   titleKey: string
-  /** 活动栏图标 */
+  /** 活动栏 / 面板标题栏共用图标 */
   icon: Component
+  /** 面板内容组件（纯内容，无自带 header） */
+  component: Component
+  /** 默认放置侧 */
+  defaultPlacement: PanelPlacement
 }
 
-/** 活动栏面板注册表（顺序即默认展示顺序） */
-export const PANEL_REGISTRY: PanelMeta[] = [
-  { id: 'nodeTree', titleKey: 'leftSidebar.nodeTree', icon: ListOutline },
-  { id: 'references', titleKey: 'leftSidebar.references', icon: HashIcon },
-  { id: 'search', titleKey: 'leftSidebar.search', icon: SearchOutline },
-  { id: 'presets', titleKey: 'leftSidebar.presets', icon: ColorPaletteOutline },
-  { id: 'tags', titleKey: 'leftSidebar.tags', icon: PricetagsOutline },
-  // property 面板默认在右侧 dock，不在左侧活动栏默认列表（见 utils/dock.ts）
-  { id: 'property', titleKey: 'rightSidebar.nodeProps', icon: OptionsOutline },
+/** 全量面板品类表（顺序即默认展示顺序） */
+export const PANEL_CATALOG: PanelDef[] = [
+  { id: 'nodeTree', titleKey: 'leftSidebar.nodeTree', icon: ListOutline, component: NodeTreePanel, defaultPlacement: 'left' },
+  { id: 'references', titleKey: 'leftSidebar.references', icon: HashIcon, component: ReferencesPanel, defaultPlacement: 'left' },
+  { id: 'search', titleKey: 'leftSidebar.search', icon: SearchOutline, component: SearchPanel, defaultPlacement: 'left' },
+  { id: 'tags', titleKey: 'leftSidebar.tags', icon: PricetagsOutline, component: TagsPanel, defaultPlacement: 'left' },
+  { id: 'property', titleKey: 'rightSidebar.property', icon: OptionsOutline, component: PropertyPanel, defaultPlacement: 'right' },
+  { id: 'presets', titleKey: 'leftSidebar.presets', icon: ColorPaletteOutline, component: PresetManagerPanel, defaultPlacement: 'right' },
 ]
 
-/** 面板 id -> 渲染组件 */
-export const PANEL_COMPONENTS: Record<PanelId, Component> = {
-  nodeTree: NodeTreePanel,
-  references: ReferencesPanel,
-  search: SearchPanel,
-  presets: PresetManagerPanel,
-  tags: TagsPanel,
-  property: PropertyPanel,
-}
+/** 面板 id -> 品类定义（快速索引） */
+export const PANEL_INDEX: Record<PanelId, PanelDef> = Object.fromEntries(
+  PANEL_CATALOG.map((p) => [p.id, p]),
+) as Record<PanelId, PanelDef>
+
+/** 面板 id -> 内容组件 */
+export const PANEL_COMPONENTS: Record<PanelId, Component> = Object.fromEntries(
+  PANEL_CATALOG.map((p) => [p.id, p.component]),
+) as Record<PanelId, Component>
+
+/** 默认放置在左侧的面板 id（活动栏单面板区） */
+export const DEFAULT_LEFT_PANELS: PanelId[] = PANEL_CATALOG.filter(
+  (p) => p.defaultPlacement === 'left',
+).map((p) => p.id)
+
+/** 默认放置在右侧的面板 id（多面板 dock） */
+export const DEFAULT_RIGHT_PANELS: PanelId[] = PANEL_CATALOG.filter(
+  (p) => p.defaultPlacement === 'right',
+).map((p) => p.id)

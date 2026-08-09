@@ -10,7 +10,6 @@
  */
 import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
-import { t } from '@/composables/useT'
 import NodePropertyEditor from './NodePropertyEditor.vue'
 import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
 
@@ -20,11 +19,6 @@ const active = useActiveView()
 const isConnectionSelected = computed(
   () => active.view.selectedConnectionIds.size > 0,
 )
-
-/** 供 DockPanel 展示的标题（通用「属性」，不随选区切换） */
-const title = computed(() => t('rightSidebar.property'))
-
-defineExpose({ title })
 </script>
 
 <template>

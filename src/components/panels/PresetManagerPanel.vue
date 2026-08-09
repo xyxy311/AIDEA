@@ -40,6 +40,11 @@ import { t } from '@/composables/useT'
 import { deriveBackgroundColor } from '@/utils/color'
 import { LINE_STYLE_OPTIONS, CONNECTION_MAX_STROKE_WIDTH } from '@/constants'
 
+/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
+defineProps<{
+  hideHeader?: boolean
+}>()
+
 const presetsStore = usePresetsStore()
 const themeStore = useThemeStore()
 const active = useActiveView()
@@ -348,7 +353,7 @@ function handleDeleteGroup(id: string): void {
 <template>
   <div class="preset-panel">
     <!-- 面板标题栏 -->
-    <div class="panel-header">
+    <div v-if="!hideHeader" class="panel-header">
       <span class="panel-title">{{ t('leftSidebar.presets') }}</span>
     </div>
 

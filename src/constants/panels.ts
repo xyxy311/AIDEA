@@ -1,11 +1,12 @@
 import type { Component } from 'vue'
 import { defineComponent, h } from 'vue'
-import { ListOutline, SearchOutline, ColorPaletteOutline, PricetagsOutline } from '@vicons/ionicons5'
+import { ListOutline, SearchOutline, ColorPaletteOutline, PricetagsOutline, OptionsOutline } from '@vicons/ionicons5'
 import NodeTreePanel from '@/components/panels/NodeTreePanel.vue'
 import ReferencesPanel from '@/components/panels/ReferencesPanel.vue'
 import SearchPanel from '@/components/panels/SearchPanel.vue'
 import PresetManagerPanel from '@/components/panels/PresetManagerPanel.vue'
 import TagsPanel from '@/components/panels/TagsPanel.vue'
+import PropertyPanel from '@/components/panels/PropertyPanel.vue'
 
 /**
  * 引用定义图标（#）。
@@ -45,7 +46,7 @@ const HashIcon = defineComponent({
  * 新增面板只需在此注册 id + 图标 + 组件，活动栏与面板容器自动渲染。
  * 面板顺序（拖拽排序）与激活状态由 layout store 管理，不在此处持久化。
  */
-export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags'
+export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property'
 
 /** 面板元信息 */
 export interface PanelMeta {
@@ -63,6 +64,8 @@ export const PANEL_REGISTRY: PanelMeta[] = [
   { id: 'search', titleKey: 'leftSidebar.search', icon: SearchOutline },
   { id: 'presets', titleKey: 'leftSidebar.presets', icon: ColorPaletteOutline },
   { id: 'tags', titleKey: 'leftSidebar.tags', icon: PricetagsOutline },
+  // property 面板默认在右侧 dock，不在左侧活动栏默认列表（见 utils/dock.ts）
+  { id: 'property', titleKey: 'rightSidebar.nodeProps', icon: OptionsOutline },
 ]
 
 /** 面板 id -> 渲染组件 */
@@ -72,4 +75,5 @@ export const PANEL_COMPONENTS: Record<PanelId, Component> = {
   search: SearchPanel,
   presets: PresetManagerPanel,
   tags: TagsPanel,
+  property: PropertyPanel,
 }

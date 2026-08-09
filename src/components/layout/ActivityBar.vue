@@ -12,7 +12,8 @@
  * 渲染顺序 = layout.panels（受拖拽 reorder 影响），元信息从 PANEL_REGISTRY 解析。
  */
 import { computed, ref } from 'vue'
-import { NTooltip } from 'naive-ui'
+import { NTooltip, NDropdown } from 'naive-ui'
+import { AddOutline } from '@vicons/ionicons5'
 import { useLayoutStore } from '@/stores/layout'
 import { PANEL_REGISTRY, type PanelId, type PanelMeta } from '@/constants/panels'
 import { t } from '@/composables/useT'
@@ -33,13 +34,75 @@ const dropIndex = ref<number | null>(null)
 /** 拖拽刚结束时抑制紧随其后的 click，避免误切换面板 */
 const suppressClick = ref(false)
 
-function onDragStart(index: number, e: DragEvent): void {
+/** 拖拽共享协议（全项目一致）：左右 dock 互通时写入/读取的 dataTransfer key */
+const IDS = 'aidea-panel'
+
+/** 面板拖拽数据结构 */
+interface PanelDragData {
+  panelId: PanelId
+  from: 'left' | 'right'
+}
+
+/** 从 dataTransfer 解析面板拖拽数据；解析失败返回 null（容错） */
+function parsePanelDrag(e: DragEvent): PanelDragData | null {
+  const raw = e.dataTransfer?.getData(IDS)
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as PanelDragData
+  } catch {
+    return null
+  }
+}
+
+function onDragStart(index: number, panel: PanelMeta, e: DragEvent): void {
   dragIndex.value = index
   suppressClick.value = true
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', String(index))
+    // 同时写入共享协议，供右侧 dock 接收本面板
+    e.dataTransfer.setData(IDS, JSON.stringify({ panelId: panel.id, from: 'left' }))
   }
+}
+
+// ── 活动栏容器作为拖拽目标（接收来自右侧 dock 的面板）──
+
+/** 是否高亮为可接收从右侧拖入的目标 */
+const isDropTarget = ref(false)
+
+function onContainerDragOver(e: DragEvent): void {
+  // 仅当拖拽来自右侧 dock 时高亮可投放
+  isDropTarget.value = parsePanelDrag(e)?.from === 'right'
+}
+
+function onContainerDrop(e: DragEvent): void {
+  const data = parsePanelDrag(e)
+  if (data && data.from === 'right') {
+    layout.moveToLeft(data.panelId)
+  }
+  isDropTarget.value = false
+}
+
+function onContainerDragLeave(): void {
+  isDropTarget.value = false
+}
+
+// ── 底部「添加面板」─ 浮层列出未放置面板 ──
+
+/** 未放置的面板：既不在左侧也不在右侧的注册表面板 */
+const unplacedPanels = computed<PanelMeta[]>(() =>
+  PANEL_REGISTRY.filter(
+    (p) => !layout.panels.includes(p.id) && !layout.rightPanels.includes(p.id),
+  ),
+)
+
+/** 添加面板下拉选项 */
+const addMenuOptions = computed(() =>
+  unplacedPanels.value.map((p) => ({ label: t(p.titleKey), key: p.id })),
+)
+
+function handleAddSelect(key: string): void {
+  layout.moveToLeft(key as PanelId)
 }
 
 function onDragOver(index: number, e: DragEvent): void {
@@ -81,7 +144,13 @@ function handleClick(id: PanelId): void {
 </script>
 
 <template>
-  <div class="activity-bar">
+  <div
+    class="activity-bar"
+    :class="{ 'is-drop-target': isDropTarget }"
+    @dragover.prevent="onContainerDragOver"
+    @drop.prevent="onContainerDrop"
+    @dragleave="onContainerDragLeave"
+  >
     <NTooltip
       v-for="(panel, index) in orderedPanels"
       :key="panel.id"
@@ -98,7 +167,7 @@ function handleClick(id: PanelId): void {
           }"
           :draggable="true"
           @click="handleClick(panel.id)"
-          @dragstart.stop="onDragStart(index, $event)"
+          @dragstart.stop="onDragStart(index, panel, $event)"
           @dragenter.prevent="dropIndex = index"
           @dragover.prevent="onDragOver(index, $event)"
           @dragleave="dropIndex === index && (dropIndex = null)"
@@ -110,6 +179,29 @@ function handleClick(id: PanelId): void {
       </template>
       {{ t(panel.titleKey) }}
     </NTooltip>
+
+    <!-- 底部「添加面板」按钮：弹出未放置面板浮层 -->
+    <div class="add-panel-wrap">
+      <NDropdown
+        v-if="unplacedPanels.length"
+        :options="addMenuOptions"
+        trigger="click"
+        placement="right"
+        @select="handleAddSelect"
+      >
+        <button type="button" class="activity-item add-panel" title="">
+          <AddOutline class="activity-icon" />
+        </button>
+      </NDropdown>
+      <NTooltip v-else placement="right">
+        <template #trigger>
+          <button type="button" class="activity-item add-panel" disabled>
+            <AddOutline class="activity-icon" />
+          </button>
+        </template>
+        {{ t('dock.noPanel') }}
+      </NTooltip>
+    </div>
   </div>
 </template>
 
@@ -169,6 +261,35 @@ function handleClick(id: PanelId): void {
 .activity-icon {
   width: 22px;
   height: 22px;
+}
+
+/* 底部添加面板按钮：与图标列表间隔开，悬浮在底部 */
+.add-panel-wrap {
+  margin-top: auto;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.add-panel {
+  opacity: 0.5;
+}
+
+.add-panel:hover {
+  opacity: 1;
+}
+
+.add-panel:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+/* 从右侧拖入时的容器高亮：整个活动栏描边提示可投放 */
+.activity-bar.is-drop-target {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 /* 拖拽中的被拖项：半透明 */

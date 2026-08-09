@@ -285,8 +285,9 @@ export async function runAIWordGeneration(targetNodeId?: string): Promise<string
     console.warn('[AI] 当前视图无子级节点')
     return ''
   }
-  const context = nodes.join('\n')
-
+  const context = (nodeStore.getNode(targetId)?.text || '') + '\n\t' + nodes.join('\n\t')
+  console.log(context)
+  
   const aiConfig = useAIConfigStore()
   const provider = createOpenAIProvider(aiConfig.providerConfig())
 
@@ -295,7 +296,6 @@ export async function runAIWordGeneration(targetNodeId?: string): Promise<string
       { role: 'system', content: AI_WORD_PROMPT },
       { role: 'user', content: context },
     ])
-    console.log('[AI 词生成回复]', reply)
     return reply
   } catch (err) {
     console.error('[AI 词生成失败]', err)

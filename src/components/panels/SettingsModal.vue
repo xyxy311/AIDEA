@@ -4,8 +4,9 @@
  *
  * 窗口式外观，不可拖拽移动，仅 UI 占位。
  */
-import { NModal, NCard, NDivider, NSwitch, NSpace, NText, NRadioGroup, NRadioButton } from 'naive-ui'
+import { NModal, NCard, NDivider, NSwitch, NSpace, NText, NRadioGroup, NRadioButton, NButton, useDialog } from 'naive-ui'
 import { useThemeStore } from '@/stores/theme'
+import { useLayoutStore } from '@/stores/layout'
 import { accentSchemes, type AccentSchemeId } from '@/config/colorSchemes'
 import { t } from '@/composables/useT'
 import { computed } from 'vue'
@@ -19,6 +20,8 @@ const emit = defineEmits<{
 }>()
 
 const theme = useThemeStore()
+const layout = useLayoutStore()
+const dialog = useDialog()
 
 /** 当前明暗模式下各主色调的色块颜色 */
 const dotColors = computed(() => {
@@ -28,6 +31,17 @@ const dotColors = computed(() => {
     blue: accentSchemes.blue.variants[mode].cssVars['--color-primary'],
   }
 })
+
+/** 恢复默认布局：先弹确认框，确认后调用 layout.resetDock() */
+function handleResetLayout(): void {
+  dialog.warning({
+    title: t('settings.resetLayout'),
+    content: t('settings.resetLayoutConfirm'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => layout.resetDock(),
+  })
+}
 </script>
 
 <template>
@@ -65,6 +79,11 @@ const dotColors = computed(() => {
               </NRadioButton>
             </NRadioGroup>
           </NSpace>
+        </div>
+        <div>
+          <NText strong>{{ t('settings.layout') }}</NText>
+          <NDivider style="margin: 8px 0" />
+          <NButton @click="handleResetLayout">{{ t('settings.resetLayout') }}</NButton>
         </div>
         <div>
           <NText strong>{{ t('settings.canvas') }}</NText>

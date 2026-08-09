@@ -1,20 +1,13 @@
 <script setup lang="ts">
 /**
- * RightSidebar — 右侧边栏
+ * RightSidebar — 右侧多面板 dock 容器外壳
  *
- * 选中节点时显示节点属性编辑器 + 预设样式。
- * 选中连线时显示连线属性编辑器 + 预设样式。
- * 支持收起/展开。
+ * 保留「收起/展开 + 宽度」外壳，内容区渲染 DockContainer。
+ * 面板的标题 / 拖拽换位 / resize / 关闭均由 DockContainer 及各面板自身处理。
  */
-import { computed } from 'vue'
-import { NButton, NScrollbar, NText } from 'naive-ui'
+import { NButton } from 'naive-ui'
 import { ChevronBack, ChevronForward } from '@vicons/ionicons5'
-import { t } from '@/composables/useT'
-import { useActiveView } from '@/composables/useActiveView'
-import NodePropertyEditor from './NodePropertyEditor.vue'
-import ConnectionPropertyEditor from './ConnectionPropertyEditor.vue'
-
-const active = useActiveView()
+import DockContainer from '@/components/common/DockContainer.vue'
 
 defineProps<{
   collapsed: boolean
@@ -25,12 +18,6 @@ defineProps<{
 const emit = defineEmits<{
   toggle: []
 }>()
-
-/** 标题文本 */
-const title = computed(() => {
-  if (active.view.selectedConnectionIds.size > 0) return t('rightSidebar.connectionProps')
-  return t('rightSidebar.nodeProps')
-})
 </script>
 
 <template>
@@ -46,23 +33,11 @@ const title = computed(() => {
           <ChevronBack v-else />
         </template>
       </NButton>
-      <span v-if="!collapsed" class="sidebar-title">{{ title }}</span>
     </div>
 
-    <template v-if="!collapsed">
-      <NScrollbar class="sidebar-scroll">
-        <div class="sidebar-content">
-          <!-- 连线选中 → 连线属性编辑器（含预设） -->
-          <template v-if="active.view.selectedConnectionIds.size > 0">
-            <ConnectionPropertyEditor />
-          </template>
-          <!-- 节点选中或无选中 → 节点属性编辑器（含预设） -->
-          <template v-else>
-            <NodePropertyEditor />
-          </template>
-        </div>
-      </NScrollbar>
-    </template>
+    <div v-if="!collapsed" class="sidebar-body">
+      <DockContainer />
+    </div>
   </div>
 </template>
 
@@ -90,22 +65,14 @@ const title = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 8px 8px 8px;
+  padding: 8px;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
-.sidebar-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-right: 8px;
-}
-
-.sidebar-scroll {
+.sidebar-body {
   flex: 1;
-}
-
-.sidebar-content {
-  padding: 8px 12px;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

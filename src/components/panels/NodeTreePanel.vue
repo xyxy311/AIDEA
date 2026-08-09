@@ -31,6 +31,11 @@ import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import { useNodeStore } from '@/stores/node'
 
+/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
+defineProps<{
+  hideHeader?: boolean
+}>()
+
 const project = useProjectStore()
 const {
   flatTree,
@@ -125,7 +130,7 @@ function cancelRename(): void {
 <template>
   <div class="node-tree-panel">
     <!-- 面板标题栏 -->
-    <div class="panel-header">
+    <div v-if="!hideHeader" class="panel-header">
       <span class="panel-title">{{ t('leftSidebar.nodeTree') }}</span>
       <div class="panel-actions">
         <!-- 纯图标按钮：新建子节点 -->

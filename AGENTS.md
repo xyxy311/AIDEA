@@ -39,8 +39,8 @@ stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex/tagI
 composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
             / useAIAssist(AI上下文解析+调用：buildNodeContext 把根→目标路径+子级+连线表转结构化语言描述供模型输入，collectSubtree 收集子树按缩进成行，只读 nodeStore；runAIAssist 发散当前视图、runAIWordGeneration 生成10个词，调 provider 后打印到控制台)
 components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
-             / right:NodePropertyEditor/ConnectionPropertyEditor) / layout(ActivityBar/MenuBar/AppShell)
-             / common(DraggableSortList — 通用可拖拽排序列表) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
+             / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/MenuBar/AppShell)
+             / common(DraggableSortList — 通用可拖拽排序列表 / DockPanel+DockContainer — 右侧多面板 dock) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
 ```
 
 组件通常经 `useActiveView()` 统一访问 nodeStore / project / view。
@@ -67,6 +67,15 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **拖拽排序**：HTML5 drag（dragstart/dragover/drop）调 `layout.reorder`；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位，抑制拖拽后误触 click 切换面板。内存态，不持久化。
 - layout store：`panels`（顺序）/`activePanelId`/`lastPanelId`（收起后 `expand()` 恢复）/`togglePanel`/`setActive`/`reorder`/`collapse`/`expand`。
 - 新增面板只需在 `constants/panels.ts` 注册，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。
+
+### 可拖拽面板与左右侧边栏（dock）
+
+- **右侧是多面板 dock**（PS/Blender 式）：`RightSidebar` 外壳内渲染 `DockContainer`，垂直堆叠多个 `DockPanel`；面板间有可上下拖拽的 resize handle 调整高度比例，面板可拖拽换位、可关闭。
+- **通用组件**：`common/DockPanel.vue`（统一 header：拖拽手柄 + 标题 + 关闭按钮，内容走插槽，滚动用 `NScrollbar x-scrollable`）；`common/DockContainer.vue`（垂直堆叠 + resize + reorder + 空态）。
+- **左右互通**：面板可在左侧（活动栏）与右侧（dock）之间拖拽移动。统一 HTML5 drag 协议 `dataTransfer` 携带 `{panelId, from:'left'|'right'}`（MIME `aidea-panel`）：右侧面板拖到活动栏 → `moveToLeft`；活动栏图标拖到右侧 dock → `moveToRight`。活动栏底部「+」可把未放置面板加回左侧。
+- **面板复用**：左侧面板（NodeTree/References/Search/Presets/Tags）支持 `hideHeader` prop，作为 dock 面板时隐藏自带标题栏避免双标题；`property` 面板（`PropertyPanel`，按选中自动切节点/连线属性编辑器）默认常驻右侧。
+- **layout store**：`rightPanels`（右侧顺序）/`rightSizes`（各面板 flex 比例）/`moveToLeft`/`moveToRight`/`reorderRight`/`setRightSize`/`removePanel`/`resetDock`。纯状态转换在 `utils/dock.ts`（可单测）。归属/顺序/高度持久化到 localStorage，设置「恢复默认布局」一键重置。
+- 详见 `docs/可拖拽面板与左右侧边栏.md`。
 
 ### 预设样式系统（presets store）
 

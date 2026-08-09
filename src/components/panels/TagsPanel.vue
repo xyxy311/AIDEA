@@ -19,6 +19,11 @@ import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import type { Tag, WhiteboardNode } from '@/types'
 
+/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
+defineProps<{
+  hideHeader?: boolean
+}>()
+
 const tagsStore = useTagsStore()
 const active = useActiveView()
 const message = useMessage()
@@ -146,7 +151,7 @@ function nextQuickColor(): string {
 <template>
   <div class="tags-panel">
     <!-- 面板标题栏 -->
-    <div class="panel-header">
+    <div v-if="!hideHeader" class="panel-header">
       <span class="panel-title">{{ t('leftSidebar.tags') }}</span>
     </div>
 

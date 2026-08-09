@@ -20,6 +20,11 @@ import { useNodeStore } from '@/stores/node'
 import { useNodeTree } from '@/composables/useNodeTree'
 import { t } from '@/composables/useT'
 
+/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
+defineProps<{
+  hideHeader?: boolean
+}>()
+
 const project = useProjectStore()
 const nodeStore = useNodeStore()
 const { deleteNodeRecursive, renameNode, rootViewId } = useNodeTree()
@@ -79,7 +84,7 @@ function cancelRename(): void {
 <template>
   <div class="refs-panel">
     <!-- 面板标题栏 -->
-    <div class="panel-header">
+    <div v-if="!hideHeader" class="panel-header">
       <span class="panel-title">{{ t('leftSidebar.references') }}</span>
     </div>
 

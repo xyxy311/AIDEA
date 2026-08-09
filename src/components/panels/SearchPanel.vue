@@ -19,6 +19,11 @@ import { searchNodes, type SearchScope } from '@/utils/search'
 import { t } from '@/composables/useT'
 import { pendingSearchFocus } from '@/composables/useSearchFocus'
 
+/** 当作为 dock 面板复用时，由外层提供标题栏，可隐藏自带标题栏避免双重标题 */
+defineProps<{
+  hideHeader?: boolean
+}>()
+
 const project = useProjectStore()
 const nodeStore = useNodeStore()
 const tagsStore = useTagsStore()
@@ -113,7 +118,7 @@ function handleSwitch(nodeId: string): void {
 <template>
   <div class="search-panel">
     <!-- 面板标题栏 -->
-    <div class="panel-header">
+    <div v-if="!hideHeader" class="panel-header">
       <span class="panel-title">{{ t('leftSidebar.search') }}</span>
     </div>
 

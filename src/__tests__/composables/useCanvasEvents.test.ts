@@ -62,8 +62,8 @@ describe('useCanvasEvents', () => {
     expect(children.length).toBe(1)
     const node = children[0]
     // 节点左上角应偏移半个节点尺寸，使节点中心对齐鼠标位置
-    // DEFAULT_NODE_WIDTH=200 -> 300-100=200, DEFAULT_NODE_HEIGHT=120 -> 200-60=140
+    // DEFAULT_NODE_WIDTH=200 -> 300-100=200, DEFAULT_NODE_HEIGHT=100 -> 200-50=150
     expect(node.x).toBe(200)
-    expect(node.y).toBe(140)
+    expect(node.y).toBe(150)
   })
 })

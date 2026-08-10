@@ -7,6 +7,7 @@ import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMe
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useClipboard } from '@/composables/useClipboard'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
+import { snapPosition, snapFocus } from '@/utils/grid'
 
 /**
  * 画布事件处理
@@ -59,11 +60,27 @@ export function useCanvasEvents(viewId: string) {
     const pos = stage?.getRelativePointerPosition()
     if (pos) {
       // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
-      const newId = commands.createNode(
-        view.viewedNodeId,
-        pos.x - DEFAULT_NODE_WIDTH / 2,
-        pos.y - DEFAULT_NODE_HEIGHT / 2,
-      )
+      const left = pos.x - DEFAULT_NODE_WIDTH / 2
+      const top = pos.y - DEFAULT_NODE_HEIGHT / 2
+
+      let newX = left
+      let newY = top
+      if (view.gridMode) {
+        // 网格模式：节点左上角吸附到最近 100 格点（四舍五入到百）
+        newX = snapPosition(left)
+        newY = snapPosition(top)
+      }
+
+      const newId = commands.createNode(view.viewedNodeId, newX, newY)
+
+      // 网格模式：新建后同步活动网格到节点中心（吸附到 50 倍数）
+      if (view.gridMode) {
+        const n = nodeStore.getNode(newId)
+        if (n) {
+          view.setActiveGrid(snapFocus(n.x + n.width / 2), snapFocus(n.y + n.height / 2))
+        }
+      }
+
       // 新建后选中并进入编辑态（数据与视图状态分离，需手动编排）
       view.selectNode(newId)
       view.startEditing(newId)

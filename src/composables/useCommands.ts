@@ -3,7 +3,7 @@ import type { ComputedRef } from 'vue'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
-import type { Connection, LineStyle } from '@/types'
+import type { Connection, LineStyle, WhiteboardNode } from '@/types'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import {
   deepClone,
@@ -16,6 +16,7 @@ import {
   type ConnectionChange,
 } from '@/utils/command'
 import { extractReferenceName } from '@/utils/reference'
+import { snapPosition, snapSize } from '@/utils/grid'
 
 /**
  * 命令层 - 数据写操作的统一入口
@@ -118,6 +119,7 @@ export function useCommands() {
    */
   function commitNodeMove(
     positions: Array<{ id: string; oldX: number; oldY: number; newX: number; newY: number }>,
+    opts?: { coalesceKey?: string },
   ): void {
     if (positions.length === 0) return
     const patch: DataPatch = {
@@ -129,7 +131,62 @@ export function useCommands() {
       })),
       connChanges: [],
     }
-    history.pushCommand(patch)
+    history.pushCommand(patch, opts)
+  }
+
+  /**
+   * 网格对齐：将指定节点对齐到网格约束（网格模式开启时的批量吸附）。
+   *
+   * 对齐规则（与 utils/grid 一致）：
+   * 1. 先 fitNodeToText（文本自适应，可能撑大尺寸）
+   * 2. 尺寸向上取整百（snapSize）
+   * 3. 位置四舍五入（snapPosition）
+   *
+   * 捕获修改前后（x/y/width/height）为 modify patch，多节点合并为单条历史
+   * （一个 DataPatch 含若干 modify，无需 beginBatch）。
+   * 若某节点修改后无变化（本就对齐且文本未撑大）则跳过该 modify，避免污染历史。
+   */
+  function alignNodesToGrid(ids: string[]): void {
+    // 先捕获旧值（runWithViewCoord 执行前仍需读取节点）
+    const olds = new Map<string, Partial<WhiteboardNode>>()
+    for (const id of ids) {
+      const node = nodeStore.getNode(id)
+      if (!node) continue
+      olds.set(id, captureNodeFields(nodeStore, id, ['x', 'y', 'width', 'height']) ?? {})
+    }
+    if (olds.size === 0) return
+
+    // 构造 patch（nodeChanges 在包裹的执行内逐步填充；connChanges 恒为空）
+    const patch: DataPatch = { nodeChanges: [], connChanges: [] }
+
+    // 包裹视图协调：fit+snap+写节点，并传入 patch，
+    // 使 runWithViewCoord 据 patch 推导 sizeModifiedIds 同步内联视图宿主尺寸。
+    history.runWithViewCoord(() => {
+      for (const id of olds.keys()) {
+        nodeStore.fitNodeToText(id)
+        const n = nodeStore.getNode(id)!
+        const neu = {
+          x: snapPosition(n.x),
+          y: snapPosition(n.y),
+          width: snapSize(n.width),
+          height: snapSize(n.height),
+        }
+        nodeStore.setNodeSize(id, neu.x, neu.y, neu.width, neu.height)
+        const old = olds.get(id)!
+        if (
+          old.x !== neu.x ||
+          old.y !== neu.y ||
+          old.width !== neu.width ||
+          old.height !== neu.height
+        ) {
+          patch.nodeChanges.push({ type: 'modify', id, old, new: neu })
+        }
+      }
+    }, patch)
+
+    if (patch.nodeChanges.length > 0) {
+      history.pushCommand(patch)
+    }
   }
 
   // ── 节点文本 ──
@@ -743,6 +800,7 @@ export function useCommands() {
     createNode,
     deleteNodes,
     commitNodeMove,
+    alignNodesToGrid,
     setNodeText,
     setNodesText,
     updateNodesStyle,

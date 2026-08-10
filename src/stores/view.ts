@@ -1,5 +1,7 @@
 import { ref, computed, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
+import { useNodeStore } from '@/stores/node'
+import { snapFocus } from '@/utils/grid'
 
 /** 内联视图项（宿主视图持有的展开状态） */
 export interface InlineViewItem {
@@ -99,6 +101,15 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
     // ── 连线创建中 ──
     /** 正在创建连线时的起始节点 ID（null 表示不在创建连线模式） */
     const connectingFrom = ref<string | null>(null)
+
+    // ── 网格模式（视图状态，仅主视图启用，不入 undo、不持久化）──
+    /** 是否开启网格模式 */
+    const gridMode = ref(false)
+    /** 活动格焦点世界坐标（G/2 即 50 的倍数；null 表示未初始化） */
+    const activeGrid = ref<{ x: number; y: number } | null>(null)
+
+    /** 网格模式是否开启（getter） */
+    const isGridMode = computed(() => gridMode.value)
 
     // ── 跨视图拖拽 ──
     /** Stage 容器 DOM 引用（供坐标映射用 getBoundingClientRect） */
@@ -275,6 +286,49 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       stageScale.value = scale
     }
 
+    // ── 网格模式操作 ──
+
+    /**
+     * 设置 / 取消网格模式（视图状态，不入 undo、不持久化）
+     *
+     * 仅主视图启用：内联视图直接忽略（return）。
+     * 开启时若当前有选中节点，焦点放到该节点中心（吸附到 G/2 的整数倍）；
+     * 否则 activeGrid 置为 null，由 CanvasStage 按视口中心初始化（setActiveGrid）。
+     * 关闭时清空 activeGrid，保证下次开启走完整初始化。
+     */
+    function setGridMode(enabled: boolean): void {
+      // 内联视图不启用网格（硬守卫）
+      if (isInline) return
+      gridMode.value = enabled
+      if (enabled) {
+        const id = selectedNodeId.value
+        if (id) {
+          const n = useNodeStore().getNode(id)
+          if (n) {
+            activeGrid.value = {
+              x: snapFocus(n.x + n.width / 2),
+              y: snapFocus(n.y + n.height / 2),
+            }
+            return
+          }
+        }
+        activeGrid.value = null
+      } else {
+        // 关闭时清空焦点，保证下次开启走完整初始化
+        activeGrid.value = null
+      }
+    }
+
+    /** 切换网格模式 */
+    function toggleGridMode(): void {
+      setGridMode(!gridMode.value)
+    }
+
+    /** 设置活动格焦点（世界坐标，应吸附到 G/2 的整数倍） */
+    function setActiveGrid(x: number, y: number): void {
+      activeGrid.value = { x, y }
+    }
+
     // ── 内联视图操作 ──
 
     /** 添加内联视图项（已存在同 nodeId 则忽略） */
@@ -349,6 +403,10 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       editingConnectionId,
       // 连线创建
       connectingFrom,
+      // 网格模式
+      gridMode,
+      activeGrid,
+      isGridMode,
       // 跨视图拖拽
       containerEl,
       // 操作
@@ -362,6 +420,9 @@ export function useViewStore(viewId: string, init?: ViewStoreInit) {
       startEditingConnection,
       stopEditingConnection,
       setViewport,
+      setGridMode,
+      toggleGridMode,
+      setActiveGrid,
       resetViewState,
     }
   })()

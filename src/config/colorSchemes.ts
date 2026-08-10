@@ -32,6 +32,10 @@ export interface CanvasColors {
   connectionTemp: string
   /** 选中连线描边 */
   connectionSelected: string
+  /** 网格模式网格线颜色（半透明中性色） */
+  gridLine: string
+  /** 网格模式活动格高亮（主色系半透明） */
+  activeGrid: string
 }
 
 /** 合并后的完整方案（消费方接口不变） */
@@ -154,6 +158,8 @@ const emerald: AccentScheme = {
         marqueeStroke: '#10b981',
         connectionTemp: '#10b981',
         connectionSelected: '#10b981',
+        gridLine: 'rgba(0,0,0,0.10)',
+        activeGrid: 'rgba(16,185,129,0.25)',
       },
     },
     dark: {
@@ -182,6 +188,8 @@ const emerald: AccentScheme = {
         marqueeStroke: '#34d399',
         connectionTemp: '#34d399',
         connectionSelected: '#34d399',
+        gridLine: 'rgba(255,255,255,0.10)',
+        activeGrid: 'rgba(52,211,153,0.25)',
       },
     },
   },
@@ -218,6 +226,8 @@ const blue: AccentScheme = {
         marqueeStroke: '#3b82f6',
         connectionTemp: '#3b82f6',
         connectionSelected: '#3b82f6',
+        gridLine: 'rgba(0,0,0,0.10)',
+        activeGrid: 'rgba(59,130,246,0.25)',
       },
     },
     dark: {
@@ -246,6 +256,8 @@ const blue: AccentScheme = {
         marqueeStroke: '#60a5fa',
         connectionTemp: '#60a5fa',
         connectionSelected: '#60a5fa',
+        gridLine: 'rgba(255,255,255,0.10)',
+        activeGrid: 'rgba(96,165,250,0.25)',
       },
     },
   },
@@ -290,6 +302,8 @@ export function combineScheme(mode: 'light' | 'dark', accent: AccentSchemeId): C
       marqueeStroke: accentVariant.canvas.marqueeStroke,
       connectionTemp: accentVariant.canvas.connectionTemp,
       connectionSelected: accentVariant.canvas.connectionSelected,
+      gridLine: accentVariant.canvas.gridLine,
+      activeGrid: accentVariant.canvas.activeGrid,
     },
   }
 }

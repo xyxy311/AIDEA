@@ -72,11 +72,8 @@ export function useKeyboardShortcuts(
         projectFile.newProject()
         return
       }
-    }
 
     // Ctrl/Cmd + F：打开搜索面板并聚焦搜索输入框（置于输入框焦点守卫之前，编辑文本时也可触发）
-    if (e.ctrlKey || e.metaKey) {
-      const key = e.key.toLowerCase()
       if (key === 'f') {
         e.preventDefault()
         layout.setActive('search')

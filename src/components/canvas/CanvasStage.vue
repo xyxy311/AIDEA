@@ -26,6 +26,7 @@ import { useCanvasNavigation } from '@/composables/useCanvasNavigation'
 import { useConnectionCreation } from '@/composables/useConnectionCreation'
 import { useMarqueeSelection } from '@/composables/useMarqueeSelection'
 import { useNodeDragging } from '@/composables/useNodeDragging'
+import { useGridMode } from '@/composables/useGridMode'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import type { VueKonvaRef } from 'vue-konva'
 import type Konva from 'konva'
@@ -36,7 +37,9 @@ import {
   TRANSFORMER_BORDER_DASH,
   INLINE_VIEW_MIN_WIDTH,
   INLINE_VIEW_MIN_HEIGHT,
+  GRID_G,
 } from '@/constants'
+import { snapFocus, snapPosition, snapSize } from '@/utils/grid'
 import WhiteboardNode from './WhiteboardNode.vue'
 import WhiteboardConnection from './WhiteboardConnection.vue'
 import InlineViewFrame from './InlineViewFrame.vue'
@@ -109,6 +112,74 @@ const marquee = useMarqueeSelection(props.viewId)
 
 // ── 节点拖动 ──
 const nodeDrag = useNodeDragging(props.viewId)
+
+// ── 网格键盘交互（仅主视图实例化；内联视图不启用，置 null）──
+const grid = props.viewId === 'main' ? useGridMode('main') : null
+
+// ── 网格层（仅主视图启用）──
+
+/**
+ * 网格线：仅绘制视口可见范围内的网格线（世界坐标）。
+ * 每条线为 [x1, y1, x2, y2]，供 v-line 的 points 使用。
+ * 随 viewport / 缩放 / gridMode 变化重绘。
+ * 仅主视图启用：非主视图直接返回空（不绘制）。
+ */
+const gridLines = computed(() => {
+  const vert: number[][] = []
+  const horiz: number[][] = []
+  if (props.viewId !== 'main' || !view.gridMode) return { vert, horiz }
+
+  const scale = view.stageScale
+  const g = GRID_G
+  // 将屏幕四边换算为世界坐标（世界 = (屏幕 - stageX) / scale）
+  const worldLeft = -view.stageX / scale
+  const worldRight = (stageWidth.value - view.stageX) / scale
+  const worldTop = -view.stageY / scale
+  const worldBottom = (stageHeight.value - view.stageY) / scale
+
+  const colStart = Math.floor(worldLeft / g)
+  const colEnd = Math.ceil(worldRight / g)
+  for (let c = colStart; c <= colEnd; c++) {
+    const x = c * g
+    vert.push([x, worldTop, x, worldBottom])
+  }
+
+  const rowStart = Math.floor(worldTop / g)
+  const rowEnd = Math.ceil(worldBottom / g)
+  for (let r = rowStart; r <= rowEnd; r++) {
+    const y = r * g
+    horiz.push([worldLeft, y, worldRight, y])
+  }
+
+  return { vert, horiz }
+})
+
+/** 活动格高亮矩形（中心对焦点，尺寸 G×G；未初始化或非主视图则 null） */
+const activeGridRect = computed(() => {
+  if (props.viewId !== 'main' || !view.gridMode || !view.activeGrid) return null
+  return {
+    x: view.activeGrid.x - GRID_G / 2,
+    y: view.activeGrid.y - GRID_G / 2,
+    width: GRID_G,
+    height: GRID_G,
+  }
+})
+
+/**
+ * 开启网格时若 activeGrid 为 null（开启时无选中节点），
+ * 在此按视口中心对应的世界坐标初始化焦点并调用 setActiveGrid（吸附到 G/2 倍数）。
+ */
+watch(
+  () => view.gridMode,
+  (on) => {
+    if (on && view.activeGrid === null && props.viewId === 'main') {
+      const scale = view.stageScale
+      const cx = (stageWidth.value / 2 - view.stageX) / scale
+      const cy = (stageHeight.value / 2 - view.stageY) / scale
+      view.setActiveGrid(snapFocus(cx), snapFocus(cy))
+    }
+  },
+)
 
 // ── 当前视图数据（computed，保持响应式）──
 
@@ -269,8 +340,8 @@ function onTransformEnd(): void {
     // 区分：内联视图节点（同步节点尺寸入 undo + 更新视图尺寸）vs 普通节点（commitNodeResize 入 undo）
     if (view.getInlineViewRect(nodeId)) {
       // 内联视图节点：缩放矩形 = 同步更新节点尺寸（入 undo）+ 更新 inlineViews 尺寸（视图状态，不入 undo）
-      const newWidth = Math.max(rect.width() * scaleX, INLINE_VIEW_MIN_WIDTH)
-      const newHeight = Math.max(rect.height() * scaleY, INLINE_VIEW_MIN_HEIGHT)
+      let newWidth = Math.max(rect.width() * scaleX, INLINE_VIEW_MIN_WIDTH)
+      let newHeight = Math.max(rect.height() * scaleY, INLINE_VIEW_MIN_HEIGHT)
 
       const nodeData = nodeStore.getNode(nodeId)
       // 捕获 resize 前的旧状态（用于 undo）
@@ -281,8 +352,17 @@ function onTransformEnd(): void {
         height: nodeData?.height ?? 0,
       }
 
-      const worldX = (nodeData?.x ?? 0) + rect.x()
-      const worldY = (nodeData?.y ?? 0) + rect.y()
+      let worldX = (nodeData?.x ?? 0) + rect.x()
+      let worldY = (nodeData?.y ?? 0) + rect.y()
+
+      // 网格模式：尺寸向上取整百（snapSize）、位置四舍五入（snapPosition），
+      // 使缩放后的节点落在网格上，吸附结果进入同一 commitNodeResize 历史。
+      if (view.gridMode) {
+        newWidth = snapSize(newWidth)
+        newHeight = snapSize(newHeight)
+        worldX = snapPosition(worldX)
+        worldY = snapPosition(worldY)
+      }
 
       // 重置 rect 的 scale 与 group 内偏移
       rect.x(0)
@@ -307,8 +387,8 @@ function onTransformEnd(): void {
       view.updateInlineViewSize(nodeId, newState.width, newState.height)
     } else {
       // 普通节点：将 scale 烘焙为 width/height，写入 store 并入 undo 栈
-      const newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)
-      const newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
+      let newWidth = Math.max(rect.width() * scaleX, MIN_NODE_WIDTH)
+      let newHeight = Math.max(rect.height() * scaleY, MIN_NODE_HEIGHT)
 
       const node = nodeStore.getNode(nodeId)
       // 捕获 resize 前的旧状态（用于 undo）
@@ -319,8 +399,16 @@ function onTransformEnd(): void {
         height: node?.height ?? 0,
       }
 
-      const worldX = (node?.x ?? 0) + rect.x()
-      const worldY = (node?.y ?? 0) + rect.y()
+      let worldX = (node?.x ?? 0) + rect.x()
+      let worldY = (node?.y ?? 0) + rect.y()
+
+      // 网格模式：尺寸向上取整百（snapSize）、位置四舍五入（snapPosition）
+      if (view.gridMode) {
+        newWidth = snapSize(newWidth)
+        newHeight = snapSize(newHeight)
+        worldX = snapPosition(worldX)
+        worldY = snapPosition(worldY)
+      }
 
       // 重置 rect 的 scale 与 group 内偏移
       rect.x(0)
@@ -482,12 +570,28 @@ function handleStageDragEnd(e: unknown): void {
   nav.handleDragEnd(e as KonvaEventObject<DragEvent>)
 }
 
+/**
+ * 网格模式下：把鼠标点击的世界坐标吸附到 50 倍数后同步活动网格（设计 §3.2）。
+ * 点击与双击（双击触发两次 mousedown）均会移动活动网格；
+ * 双击新建节点时节点中心即鼠标位置，因此 activeGrid 落在该节点中心（吸附后）一致。
+ */
+function syncActiveGridToPointer(e: KonvaEventObject<MouseEvent>): void {
+  if (!view.gridMode || view.type !== 'main') return
+  const stage = e.target.getStage()
+  const pos = stage?.getRelativePointerPosition()
+  if (pos) view.setActiveGrid(snapFocus(pos.x), snapFocus(pos.y))
+}
+
 // ── 鼠标事件分流：连线创建 / 节点拖动 / 框选 / 平移 ──
 
 /** mousedown：Shift 走连线创建，PanMode 走平移，命中节点走拖动，空白走框选 */
 function handleStageMouseDown(e: unknown): void {
   const ke = e as KonvaEventObject<MouseEvent>
-  if (conn.isShiftHeld.value) {
+  // 网格模式下：鼠标点击同步活动网格（焦点吸附到 50 倍数）
+  if (ke.evt.button === 0) syncActiveGridToPointer(ke)
+  // 键盘连线预览激活时（grid?.isGridConnecting），Shift 连线语义让渡给键盘预览，
+  // 鼠标 mousedown 落到 nodeDrag/marquee 普通选中/框选，避免鼠标连线抢占（设计"鼠标点击切换活动网格"）。
+  if (conn.isShiftHeld.value && !grid?.isGridConnecting.value) {
     conn.handleMouseDown(ke)
     return
   }
@@ -548,6 +652,30 @@ function handleStageMouseUp(e: unknown): void {
       @mousemove="handleStageMouseMove"
       @mouseup="handleStageMouseUp"
     >
+      <!-- 网格层（最底层，仅主视图启用）：listening:false 不参与事件，仅视觉 -->
+      <v-layer v-if="view.gridMode && view.type === 'main'" :config="{ listening: false }">
+        <!-- 纵向网格线 -->
+        <v-line
+          v-for="(pts, i) in gridLines.vert"
+          :key="'grid-v-' + i"
+          :config="{
+            points: pts,
+            stroke: theme.scheme.canvas.gridLine,
+            strokeWidth: 1 / view.stageScale,
+          }"
+        />
+        <!-- 横向网格线 -->
+        <v-line
+          v-for="(pts, i) in gridLines.horiz"
+          :key="'grid-h-' + i"
+          :config="{
+            points: pts,
+            stroke: theme.scheme.canvas.gridLine,
+            strokeWidth: 1 / view.stageScale,
+          }"
+        />
+      </v-layer>
+
       <!-- 连线层（底层）：独立 layer 确保节点层始终覆盖在连线之上，
            不受 v-for 列表更新导致的 Konva children 重排影响 -->
       <v-layer>
@@ -564,10 +692,16 @@ function handleStageMouseUp(e: unknown): void {
           @dblclick="handleConnectionDblClick"
         />
 
-        <!-- 临时连线（拖拽创建中，虚线） -->
+        <!-- 临时连线（拖拽创建中，虚线）——网格键盘预览激活时不渲染鼠标线，避免两条重叠 -->
         <v-line
-          v-if="view.connectingFrom !== null"
+          v-if="view.connectingFrom !== null && !grid?.isGridConnecting.value"
           :config="conn.tempConnConfig.value"
+        />
+
+        <!-- 网格键盘连线预览临时线（Shift+方向键，仅主视图；与上方鼠标临时线互斥） -->
+        <v-line
+          v-if="grid?.isGridConnecting.value"
+          :config="grid?.gridTempConn.value"
         />
       </v-layer>
 
@@ -590,6 +724,17 @@ function handleStageMouseUp(e: unknown): void {
             @reference-click="handleReferenceClick"
           />
         </template>
+        
+        <!-- 活动格高亮（中心对焦点，半透明填充 + 描边） -->
+        <v-rect
+          v-if="activeGridRect"
+          :config="{
+            ...activeGridRect,
+            fill: theme.scheme.canvas.activeGrid,
+            stroke: theme.scheme.canvas.activeGrid,
+            strokeWidth: 1 / view.stageScale,
+          }"
+        />
 
         <!-- 全局 Transformer：单选/多选统一变换（替代每节点独立 Transformer） -->
         <v-transformer

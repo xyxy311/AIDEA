@@ -6,6 +6,7 @@ import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
+import { snapPosition } from '@/utils/grid'
 import {
   hitTestInlineViewWorld,
   mapMainWorldToInlineWorld,
@@ -113,7 +114,14 @@ export function useNodeDragging(viewId: string) {
     )
   }
 
-  /** 提交同视图内移动到历史栈（拖拽未跨视图时） */
+  /**
+   * 提交同视图内移动到历史栈（拖拽未跨视图时）。
+   *
+   * 网格模式下（仅主视图）：先把每个节点最终位置吸附到网格（snapPosition），
+   * 并同步写入 store（moveNode），使显示与历史 patch 一致，保证拖拽结束后节点对齐。
+   * 跨视图 reparent 的 performReparent 不动——grid 仅主视图，reparent 到内联视图的
+   * 内联世界坐标不吸附（保持简单）。
+   */
   function commitMovePositions(): void {
     const positions: Array<{
       id: string
@@ -125,7 +133,15 @@ export function useNodeDragging(viewId: string) {
     dragStartPositions.forEach((start, id) => {
       const n = nodeStore.getNode(id)
       if (n && (n.x !== start.x || n.y !== start.y)) {
-        positions.push({ id, oldX: start.x, oldY: start.y, newX: n.x, newY: n.y })
+        let newX = n.x
+        let newY = n.y
+        // 网格模式：吸附到最近 100 格点，并同步 store 使显示与历史一致
+        if (view.gridMode) {
+          newX = snapPosition(n.x)
+          newY = snapPosition(n.y)
+          nodeStore.moveNode(id, newX, newY)
+        }
+        positions.push({ id, oldX: start.x, oldY: start.y, newX, newY })
       }
     })
     if (positions.length > 0) commands.commitNodeMove(positions)

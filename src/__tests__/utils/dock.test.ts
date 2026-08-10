@@ -22,21 +22,15 @@ function baseState(): DockState {
 
 describe('dock 纯函数', () => {
   describe('默认布局', () => {
-    it('DEFAULT_LEFT_PANELS 排除右锁默认面板（property）', () => {
-      expect(DEFAULT_LEFT_PANELS).toEqual([
-        'nodeTree',
-        'references',
-        'search',
-        'presets',
-        'tags',
-      ])
+    it('DEFAULT_LEFT_PANELS 排除右侧默认面板（property / presets）', () => {
+      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags'])
     })
 
-    it('defaultDockState：左侧为全部注册-右侧默认[-property-]，尺寸默认 1', () => {
+    it('defaultDockState：左侧默认面板-右侧默认[property,presets]，尺寸默认 1', () => {
       const s = defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
       expect(s.leftPanels).toEqual(DEFAULT_LEFT_PANELS)
       expect(s.rightPanels).toEqual(DEFAULT_RIGHT_PANELS)
-      expect(s.rightSizes).toEqual({ property: DEFAULT_SIZE })
+      expect(s.rightSizes).toEqual({ property: DEFAULT_SIZE, presets: DEFAULT_SIZE })
     })
   })
 

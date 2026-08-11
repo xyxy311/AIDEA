@@ -58,13 +58,25 @@ function validSet(registry: PanelId[]): Set<PanelId> {
   return new Set(registry)
 }
 
+/** 默认布局（用于补充新增面板） */
+export interface DockDefaults {
+  left: PanelId[]
+  right: PanelId[]
+}
+
 /**
  * 清理并规整 dock 状态：
  * - 过滤无效 / 重复 id
  * - 保证互斥：同一面板出现在两侧时，优先保留在右侧
  * - 补齐缺失的尺寸记录
+ * - 补充「新增的默认面板」：defaults 中未出现在任一侧的面板，按默认侧追加到末尾。
+ *   保证新增面板只需在品类表登记，即可对已有用户自动生效（旧 localStorage 不含新面板时）。
  */
-export function normalizeDockState(state: DockState, registry: PanelId[]): DockState {
+export function normalizeDockState(
+  state: DockState,
+  registry: PanelId[],
+  defaults?: DockDefaults,
+): DockState {
   const valid = validSet(registry)
 
   // 右侧优先：记录右侧出现的 id
@@ -92,6 +104,24 @@ export function normalizeDockState(state: DockState, registry: PanelId[]): DockS
   for (const id of rightPanels) {
     const v = state.rightSizes?.[id]
     rightSizes[id] = typeof v === 'number' && v > 0 ? v : DEFAULT_SIZE
+  }
+
+  // 补充新增的默认面板（未出现在任一侧时，按默认侧追加）
+  if (defaults) {
+    const placed = new Set<PanelId>([...leftPanels, ...rightPanels])
+    for (const id of defaults.left) {
+      if (valid.has(id) && !placed.has(id)) {
+        leftPanels.push(id)
+        placed.add(id)
+      }
+    }
+    for (const id of defaults.right) {
+      if (valid.has(id) && !placed.has(id)) {
+        rightPanels.push(id)
+        placed.add(id)
+        rightSizes[id] = DEFAULT_SIZE
+      }
+    }
   }
 
   return { leftPanels, rightPanels, rightSizes }

@@ -55,7 +55,7 @@ export const useLayoutStore = defineStore('layout', () => {
     defaultRightSizes(DEFAULT_RIGHT_PANELS),
   )
 
-  // ── 加载时归一化（清理脏数据 / 保证互斥）──
+  // ── 加载时归一化（清理脏数据 / 保证互斥 / 补新增默认面板）──
   const normalized = normalizeDockState(
     {
       leftPanels: panels.value,
@@ -63,6 +63,7 @@ export const useLayoutStore = defineStore('layout', () => {
       rightSizes: rightSizes.value,
     },
     allPanelIds,
+    { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
   )
   panels.value = normalized.leftPanels
   rightPanels.value = normalized.rightPanels

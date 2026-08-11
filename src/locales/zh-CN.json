@@ -104,7 +104,29 @@
     "searchScopeView": "当前视图",
     "searchTagPlaceholder": "按标签过滤…",
     "presets": "预设管理",
-    "tags": "标签管理"
+    "tags": "标签管理",
+    "viewText": "转化为文本"
+  },
+  "viewTextPanel": {
+    "algorithm": "算法",
+    "generate": "生成文本",
+    "empty": "当前视图无节点",
+    "resultPlaceholder": "点击「生成文本」查看结果",
+    "copy": "复制",
+    "copied": "已复制",
+    "paramTolerance": "纵向容差",
+    "paramIncludeCoords": "显示坐标",
+    "paramSeparator": "分隔符",
+    "sepTab": "制表符",
+    "sepComma": "逗号",
+    "sepSemicolon": "分号",
+    "sepPipe": "竖线",
+    "algorithmRow": "行聚类（方案A）",
+    "algorithmLine": "直线命中（方案B）",
+    "paramYThreshold": "中心Y阈值",
+    "paramOffset": "线偏移",
+    "paramOverlapRatio": "合并阈值",
+    "algorithmCollectAll": "全部收集（扁平）"
   },
   "presetPanel": {
     "nodeTab": "节点",

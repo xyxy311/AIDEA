@@ -14,7 +14,7 @@ import {
   type DockState,
 } from '@/utils/dock'
 
-const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property']
+const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property', 'viewText']
 
 function baseState(): DockState {
   return defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
@@ -23,7 +23,7 @@ function baseState(): DockState {
 describe('dock 纯函数', () => {
   describe('默认布局', () => {
     it('DEFAULT_LEFT_PANELS 排除右侧默认面板（property / presets）', () => {
-      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags'])
+      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags', 'viewText'])
     })
 
     it('defaultDockState：左侧默认面板-右侧默认[property,presets]，尺寸默认 1', () => {
@@ -67,6 +67,37 @@ describe('dock 纯函数', () => {
       }
       const s = normalizeDockState(raw, REGISTRY)
       expect(s.rightSizes.property).toBe(DEFAULT_SIZE)
+    })
+
+    it('补充新增的默认面板（旧 localStorage 不含新面板时自动补入）', () => {
+      const raw: DockState = {
+        leftPanels: ['nodeTree', 'references', 'search', 'tags'],
+        rightPanels: ['property', 'presets'],
+        rightSizes: { property: 1, presets: 1 },
+      }
+      const s = normalizeDockState(
+        raw,
+        REGISTRY,
+        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
+      )
+      // 旧 saved 布局不含 viewText，应补到左侧末尾
+      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'viewText'])
+      expect(s.rightPanels).toEqual(['property', 'presets'])
+    })
+
+    it('已放置的面板不会被重复补充', () => {
+      const raw: DockState = {
+        leftPanels: ['nodeTree'],
+        rightPanels: ['property'],
+        rightSizes: { property: 1 },
+      }
+      const s = normalizeDockState(
+        raw,
+        REGISTRY,
+        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
+      )
+      // viewText 只出现一次（左侧）
+      expect(s.leftPanels.filter((id) => id === 'viewText')).toHaveLength(1)
     })
   })
 

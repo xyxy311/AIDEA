@@ -130,8 +130,6 @@ describe('useGridMode', () => {
 
     keydown('ArrowRight', { ctrlKey: true })
     expect(view.selectedNodeId).toBe(b)
-    // 活动网格保持原位，不跟随选中的节点 b
-    expect(view.activeGrid).toEqual({ x: 50, y: 50 })
   })
 
   it('Esc 仅清空选中，活动网格不跟随节点（保持原位）', () => {

@@ -8,7 +8,8 @@
 export const AI_DEFAULT_CONFIG = {
   baseURL: 'http://localhost:11434/v1',
   apiKey: '',
-  model: 'qwen2.5-coder:7b',
+  // model: 'qwen2.5-coder:7b',
+  model: 'tiny-llama:1.1b',
   timeoutMs: 60000,
   temperature: 0.7,
 }
@@ -27,6 +28,7 @@ export const AI_SYSTEM_PROMPT = [
 export const AI_WORD_PROMPT = [
   '你现在是一个头脑风暴白板 AI 助手。',
   '用户会提供当前视图的节点列表（每行一个节点文本）。',
-  '请根据这些节点发散灵感，随机生成 10 个词或句子。',
+  '请根据这些节点发散灵感，随机生成 10 个词或短句。',
   '要求：每个描述单独一行，用换行分隔；不要有序号、编号、标点、解释或任何其它信息，只输出 10 个描述。',
+  '每个描述不要太长，尽可能简明、一目了然，不要过于文学性。',
 ].join('\n')

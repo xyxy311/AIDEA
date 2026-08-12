@@ -34,6 +34,8 @@ import Toolbar from '@/components/toolbar/Toolbar.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
 import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
+import FloatingAIWordStrip from '@/components/floating/FloatingAIWordStrip.vue'
+import { useAIWordPanel } from '@/composables/useAIWordPanel'
 
 // ── 侧边栏收起状态 ──
 const layout = useLayoutStore()
@@ -127,7 +129,8 @@ provide('projectFile', projectFile)
 
 // ── 键盘快捷键（全局单份，含文件快捷键）──
 const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
-useKeyboardShortcuts(isEditing, projectFile)
+const { displayMode, open: openAIWord, clear: clearAIWord } = useAIWordPanel()
+useKeyboardShortcuts(isEditing, projectFile, { open: openAIWord, clear: clearAIWord })
 
 // ── 关闭 / 刷新前脏提示 ──
 useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
@@ -197,8 +200,9 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     <!-- 浮动属性编辑器（全局单实例挂载） -->
     <FloatingPropertyEditor />
 
-    <!-- AI 生成词浮动面板（全局单实例挂载） -->
-    <FloatingAIWordPanel />
+    <!-- AI 生成词：按 displayMode 二选一渲染（全局单实例挂载） -->
+    <FloatingAIWordStrip v-if="displayMode === 'strip'" />
+    <FloatingAIWordPanel v-else />
   </div>
 </template>
 

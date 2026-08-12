@@ -231,6 +231,9 @@
     "addAll": "全部添加",
     "regenerate": "重新生成",
     "close": "关闭",
-    "retry": "重试"
+    "retry": "重试",
+    "switchToPanel": "切换为面板模式",
+    "switchToStrip": "切换为紧凑模式",
+    "clear": "清除"
   }
 }

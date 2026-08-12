@@ -6,7 +6,7 @@
  * 通过 useWhiteboardStore 直接操作状态。
  */
 import { computed } from 'vue'
-import { SparklesOutline, GridOutline } from '@vicons/ionicons5'
+import { SparklesOutline, GridOutline, ListOutline, ContractOutline } from '@vicons/ionicons5'
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
@@ -17,8 +17,8 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 const active = useActiveView()
 const commands = useCommands()
 const { stageWidth, stageHeight } = useStageSize()
-// 顶层解构：loading 为 ref，模板自动解包；open 为函数
-const { open: openAIWordPanel, loading: aiWordLoading } = useAIWordPanel()
+// 顶层解构：loading/displayMode 为 ref，模板自动解包；open/setMode 为函数
+const { open: openAIWordPanel, loading: aiWordLoading, displayMode, setMode } = useAIWordPanel()
 
 /** 当前视图的节点列表 */
 const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentNodeId))
@@ -112,6 +112,15 @@ function debugPrint() {
         @click="openAIWordPanel"
       >
         {{ t('aiWord.generateBtn') }}
+      </button>
+      <!-- 切换 AI 生成词展示模式：strip（底部小字条）↔ panel（浮动面板） -->
+      <button
+        class="btn btn-grid"
+        :title="displayMode === 'strip' ? t('aiWord.switchToPanel') : t('aiWord.switchToStrip')"
+        @click="setMode(displayMode === 'strip' ? 'panel' : 'strip')"
+      >
+        <ListOutline v-if="displayMode === 'strip'" class="btn-icon" />
+        <ContractOutline v-else class="btn-icon" />
       </button>
       <button class="btn btn-primary" @click="debugPrint">
         {{ t('toolbar.debug') }}

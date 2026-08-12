@@ -31,9 +31,14 @@ import { requestSearchFocus } from '@/composables/useSearchFocus'
  * Ctrl/Cmd + S       - 保存项目
  * Ctrl/Cmd + O       - 打开项目
  * Ctrl/Cmd + N       - 新建项目
+ * I                  - 打开 / 重新生成 AI 生成词
+ * C                  - 清除 AI 生成词状态
  *
  * @param isEditing   - 是否正在文本编辑中，编辑时禁用快捷键
  * @param projectFile - 项目文件操作（可选），提供后启用 S/O/N 文件快捷键
+ * @param aiWord      - AI 生成词操作（可选），提供后启用 I / C 快捷键：
+ *                      I - 打开/重新生成 AI 生成词
+ *                      C - 清除 AI 生成词状态
  */
 export function useKeyboardShortcuts(
   isEditing: Ref<boolean>,
@@ -41,6 +46,10 @@ export function useKeyboardShortcuts(
     saveProject: () => void
     openProject: () => void
     newProject: () => void
+  },
+  aiWord?: {
+    open: () => void
+    clear: () => void
   },
 ) {
   const active = useActiveView()
@@ -87,6 +96,20 @@ export function useKeyboardShortcuts(
 
     // 编辑状态下不触发快捷键
     if (isEditing.value) return
+
+    // ── AI 生成词快捷键（无修饰符，非 ctrl/meta/alt）──
+    // I：打开/重新生成 AI 生成词；C：清除 AI 生成词状态。
+    // C 分支在 ctrl 判断之外且仅当无修饰符时触发，避免与 Ctrl+C 复制冲突。
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      const aiKey = e.key.toLowerCase()
+      if (aiKey === 'i') {
+        e.preventDefault()
+        aiWord?.open()
+      } else if (aiKey === 'c') {
+        e.preventDefault()
+        aiWord?.clear()
+      }
+    }
 
     // 记录 t 键按下状态（作为"t + 数字"打标签的修饰）
     if (e.key.toLowerCase() === 't') tHeld = true

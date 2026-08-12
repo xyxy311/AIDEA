@@ -10,15 +10,22 @@
  * - loading  : 是否正在生成
  * - error    : 生成失败信息（null 表示无错误）
  * - words    : 生成结果（每行一个词的数组）
+ * - displayMode：展示模式（'strip' 底部小字条 | 'panel' 浮动面板），经 useStorage 持久化
  *
  * 动作：
- * - open()      : 重置并重新生成
- * - close()     : 关闭面板
- * - regenerate()= open()
+ * - open()       : 重置并重新生成
+ * - close()      : 关闭面板
+ * - regenerate() = open()
+ * - setMode()    : 在 strip / panel 之间切换展示模式
+ * - clear()      : 清除状态（隐藏、清空错误与结果）
  */
-import { reactive, toRefs } from 'vue'
+import { reactive, toRefs, type Ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { useProjectStore } from '@/stores/project'
 import { runAIWordGeneration } from '@/composables/useAIAssist'
+
+/** 展示模式：'strip' 底部小字条 | 'panel' 浮动面板（持久化到 localStorage） */
+const displayMode = useStorage<'strip' | 'panel'>('aidea-ai-word-mode', 'strip')
 
 /** 模块顶层单例状态 */
 const state = reactive<{
@@ -69,13 +76,28 @@ function regenerate(): void {
   void load()
 }
 
+/** 切换展示模式（'strip' 底部小字条 | 'panel' 浮动面板） */
+function setMode(mode: 'strip' | 'panel'): void {
+  displayMode.value = mode
+}
+
+/** 清除状态：隐藏、清空错误与结果 */
+function clear(): void {
+  state.visible = false
+  state.error = null
+  state.words = []
+}
+
 export function useAIWordPanel() {
   // toRefs 保持响应式：解构出的 visible/loading/error/words 均为 ref，
   // 组件模板自动解包，script 中需用 .value 访问。
   return {
     ...toRefs(state),
+    displayMode,
     open,
     close,
     regenerate,
+    setMode,
+    clear,
   }
 }

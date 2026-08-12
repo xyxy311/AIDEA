@@ -79,3 +79,9 @@ runAIWordGeneration()  // 生成 10 个词
 - 当前只打印到控制台，不渲染；后续采纳流程（parse.ts / suggestStore / 新节点）未实现
 - `stream` 分支已预留接口但未实现，命中即抛 `not-implemented`
 - apiKey 存 localStorage 仅适用于本地模型 / 自用；正式发布可加薄后端代理，因 `baseURL` 可配，仅需指向代理，`AIProvider` 接口不变
+
+## 格式化文本功能
+
+暂时没有加入到AI的提示词中，后续会加入，相关文件：
+`./src/utils/viewText.ts`：文本收集算法和格式化函数
+`./src/components/panels/ViewTextPanel.vue`：格式化文本功能面板

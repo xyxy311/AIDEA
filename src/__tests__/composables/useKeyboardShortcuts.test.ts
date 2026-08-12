@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { ref, defineComponent, h, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
@@ -11,11 +11,14 @@ import { useProjectStore } from '@/stores/project'
  * Helper: Mount a renderless component that calls the composable in setup,
  * ensuring onMounted/onUnmounted lifecycle hooks fire correctly.
  */
-function mountWithShortcuts(isEditing: Ref<boolean>) {
+function mountWithShortcuts(
+  isEditing: Ref<boolean>,
+  aiWord?: { open: () => void; clear: () => void },
+) {
   return mount(
     defineComponent({
       setup() {
-        useKeyboardShortcuts(isEditing)
+        useKeyboardShortcuts(isEditing, undefined, aiWord)
         return () => h('div')
       },
     }),
@@ -84,5 +87,52 @@ describe('useKeyboardShortcuts', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(view.selectedNodeId).toBe(id) // Should NOT deselect
+  })
+
+  it('should call aiWord.open on I key (no modifier)', () => {
+    const isEditing = ref(false)
+    const open = vi.fn()
+    const clear = vi.fn()
+    wrapper = mountWithShortcuts(isEditing, { open, clear })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }))
+    expect(open).toHaveBeenCalledTimes(1)
+    expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('should call aiWord.clear on C key (no modifier)', () => {
+    const isEditing = ref(false)
+    const open = vi.fn()
+    const clear = vi.fn()
+    wrapper = mountWithShortcuts(isEditing, { open, clear })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
+    expect(clear).toHaveBeenCalledTimes(1)
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('should NOT trigger I/C when ctrl is held (Ctrl+C copy kept intact)', () => {
+    const isEditing = ref(false)
+    const open = vi.fn()
+    const clear = vi.fn()
+    wrapper = mountWithShortcuts(isEditing, { open, clear })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
+    expect(clear).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', ctrlKey: true }))
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('should NOT trigger I/C when isEditing is true', () => {
+    const isEditing = ref(true)
+    const open = vi.fn()
+    const clear = vi.fn()
+    wrapper = mountWithShortcuts(isEditing, { open, clear })
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
+    expect(open).not.toHaveBeenCalled()
+    expect(clear).not.toHaveBeenCalled()
   })
 })

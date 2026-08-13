@@ -6,7 +6,7 @@
  * 通过 useWhiteboardStore 直接操作状态。
  */
 import { computed } from 'vue'
-import { SparklesOutline, GridOutline, ListOutline, ContractOutline } from '@vicons/ionicons5'
+import { GridOutline, ListOutline, ContractOutline } from '@vicons/ionicons5'
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
@@ -17,8 +17,8 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 const active = useActiveView()
 const commands = useCommands()
 const { stageWidth, stageHeight } = useStageSize()
-// 顶层解构：loading/displayMode 为 ref，模板自动解包；open/setMode 为函数
-const { open: openAIWordPanel, loading: aiWordLoading, displayMode, setMode } = useAIWordPanel()
+// 顶层解构：displayMode 为 ref，模板自动解包；setMode 为函数
+const { displayMode, setMode } = useAIWordPanel()
 
 /** 当前视图的节点列表 */
 const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentNodeId))
@@ -105,13 +105,6 @@ function debugPrint() {
       >
         <GridOutline class="btn-icon" />
         {{ t('toolbar.grid') }}
-      </button>
-      <button
-        class="btn btn-primary"
-        :disabled="aiWordLoading"
-        @click="openAIWordPanel"
-      >
-        {{ t('aiWord.generateBtn') }}
       </button>
       <!-- 切换 AI 生成词展示模式：strip（底部小字条）↔ panel（浮动面板） -->
       <button

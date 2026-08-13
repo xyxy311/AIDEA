@@ -105,7 +105,31 @@
     "searchTagPlaceholder": "按标签过滤…",
     "presets": "预设管理",
     "tags": "标签管理",
-    "viewText": "转化为文本"
+    "ai": "AI"
+  },
+  "aiPanel": {
+    "globalPrompt": "全局提示词",
+    "globalPromptPlaceholder": "为整个项目提供背景上下文，可留空",
+    "sectionView": "当前视图设置",
+    "localPrompt": "局部提示词",
+    "localPromptPlaceholder": "仅当前视图生效的补充指令，可留空",
+    "includeConnections": "携带连线信息",
+    "mode": "处理模式",
+    "modeFast": "快速",
+    "modePrecise": "精确（先连词成句）",
+    "viewTextAlgo": "空间布局算法",
+    "save": "保存本视图设置",
+    "saveDone": "已保存",
+    "reset": "恢复默认",
+    "preview": "上下文预览",
+    "copy": "复制",
+    "copied": "已复制",
+    "sentence": "连词成句",
+    "sentenceLoading": "连词成句中…",
+    "sentenceError": "{message}",
+    "diverge": "发散当前视图",
+    "generateWords": "生成词",
+    "empty": "当前视图暂无节点"
   },
   "viewTextPanel": {
     "algorithm": "算法",

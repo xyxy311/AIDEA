@@ -14,7 +14,7 @@ import {
   type DockState,
 } from '@/utils/dock'
 
-const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property', 'viewText']
+const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property', 'ai']
 
 function baseState(): DockState {
   return defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
@@ -23,7 +23,7 @@ function baseState(): DockState {
 describe('dock 纯函数', () => {
   describe('默认布局', () => {
     it('DEFAULT_LEFT_PANELS 排除右侧默认面板（property / presets）', () => {
-      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags', 'viewText'])
+      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
     })
 
     it('defaultDockState：左侧默认面板-右侧默认[property,presets]，尺寸默认 1', () => {
@@ -80,8 +80,8 @@ describe('dock 纯函数', () => {
         REGISTRY,
         { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
       )
-      // 旧 saved 布局不含 viewText，应补到左侧末尾
-      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'viewText'])
+      // 旧 saved 布局不含 ai，应补到左侧末尾
+      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
       expect(s.rightPanels).toEqual(['property', 'presets'])
     })
 
@@ -96,8 +96,8 @@ describe('dock 纯函数', () => {
         REGISTRY,
         { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
       )
-      // viewText 只出现一次（左侧）
-      expect(s.leftPanels.filter((id) => id === 'viewText')).toHaveLength(1)
+      // ai 只出现一次（左侧）
+      expect(s.leftPanels.filter((id) => id === 'ai')).toHaveLength(1)
     })
   })
 

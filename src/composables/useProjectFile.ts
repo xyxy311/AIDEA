@@ -10,7 +10,9 @@ import { t } from '@/composables/useT'
 import {
   serializeProject,
   parseProjectFile,
+  defaultProjectAIConfig,
   type ProjectViewState,
+  type ProjectAIConfigData,
 } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
@@ -93,6 +95,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     nodes: WhiteboardNode[]
     tags?: Tag[]
     viewState: ProjectViewState
+    aiConfig?: ProjectAIConfigData
   }): void {
     // 1. 整树替换，确保根节点存在
     const map = new Map<string, WhiteboardNode>()
@@ -113,6 +116,15 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
 
     // 3. 重置项目级与主视图状态（不含历史，不触发 dirty）
     project.resetForNewProject()
+
+    // 3.5 恢复 AI 配置（先清空节点覆盖，再设全局 / 默认 / 逐条覆盖）
+    project.setGlobalPrompt(data.aiConfig?.globalPrompt ?? '')
+    project.setDefaultAIConfig(
+      data.aiConfig?.defaultConfig ?? defaultProjectAIConfig().defaultConfig,
+    )
+    for (const { nodeId, config } of data.aiConfig?.nodeConfigs ?? []) {
+      if (map.has(nodeId)) project.setNodeAIConfig(nodeId, config)
+    }
 
     const existingIds = new Set(map.keys())
 
@@ -172,7 +184,16 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     const projectName = nodeStore.rootNode?.text || t('common.untitledProject')
     const viewState = collectViewState()
     const tags = tagsStore.tagList
-    return serializeProject(nodes, projectName, viewState, tags)
+    // 收集当前 project store 的 AI 配置组装成可持久化数据
+    const aiConfig: ProjectAIConfigData = {
+      globalPrompt: project.globalPrompt,
+      defaultConfig: project.defaultAIConfig,
+      nodeConfigs: Array.from(project.nodeAIConfigs.entries()).map(([nodeId, config]) => ({
+        nodeId,
+        config,
+      })),
+    }
+    return serializeProject(nodes, projectName, viewState, tags, aiConfig)
   }
 
   /** 默认保存文件名（项目名 + '.aidea.json'） */

@@ -1,4 +1,4 @@
-import type { WhiteboardNode, Tag } from '@/types'
+import type { WhiteboardNode, Tag, AIConfig } from '@/types'
 import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
 
@@ -43,6 +43,14 @@ export interface ProjectFileData {
   nodes: WhiteboardNode[]
   tags: Tag[]
   viewState: ProjectViewState
+  aiConfig: ProjectAIConfigData
+}
+
+/** 项目文件中可持久化的 AI 配置数据 */
+export interface ProjectAIConfigData {
+  globalPrompt: string
+  defaultConfig: AIConfig
+  nodeConfigs: Array<{ nodeId: string; config: AIConfig }>
 }
 
 /** 解析后的项目数据（不含 version） */
@@ -51,6 +59,21 @@ export interface ParsedProject {
   nodes: WhiteboardNode[]
   tags: Tag[]
   viewState: ProjectViewState
+  aiConfig: ProjectAIConfigData
+}
+
+/** 默认的 AI 配置数据（与 project store 默认一致） */
+export function defaultProjectAIConfig(): ProjectAIConfigData {
+  return {
+    globalPrompt: '',
+    defaultConfig: {
+      localPrompt: '',
+      includeConnections: true,
+      mode: 'fast',
+      viewTextAlgoId: 'collectAll',
+    },
+    nodeConfigs: [],
+  }
 }
 
 /** 序列化项目为 JSON 字符串 */
@@ -59,6 +82,7 @@ export function serializeProject(
   projectName: string,
   viewState: ProjectViewState,
   tags: Tag[],
+  aiConfig: ProjectAIConfigData,
 ): string {
   const data: ProjectFileData = {
     version: PROJECT_FILE_VERSION,
@@ -66,6 +90,7 @@ export function serializeProject(
     nodes,
     tags,
     viewState,
+    aiConfig,
   }
   return JSON.stringify(data)
 }
@@ -80,6 +105,43 @@ function isValidNode(value: unknown): value is WhiteboardNode {
     typeof node.text === 'string' &&
     typeof node.borderColor === 'string'
   )
+}
+
+/** 判断对象是否为合法 AI 配置（结构不符回退默认） */
+function isValidAIConfig(value: unknown): value is AIConfig {
+  if (!value || typeof value !== 'object') return false
+  const cfg = value as Record<string, unknown>
+  return (
+    typeof cfg.localPrompt === 'string' &&
+    typeof cfg.includeConnections === 'boolean' &&
+    (cfg.mode === 'fast' || cfg.mode === 'precise') &&
+    typeof cfg.viewTextAlgoId === 'string'
+  )
+}
+
+/** 解析并自愈 aiConfig 字段（旧文件缺字段 → 默认；逐字段校验；nodeConfigs 过滤悬空引用） */
+function parseAIConfig(raw: unknown, nodeById: ReadonlyMap<string, WhiteboardNode>): ProjectAIConfigData {
+  if (!raw || typeof raw !== 'object') return defaultProjectAIConfig()
+  const o = raw as Record<string, unknown>
+  const globalPrompt = typeof o.globalPrompt === 'string' ? o.globalPrompt : ''
+  const defaultConfig = isValidAIConfig(o.defaultConfig)
+    ? (o.defaultConfig as AIConfig)
+    : defaultProjectAIConfig().defaultConfig
+  const nodeConfigs: Array<{ nodeId: string; config: AIConfig }> = []
+  if (Array.isArray(o.nodeConfigs)) {
+    for (const item of o.nodeConfigs) {
+      if (!item || typeof item !== 'object') continue
+      const it = item as Record<string, unknown>
+      if (
+        typeof it.nodeId === 'string' &&
+        nodeById.has(it.nodeId) &&
+        isValidAIConfig(it.config)
+      ) {
+        nodeConfigs.push({ nodeId: it.nodeId, config: it.config as AIConfig })
+      }
+    }
+  }
+  return { globalPrompt, defaultConfig, nodeConfigs }
 }
 
 /** 解析并校验项目文件 JSON 字符串 */
@@ -189,5 +251,8 @@ export function parseProjectFile(json: string): ParsedProject {
       : [],
   }
 
-  return { projectName, nodes, tags, viewState }
+  // —— 解析并自愈 AI 配置（旧文件缺字段回退默认；nodeConfigs 过滤悬空引用） ——
+  const aiConfig = parseAIConfig(raw.aiConfig, nodeById)
+
+  return { projectName, nodes, tags, viewState, aiConfig }
 }

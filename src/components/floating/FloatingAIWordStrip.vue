@@ -2,25 +2,28 @@
 /**
  * FloatingAIWordStrip — AI 生成词底部小字条（轻量模式）
  *
+ * 本条只展示共享状态内容 + 清除，不调用 AI 生成逻辑。
+ * 内容（words/error）由 useAIWordPanel 共享单例提供，无加载态；
+ * 生成由 AIPanel / 键盘快捷键完成，完成后再经 show(words) 注入。
+ *
  * Teleport 到 body，position:fixed 吸附画布底部居中。与浮动面板共用 useAIWordPanel 状态，
  * displayMode 二选一（strip / panel），由 AppShell 按 displayMode 决定渲染哪个。
  *
  * 状态渲染：
- * - loading：一行小字「正在生成…」
- * - error：小字错误 + hover 显示「重试」
+ * - error：小字错误
  * - words：纵向小字列表，整词点击即添加到视口中心（复用 useAIWordAdd.addWord）
  *   —— 词条过长时省略号显示，hover 经 title 查看完整内容
- * - 右上角 hover 才出现的极简控制：重生成 icon + 关闭/清除
+ * - 右上角 hover 才出现的极简控制：清除
  *
  * 添加节点逻辑与浮动面板完全一致，抽取自 useAIWordAdd。
  */
-import { NSpin, NButton } from 'naive-ui'
-import { RefreshOutline, CloseOutline } from '@vicons/ionicons5'
+import { NButton } from 'naive-ui'
+import { CloseOutline } from '@vicons/ionicons5'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { useAIWordAdd } from '@/composables/useAIWordAdd'
 import { t } from '@/composables/useT'
 
-const { visible, loading, error, words, clear, regenerate } = useAIWordPanel()
+const { visible, error, words, clear } = useAIWordPanel()
 const { addWord } = useAIWordAdd()
 </script>
 
@@ -28,16 +31,9 @@ const { addWord } = useAIWordAdd()
   <Teleport to="body">
     <Transition name="ai-word-strip">
       <div v-if="visible" class="ai-word-strip">
-        <!-- 加载中 -->
-        <div v-if="loading" class="ai-word-strip__state">
-          <NSpin size="small" />
-          <span class="ai-word-strip__hint">{{ t('aiWord.loading') }}</span>
-        </div>
-
         <!-- 错误 -->
-        <div v-else-if="error" class="ai-word-strip__state">
+        <div v-if="error" class="ai-word-strip__state">
           <span class="ai-word-strip__error" :title="error">{{ t('aiWord.error', { message: error }) }}</span>
-          <NButton size="tiny" text @click="regenerate">{{ t('aiWord.retry') }}</NButton>
         </div>
 
         <!-- 成功 -->
@@ -60,13 +56,6 @@ const { addWord } = useAIWordAdd()
 
         <!-- 右上角 hover 才出现的极简控制 -->
         <div class="ai-word-strip__controls">
-          <button
-            class="ai-word-strip__control"
-            :title="t('aiWord.regenerate')"
-            @click="regenerate"
-          >
-            <RefreshOutline class="ai-word-strip__icon" />
-          </button>
           <button
             class="ai-word-strip__control"
             :title="t('aiWord.clear')"

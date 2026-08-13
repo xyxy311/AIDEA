@@ -2,22 +2,26 @@
 /**
  * FloatingAIWordPanel — AI 生成词浮动面板
  *
- * 复用 runAIWordGeneration() 生成词，渲染到 Teleport 浮动面板中：
+ * 本面板只展示共享状态内容 + 添加/关闭，不调用 AI 生成逻辑。
+ * 内容（words/error）由 useAIWordPanel 共享单例提供，无加载态；
+ * 生成由 AIPanel / 键盘快捷键完成，完成后再经 show(words) 注入。
+ *
+ * 渲染到 Teleport 浮动面板中：
  * - 头部为可拖拽把手（pointerdown/move/up + setPointerCapture），面板用 translate 定位
  * - 词列表整行可点击：点击即把该词添加为当前视图的节点
- * - 底部操作区：「全部添加」「重新生成」「关闭」
+ * - 底部操作区：「全部添加」「关闭」
  *
  * 添加节点换算：视口中心屏幕坐标 → 世界坐标（world = (screen - offset) / scale），
  * 再经 useCommands().createNode 创建并入历史栈；批量操作用 beginBatch/commitBatch 合并为单条历史。
  * 添加逻辑已抽取到 useAIWordAdd，此处直接复用。
  */
 import { ref, computed } from 'vue'
-import { NScrollbar, NButton, NSpin } from 'naive-ui'
+import { NScrollbar, NButton } from 'naive-ui'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { useAIWordAdd } from '@/composables/useAIWordAdd'
 import { t } from '@/composables/useT'
 
-const { visible, loading, error, words, close, regenerate } = useAIWordPanel()
+const { visible, error, words, close } = useAIWordPanel()
 const { addWord, addAll } = useAIWordAdd()
 
 // ── 拖动（头部为把手） ──
@@ -71,16 +75,9 @@ function onHeaderPointerUp(): void {
 
         <!-- 主体 -->
         <div class="ai-word__body">
-          <!-- 加载中 -->
-          <div v-if="loading" class="ai-word__state">
-            <NSpin size="small" />
-            <span class="ai-word__hint">{{ t('aiWord.loading') }}</span>
-          </div>
-
           <!-- 错误 -->
-          <div v-else-if="error" class="ai-word__state">
+          <div v-if="error" class="ai-word__state">
             <span class="ai-word__error">{{ t('aiWord.error', { message: error }) }}</span>
-            <NButton size="small" @click="regenerate">{{ t('aiWord.retry') }}</NButton>
           </div>
 
           <!-- 成功 -->
@@ -111,7 +108,6 @@ function onHeaderPointerUp(): void {
             <!-- 底部操作区 -->
             <div class="ai-word__actions">
               <NButton size="small" type="primary" @click="addAll(words)">{{ t('aiWord.addAll') }}</NButton>
-              <NButton size="small" @click="regenerate">{{ t('aiWord.regenerate') }}</NButton>
               <NButton size="small" @click="close">{{ t('aiWord.close') }}</NButton>
             </div>
           </template>

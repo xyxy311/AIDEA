@@ -34,13 +34,15 @@
  * - # 设定：收集节点树部分（根→目标及目标子集）文本中出现的 @引用，
  *   解析到被引用的可引用节点（# 起始），递归输出其完整子树（无限深度）。
  */
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode, AIConfig } from '@/types'
+import type { ChatMessage } from '@/provider/aiProvider'
 import { useNodeStore } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useAIConfigStore } from '@/stores/ai'
 import { createOpenAIProvider } from '@/provider/openai'
-import { AI_SYSTEM_PROMPT, AI_WORD_PROMPT } from '@/constants/ai'
+import { AI_SENTENCE_PROMPT, AI_SYSTEM_PROMPT, AI_WORD_PROMPT } from '@/constants/ai'
 import { parseReferenceSegments } from '@/utils/reference'
+import { buildViewText } from '@/utils/viewText'
 
 type NodeStore = ReturnType<typeof useNodeStore>
 
@@ -216,14 +218,109 @@ export function buildNodeContext(
 }
 
 /**
+ * 拼接 user 消息正文：全局提示词 + 局部提示词 + 主体正文（非空白部分才拼接）。
+ * 供 assembleTaskMessages 默认路径与 runXX 精确模式外部拼接共用，保证分层单一。
+ */
+function composeUserText(globalPrompt: string, localPrompt: string, body: string): string {
+  const parts: string[] = []
+  if (globalPrompt.trim()) parts.push(globalPrompt.trim())
+  if (localPrompt.trim()) parts.push(localPrompt.trim())
+  if (body.trim()) parts.push(body.trim())
+  return parts.join('\n')
+}
+
+/**
+ * 构建 AI 上下文文本（纯函数，可单测，不触碰任何写路径）。
+ *
+ * 按 aiConfig 分派：
+ * - includeConnections === true → 复用现有 buildNodeContext（带连线结构化版本）
+ * - false → 用 nodeStore.childrenOf(targetNodeId) + buildViewText 空间布局算法
+ *
+ * @param nodeStore    - 节点 store 实例（只读）
+ * @param targetNodeId - 目标节点 ID
+ * @param aiConfig     - 当前节点的 AI 配置
+ * @returns 上下文文本字符串
+ */
+export function buildAIContext(nodeStore: NodeStore, targetNodeId: string, aiConfig: AIConfig): string {
+  if (aiConfig.includeConnections) {
+    return buildNodeContext(nodeStore, targetNodeId)
+  }
+  const children = nodeStore.childrenOf(targetNodeId)
+  return buildViewText(children, aiConfig.viewTextAlgoId ?? 'collectAll')
+}
+
+/**
+ * 组装"任务提示"消息数组（纯函数、可单测，不发起请求）。
+ *
+ * 职责：生成 [system(任务提示词), user(用户内容)] 两条消息。
+ * - 传入 precomputedUserContent 时，直接作为 user 内容（global/local 已由外层拼接，此处不再拼）。
+ * - 未传入时（快速模式默认路径），内部读取 project.globalPrompt，并按
+ *   globalPrompt + localPrompt + buildAIContext(...) 拼接 user 内容。
+ *
+ * 快速/精确的模式分支由 runXX 编排函数负责（精确模式先把连词成句结果作为
+ * precomputedUserContent 传入），本函数只做消息组装。
+ *
+ * @param nodeStore             - 节点 store 实例（只读）
+ * @param targetNodeId          - 目标节点 ID
+ * @param aiConfig              - 当前节点的 AI 配置
+ * @param taskSystemPrompt      - 任务系统提示词（如 AI_SYSTEM_PROMPT / AI_WORD_PROMPT）
+ * @param precomputedUserContent - 可选：已连词成句（或已拼好 global/local）的 user 内容主体
+ * @returns ChatMessage[] 消息数组
+ */
+export function assembleTaskMessages(
+  nodeStore: NodeStore,
+  targetNodeId: string,
+  aiConfig: AIConfig,
+  taskSystemPrompt: string,
+  precomputedUserContent?: string,
+): ChatMessage[] {
+  let userContent: string
+  if (precomputedUserContent !== undefined) {
+    userContent = precomputedUserContent
+  } else {
+    const project = useProjectStore()
+    userContent = composeUserText(project.globalPrompt, aiConfig.localPrompt, buildAIContext(nodeStore, targetNodeId, aiConfig))
+  }
+  return [
+    { role: 'system', content: taskSystemPrompt },
+    { role: 'user', content: userContent },
+  ]
+}
+
+/**
+ * 连词成句（二段式第一段）：把结构化上下文转自然语言描述。
+ * 供面板预览或 runXX 精确模式第一步调用。
+ *
+ * @param structuredContext - 结构化上下文文本（buildAIContext 的结果）
+ * @returns 自然语言描述文本
+ * @throws 调用失败时 re-throw
+ */
+export async function runAISentenceMaking(structuredContext: string): Promise<string> {
+  const aiConfig = useAIConfigStore()
+  const provider = createOpenAIProvider(aiConfig.providerConfig())
+  try {
+    const reply = await provider.chat([
+      { role: 'system', content: AI_SENTENCE_PROMPT },
+      { role: 'user', content: structuredContext },
+    ])
+    return reply
+  } catch (err) {
+    console.error('[AI 连词成句失败]', err)
+    throw err
+  }
+}
+
+/**
  * 调用本地 Ollama 大模型，把当前视图上下文发给模型并打印回复到控制台。
  *
  * 编排流程：
  *   1. 取目标节点（默认当前查看节点 project.currentNodeId）
- *   2. 用 buildNodeContext 生成结构化上下文
- *   3. 读取 aiConfig store 配置，创建 OpenAI 兼容 provider
- *   4. 以 system（AI_SYSTEM_PROMPT）+ user（上下文）调用 chat
- *   5. console.log 打印回复并返回供调用方使用
+ *   2. 读取 project.getAIConfig(targetId) 得到节点级 AI 配置
+ *   3. fast：用 buildAIContext 生成上下文，经 assembleTaskMessages 组装任务消息
+ *   4. precise：先用 runAISentenceMaking(buildAIContext(...)) 连词成句，
+ *      再以自然语言文本为 user 内容组装任务消息
+ *   5. 以 system（AI_SYSTEM_PROMPT）+ user 调用 chat
+ *   6. console.log 打印回复并返回供调用方使用
  *
  * 本次只打印到控制台，不渲染到画布。
  *
@@ -234,22 +331,32 @@ export function buildNodeContext(
 export async function runAIAssist(targetNodeId?: string): Promise<string> {
   const project = useProjectStore()
   const targetId = targetNodeId ?? project.currentNodeId
+  const cfg = project.getAIConfig(targetId)
 
   const nodeStore = useNodeStore()
-  const context = buildNodeContext(nodeStore, targetId)
-  if (!context) {
+
+  // 组装任务消息：精确模式先连词成句，快速模式直接发结构化上下文
+  // 两种模式均需先做空上下文守卫（避免向模型发送空 user 内容）
+  const structured = buildAIContext(nodeStore, targetId, cfg)
+  if (!structured) {
     console.warn('[AI] 当前视图上下文为空')
     return ''
+  }
+
+  let messages: ChatMessage[]
+  if (cfg.mode === 'precise') {
+    const sentence = await runAISentenceMaking(structured)
+    const userContent = composeUserText(project.globalPrompt, cfg.localPrompt, sentence)
+    messages = assembleTaskMessages(nodeStore, targetId, cfg, AI_SYSTEM_PROMPT, userContent)
+  } else {
+    messages = assembleTaskMessages(nodeStore, targetId, cfg, AI_SYSTEM_PROMPT)
   }
 
   const aiConfig = useAIConfigStore()
   const provider = createOpenAIProvider(aiConfig.providerConfig())
 
   try {
-    const reply = await provider.chat([
-      { role: 'system', content: AI_SYSTEM_PROMPT },
-      { role: 'user', content: context },
-    ])
+    const reply = await provider.chat(messages)
     console.log('[AI 回复]', reply)
     return reply
   } catch (err) {
@@ -264,10 +371,12 @@ export async function runAIAssist(targetNodeId?: string): Promise<string> {
  *
  * 编排流程：
  *   1. 取目标节点（默认当前查看节点 project.currentNodeId）
- *   2. 用 collectSubtree(targetId, { maxDepth: 1 }) 收集视口展示的所有节点（一层深度）
- *   3. 读取 aiConfig store 配置，创建 OpenAI 兼容 provider
- *   4. 以 system（AI_WORD_PROMPT）+ user（节点列表）调用 chat
- *   5. console.log 打印模型回复并返回供调用方使用
+ *   2. 读取 project.getAIConfig(targetId) 得到节点级 AI 配置
+ *   3. 用 buildAIContext 生成上下文
+ *   4. fast：直接以上下文组装 AI_WORD_PROMPT 消息；
+ *      precise：先 runAISentenceMaking 连词成句，再以自然语言组装
+ *   5. 以 system（AI_WORD_PROMPT）+ user 调用 chat
+ *   6. console.log 打印模型回复并返回供调用方使用
  *
  * 本次只打印到控制台，不渲染到画布。
  *
@@ -278,24 +387,31 @@ export async function runAIAssist(targetNodeId?: string): Promise<string> {
 export async function runAIWordGeneration(targetNodeId?: string): Promise<string> {
   const project = useProjectStore()
   const targetId = targetNodeId ?? project.currentNodeId
+  const cfg = project.getAIConfig(targetId)
 
   const nodeStore = useNodeStore()
-  const nodes = collectSubtree(nodeStore, targetId, { maxDepth: 1 })
-  if (nodes.length === 0) {
-    console.warn('[AI] 当前视图无子级节点')
+  const structured = buildAIContext(nodeStore, targetId, cfg)
+  if (!structured) {
+    console.warn('[AI] 当前视图上下文为空')
     return ''
   }
-  const context = (nodeStore.getNode(targetId)?.text || '') + '\n\t' + nodes.join('\n\t')
-  console.log(context)
-  
+  console.log(structured)
+
+  // 精确模式先连词成句，快速模式直接发结构化上下文
+  let messages: ChatMessage[]
+  if (cfg.mode === 'precise') {
+    const sentence = await runAISentenceMaking(structured)
+    const userContent = composeUserText(project.globalPrompt, cfg.localPrompt, sentence)
+    messages = assembleTaskMessages(nodeStore, targetId, cfg, AI_WORD_PROMPT, userContent)
+  } else {
+    messages = assembleTaskMessages(nodeStore, targetId, cfg, AI_WORD_PROMPT)
+  }
+
   const aiConfig = useAIConfigStore()
   const provider = createOpenAIProvider(aiConfig.providerConfig())
 
   try {
-    const reply = await provider.chat([
-      { role: 'system', content: AI_WORD_PROMPT },
-      { role: 'user', content: context },
-    ])
+    const reply = await provider.chat(messages)
     return reply
   } catch (err) {
     console.error('[AI 词生成失败]', err)

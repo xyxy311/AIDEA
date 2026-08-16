@@ -8,6 +8,7 @@ import { useLayoutStore } from '@/stores/layout'
 import { useTagsStore } from '@/stores/tags'
 import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
+import { useAIWordPanel } from '@/composables/useAIWordPanel'
 
 /**
  * 全局键盘快捷键
@@ -36,9 +37,6 @@ import { requestSearchFocus } from '@/composables/useSearchFocus'
  *
  * @param isEditing   - 是否正在文本编辑中，编辑时禁用快捷键
  * @param projectFile - 项目文件操作（可选），提供后启用 S/O/N 文件快捷键
- * @param aiWord      - AI 生成词操作（可选），提供后启用 I / C 快捷键：
- *                      I - 打开/重新生成 AI 生成词
- *                      C - 清除 AI 生成词状态
  */
 export function useKeyboardShortcuts(
   isEditing: Ref<boolean>,
@@ -47,10 +45,6 @@ export function useKeyboardShortcuts(
     openProject: () => void
     newProject: () => void
   },
-  aiWord?: {
-    open: () => void
-    clear: () => void
-  },
 ) {
   const active = useActiveView()
   const link = useNodeViewLink('main')
@@ -58,6 +52,7 @@ export function useKeyboardShortcuts(
   const presets = usePresetsStore()
   const layout = useLayoutStore()
   const tagsStore = useTagsStore()
+  const aiWord = useAIWordPanel()
 
   /** t 键是否处于按下状态（作为"t + 数字"打标签的修饰） */
   let tHeld = false
@@ -104,10 +99,10 @@ export function useKeyboardShortcuts(
       const aiKey = e.key.toLowerCase()
       if (aiKey === 'i') {
         e.preventDefault()
-        aiWord?.open()
+        void aiWord.directGenerate()
       } else if (aiKey === 'c') {
         e.preventDefault()
-        aiWord?.clear()
+        aiWord.clear()
       }
     }
 

@@ -15,7 +15,6 @@ import type { AIConfig } from '@/types'
 function validConfig(overrides: Partial<AIConfig> = {}): AIConfig {
   return {
     localPrompt: '请从用户角度发散',
-    includeConnections: true,
     mode: 'fast',
     viewTextAlgoId: 'collectAll',
     ...overrides,
@@ -115,7 +114,7 @@ describe('projectFile - aiConfig 解析', () => {
   })
 
   it('defaultConfig 缺字段 → 回退默认 defaultConfig，其余字段保留', () => {
-    const badDefault = { localPrompt: 'x', includeConnections: true } as unknown as AIConfig
+    const badDefault = { localPrompt: 'x' } as unknown as AIConfig
     const aiConfig = {
       globalPrompt: '全局',
       defaultConfig: badDefault,
@@ -131,7 +130,6 @@ describe('projectFile - aiConfig 解析', () => {
   it('defaultConfig 类型错（mode 非法 / localPrompt 非字符串）→ 回退默认 defaultConfig', () => {
     const badDefault = {
       localPrompt: 123,
-      includeConnections: true,
       mode: 'super',
       viewTextAlgoId: 'collectAll',
     }

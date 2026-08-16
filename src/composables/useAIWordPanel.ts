@@ -1,41 +1,183 @@
 /**
- * useAIWordPanel — AI 生成词浮动面板共享状态单例（模块级 reactive）
+ * useAIWordPanel — AI 生成词的共享状态单例 + AI 生成编排（模块级）
  *
- * 本模块是共享状态单例，**不运行 AI 生成**。
- * 浮动面板（FloatingAIWordPanel / FloatingAIWordStrip）只读取 words/error 展示内容；
- * show(words) 由调用方（AIPanel 等）在 AI 生成完成后同步注入结果并打开面板。
- * 已移除 loading（生成进度由调用方自己管理）。
- * 状态在模块顶层用 reactive 定义，所有调用方共享同一引用，
- * 保证任意组件（如 AIPanel / 快捷键）注入结果后，浮动面板组件能感知到状态变化。
+ * 本模块是共享状态单例，同时承载「AI 生成编排」与「面板展示状态」两部分逻辑，
+ * 供 AIPanel 与 I 键（快捷键）共用，两者均以无参方式调用生成方法。
  *
- * 状态：
- * - visible  : 面板是否可见
- * - error    : 生成失败信息（null 表示无错误）
- * - words    : 生成结果（每行一个词的数组）
- * - displayMode：展示模式（'strip' 底部小字条 | 'panel' 浮动面板），经 useStorage 持久化
+ * - AI 生成编排：directGenerate() / regenerate() / sentenceMaking() / generatePreview()
+ * - AI 模式状态：mode（快速 / 精确）、previewText（上下文预览）、sentenceText（连词成句结果）
+ * - 面板展示状态：show() / close() / setMode() / clear() + visible/words/error/displayMode
  *
- * 动作：
- * - show(words) : 由调用方在 AI 生成完成后传入结果：设置 words 并打开面板
- * - close()   : 关闭面板
- * - setMode() : 在 strip / panel 之间切换展示模式
- * - clear()   : 清除状态（隐藏、清空错误与结果）
+ * 设计边界：
+ * - directGenerate() / regenerate() 无参自包含：预览为空时自动先生成上下文预览；
+ *   精确模式下连词成句依赖的上下文预览为空时也自动生成预览后再连词成句。
+ * - 格式转化（拆行/拼接）在此统一，调用方无需再做。
+ * - 状态在模块顶层用 reactive 定义，调用方共享同一引用，保证任意组件注入结果后
+ *   浮动面板组件能感知到状态变化。
  */
 import { reactive, toRefs } from 'vue'
 import { useStorage } from '@vueuse/core'
+import { useNodeStore } from '@/stores/node'
+import { useProjectStore } from '@/stores/project'
+import { buildViewText } from '@/utils/viewText'
+import { runGenerateIdea, runSentenceMaking } from '@/composables/useAIGenerate'
 
 /** 展示模式：'strip' 底部小字条 | 'panel' 浮动面板（持久化到 localStorage） */
 const displayMode = useStorage<'strip' | 'panel'>('aidea-ai-word-mode', 'strip')
 
 /** 模块顶层单例状态 */
 const state = reactive<{
+  // 面板展示
   visible: boolean
   error: string | null
   words: string[]
+  // AI 生成状态
+  mode: 'fast' | 'precise'
+  previewText: string
+  sentenceText: string
+  generating: boolean
+  regenerating: boolean
+  sentenceLoading: boolean
 }>({
   visible: false,
   error: null,
   words: [],
+  mode: 'fast',
+  previewText: '',
+  sentenceText: '',
+  generating: false,
+  regenerating: false,
+  sentenceLoading: false,
 })
+
+// ───────────────────────────── AI 生成编排 ─────────────────────────────
+
+/** 把模型回复按行拆成词数组（统一格式转化） */
+function splitLines(reply: string): string[] {
+  return reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+}
+
+/** 拼接 user 正文：全局提示词 + 局部提示词 + 主体正文（非空白部分才拼接） */
+function composeUserText(body: string): string {
+  const project = useProjectStore()
+  const cfg = project.getAIConfig(project.currentNodeId)
+  const globalPrompt = project.globalPrompt
+  const localPrompt = cfg.localPrompt
+
+  const parts: string[] = []
+  if (globalPrompt.trim()) parts.push(`全局提示：${globalPrompt.trim()}`)
+  if (localPrompt.trim()) parts.push(`局部提示：${localPrompt.trim()}`)
+  if (body.trim()) parts.push(body.trim())
+  return parts.join('\n\n')
+}
+
+/** 从 project 同步 AI 模式（保证 I 键与 AIPanel 一致、跟随节点切换） */
+export function syncAIMode(): void {
+  const project = useProjectStore()
+  state.mode = project.getAIConfig(project.currentNodeId).mode
+}
+
+/** 生成上下文预览：用 viewText 程序计算结果填充，返回是否非空 */
+export function generatePreview(): boolean {
+  const project = useProjectStore()
+  const nodeStore = useNodeStore()
+  const cfg = project.getAIConfig(project.currentNodeId)
+  state.previewText = buildViewText(
+    nodeStore.childrenOf(project.currentNodeId),
+    cfg.viewTextAlgoId ?? 'collectAll',
+  )
+  return state.previewText.trim().length > 0
+}
+
+/** 连词成句：把内部预览文本转自然语言，结果写回 sentenceText（无参） */
+export async function sentenceMaking(): Promise<string> {
+  if (state.sentenceLoading) return ''
+  if (!state.previewText.trim()) generatePreview()
+  if (!state.previewText.trim()) return ''
+  state.sentenceLoading = true
+  state.error = null
+  const context = composeUserText(state.previewText)
+  try {
+    state.sentenceText = await runSentenceMaking(context)
+    return state.sentenceText
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : String(err)
+    return ''
+  } finally {
+    state.sentenceLoading = false
+  }
+}
+
+/** 发散并展示到浮动面板（内部共用，body 为最终输入正文） */
+async function runIdeaAndShow(body: string): Promise<string[]> {
+  const userContent = composeUserText(body)
+  const reply = await runGenerateIdea(userContent)
+  const words = splitLines(reply)
+  show(words)
+  return words
+}
+
+/** 直接生成（无参）：预览为空则自动生成上下文预览；精确模式连词成句为空则自动连词成句 */
+export async function directGenerate(): Promise<string[]> {
+  if (state.generating || state.regenerating) return []
+  syncAIMode()
+  state.generating = true
+  state.error = null
+  try {
+    if (!state.previewText.trim()) generatePreview()
+    let body = state.previewText
+    if (state.mode === 'precise') {
+      if (!state.sentenceText.trim()) {
+        state.sentenceText = await sentenceMaking()
+      }
+      body = state.sentenceText
+    }
+    if (!body.trim()) return []
+    return await runIdeaAndShow(body)
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : String(err)
+    return []
+  } finally {
+    state.generating = false
+  }
+}
+
+/** 重新生成（无参）：强制重算上下文预览，精确模式再连词成句，然后发散 */
+export async function regenerate(): Promise<string[]> {
+  if (state.generating || state.regenerating) return []
+  syncAIMode()
+  state.regenerating = true
+  state.error = null
+  try {
+    generatePreview()
+    let body = state.previewText
+    if (state.mode === 'precise') {
+      state.sentenceText = await sentenceMaking()
+      body = state.sentenceText
+    }
+    if (!body.trim()) return []
+    return await runIdeaAndShow(body)
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : String(err)
+    return []
+  } finally {
+    state.regenerating = false
+  }
+}
+
+/** 设置 AI 模式（快速/精确）并写回 project（随项目持久化） */
+export function setAIMode(m: 'fast' | 'precise'): void {
+  state.mode = m
+  const project = useProjectStore()
+  const id = project.currentNodeId
+  const cfg = project.getAIConfig(id)
+  project.setNodeAIConfig(id, { ...cfg, mode: m })
+}
+
+// ───────────────────────────── 面板展示状态 ─────────────────────────────
 
 /** 由调用方（AIPanel 等）在 AI 生成完成后传入结果：设置 words 并打开面板 */
 function show(words: string[]): void {
@@ -62,7 +204,7 @@ function clear(): void {
 }
 
 export function useAIWordPanel() {
-  // toRefs 保持响应式：解构出的 visible/error/words 均为 ref，
+  // toRefs 保持响应式：解构出的 visible/error/words/mode/previewText 等均为 ref，
   // 组件模板自动解包，script 中需用 .value 访问。
   return {
     ...toRefs(state),
@@ -71,5 +213,11 @@ export function useAIWordPanel() {
     close,
     setMode,
     clear,
+    syncAIMode,
+    generatePreview,
+    sentenceMaking,
+    directGenerate,
+    regenerate,
+    setAIMode,
   }
 }

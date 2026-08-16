@@ -85,7 +85,6 @@ export const useProjectStore = defineStore('project', () => {
   /** AI 默认配置（未按节点覆盖时的回退值） */
   const defaultAIConfig = ref<AIConfig>({
     localPrompt: '',
-    includeConnections: true,
     mode: 'fast',
     viewTextAlgoId: 'collectAll',
   })
@@ -311,7 +310,6 @@ export const useProjectStore = defineStore('project', () => {
     globalPrompt.value = ''
     defaultAIConfig.value = {
       localPrompt: '',
-      includeConnections: true,
       mode: 'fast',
       viewTextAlgoId: 'collectAll',
     }

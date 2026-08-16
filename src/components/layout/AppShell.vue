@@ -36,7 +36,6 @@ import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor
 import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
 import FloatingAIWordStrip from '@/components/floating/FloatingAIWordStrip.vue'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
-import { generateAndShowWords } from '@/composables/useAIWordGenerate'
 
 // ── 侧边栏收起状态 ──
 const layout = useLayoutStore()
@@ -130,8 +129,8 @@ provide('projectFile', projectFile)
 
 // ── 键盘快捷键（全局单份，含文件快捷键）──
 const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
-const { displayMode, clear: clearAIWord } = useAIWordPanel()
-useKeyboardShortcuts(isEditing, projectFile, { open: () => { void generateAndShowWords() }, clear: clearAIWord })
+const { displayMode } = useAIWordPanel()
+useKeyboardShortcuts(isEditing, projectFile)
 
 // ── 关闭 / 刷新前脏提示 ──
 useEventListener('beforeunload', (e: BeforeUnloadEvent) => {

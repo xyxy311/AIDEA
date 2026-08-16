@@ -69,6 +69,8 @@ export function createOpenAIProvider(config: AIProviderConfig): AIProvider {
       if (opts.temperature !== undefined) body.temperature = opts.temperature
       if (opts.maxTokens !== undefined) body.max_tokens = opts.maxTokens
 
+      console.log(messages)
+
       const attempt = async (): Promise<Response> => {
         const controller = new AbortController()
         const timer = setTimeout(() => controller.abort(), config.timeoutMs)

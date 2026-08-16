@@ -6,19 +6,37 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
+import { useAIWordPanel } from '@/composables/useAIWordPanel'
+
+/** 构造 OpenAI 兼容成功响应 */
+function okResponse(content: string): Response {
+  return new Response(JSON.stringify({ choices: [{ message: { content } }] }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+/** 重置 AI 共享单例状态 */
+function resetAIState(): void {
+  const p = useAIWordPanel()
+  p.clear()
+  p.previewText.value = ''
+  p.sentenceText.value = ''
+  p.mode.value = 'fast'
+  p.generating.value = false
+  p.regenerating.value = false
+  p.sentenceLoading.value = false
+}
 
 /**
  * Helper: Mount a renderless component that calls the composable in setup,
  * ensuring onMounted/onUnmounted lifecycle hooks fire correctly.
  */
-function mountWithShortcuts(
-  isEditing: Ref<boolean>,
-  aiWord?: { open: () => void; clear: () => void },
-) {
+function mountWithShortcuts(isEditing: Ref<boolean>) {
   return mount(
     defineComponent({
       setup() {
-        useKeyboardShortcuts(isEditing, undefined, aiWord)
+        useKeyboardShortcuts(isEditing)
         return () => h('div')
       },
     }),
@@ -30,12 +48,15 @@ describe('useKeyboardShortcuts', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
+    resetAIState()
   })
 
   // 必须显式 unmount，否则旧组件的 event listener 会污染后续测试
   afterEach(() => {
     wrapper?.unmount()
     wrapper = null
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('should delete selected node on Delete key', () => {
@@ -89,50 +110,50 @@ describe('useKeyboardShortcuts', () => {
     expect(view.selectedNodeId).toBe(id) // Should NOT deselect
   })
 
-  it('should call aiWord.open on I key (no modifier)', () => {
+  it('I 键触发 useAIWordPanel.directGenerate（生成并展示到浮动面板）', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okResponse('词A\n词B')))
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const target = nodeStore.addNode(project.currentNodeId, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+
     const isEditing = ref(false)
-    const open = vi.fn()
-    const clear = vi.fn()
-    wrapper = mountWithShortcuts(isEditing, { open, clear })
+    wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }))
-    expect(open).toHaveBeenCalledTimes(1)
-    expect(clear).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(useAIWordPanel().visible.value).toBe(true))
+    expect(useAIWordPanel().words.value).toEqual(['词A', '词B'])
   })
 
-  it('should call aiWord.clear on C key (no modifier)', () => {
+  it('C 键清除 AI 生成词状态', () => {
+    const panel = useAIWordPanel()
+    panel.show(['词'])
+    expect(panel.visible.value).toBe(true)
+
     const isEditing = ref(false)
-    const open = vi.fn()
-    const clear = vi.fn()
-    wrapper = mountWithShortcuts(isEditing, { open, clear })
+    wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
-    expect(clear).toHaveBeenCalledTimes(1)
-    expect(open).not.toHaveBeenCalled()
+    expect(panel.visible.value).toBe(false)
   })
 
-  it('should NOT trigger I/C when ctrl is held (Ctrl+C copy kept intact)', () => {
+  it('Ctrl 组合键不触发 I/C（保留复制等快捷键）', () => {
     const isEditing = ref(false)
-    const open = vi.fn()
-    const clear = vi.fn()
-    wrapper = mountWithShortcuts(isEditing, { open, clear })
+    wrapper = mountWithShortcuts(isEditing)
 
+    // 不应触发清除/生成，也不应抛错
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
-    expect(clear).not.toHaveBeenCalled()
-
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i', ctrlKey: true }))
-    expect(open).not.toHaveBeenCalled()
+    expect(useAIWordPanel().visible.value).toBe(false)
   })
 
-  it('should NOT trigger I/C when isEditing is true', () => {
+  it('isEditing 时不触发 I/C', () => {
     const isEditing = ref(true)
-    const open = vi.fn()
-    const clear = vi.fn()
-    wrapper = mountWithShortcuts(isEditing, { open, clear })
+    wrapper = mountWithShortcuts(isEditing)
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
-    expect(open).not.toHaveBeenCalled()
-    expect(clear).not.toHaveBeenCalled()
+    expect(useAIWordPanel().visible.value).toBe(false)
   })
 })

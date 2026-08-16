@@ -68,7 +68,6 @@ export function defaultProjectAIConfig(): ProjectAIConfigData {
     globalPrompt: '',
     defaultConfig: {
       localPrompt: '',
-      includeConnections: true,
       mode: 'fast',
       viewTextAlgoId: 'collectAll',
     },
@@ -113,7 +112,6 @@ function isValidAIConfig(value: unknown): value is AIConfig {
   const cfg = value as Record<string, unknown>
   return (
     typeof cfg.localPrompt === 'string' &&
-    typeof cfg.includeConnections === 'boolean' &&
     (cfg.mode === 'fast' || cfg.mode === 'precise') &&
     typeof cfg.viewTextAlgoId === 'string'
   )

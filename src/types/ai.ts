@@ -7,10 +7,8 @@
 export interface AIConfig {
   /** 局部提示词（跟随观察节点） */
   localPrompt: string
-  /** true→buildNodeContext（带连线）；false→viewText 空间算法 */
-  includeConnections: boolean
   /** 快速 / 精确（精确 = 二段式连词成句） */
   mode: 'fast' | 'precise'
-  /** includeConnections=false 时选用的 viewText 算法 id，默认 'collectAll' */
+  /** 生成上下文时选用的 viewText 算法 id，默认 'collectAll' */
   viewTextAlgoId: string
 }

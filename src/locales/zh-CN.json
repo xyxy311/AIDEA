@@ -38,7 +38,27 @@
     "accentBlue": "经典蓝",
     "layout": "布局",
     "resetLayout": "恢复默认布局",
-    "resetLayoutConfirm": "确定恢复默认布局？将丢弃当前面板布局设置。"
+    "resetLayoutConfirm": "确定恢复默认布局？将丢弃当前面板布局设置。",
+    "aiDirections": "发散方向",
+    "aiDirectionDefault": "默认发散方向",
+    "aiDirectionDefaultHint": "画布上的生成按钮与快捷键 I 将使用此默认方向发散。",
+    "aiDirectionsEmpty": "暂无发散方向",
+    "defaultBadge": "默认",
+    "directionAdd": "添加方向",
+    "directionEdit": "编辑方向",
+    "directionDelete": "删除方向",
+    "directionDeleteConfirm": "确定删除方向「{name}」？",
+    "directionTitle": "标题",
+    "directionTitlePlaceholder": "如：为什么？",
+    "directionTitleRequired": "请填写方向标题",
+    "directionPrompt": "提示词",
+    "directionPromptPlaceholder": "该方向的发散指令，可包含 ${from} 引用发散起点",
+    "directionPromptRequired": "请填写提示词",
+    "directionSeparator": "分隔符",
+    "directionSeparatorPlaceholder": "默认空格",
+    "directionSeparatorHint": "多个发散起点合并时的分隔符，选填，默认空格。",
+    "resetDirections": "恢复默认发散方向",
+    "resetDirectionsConfirm": "确定恢复默认发散方向？将清空当前自定义方向并恢复内置默认。"
   },
   "nodeEditor": {
     "selectedCount": "已选中 {count} 个节点",
@@ -131,7 +151,15 @@
     "regenerate": "重新生成",
     "regenerateLoading": "重新生成中…",
     "directEmpty": "预览内容为空，请先点击「生成预览」或输入内容",
-    "empty": "当前视图暂无节点"
+    "empty": "当前视图暂无节点",
+    "directions": "发散方向",
+    "directionsEmpty": "暂无发散方向",
+    "addDirection": "添加方向",
+    "editDirection": "编辑方向",
+    "directionTitle": "标题",
+    "directionPrompt": "提示词",
+    "directionTitlePlaceholder": "如：为什么？",
+    "directionPromptPlaceholder": "该方向的系统提示词，调用时作为 system 传给 AI"
   },
   "viewTextPanel": {
     "algorithm": "算法",
@@ -147,12 +175,12 @@
     "sepComma": "逗号",
     "sepSemicolon": "分号",
     "sepPipe": "竖线",
-    "algorithmRow": "行聚类（方案A）",
-    "algorithmLine": "直线命中（方案B）",
+    "algorithmRow": "行聚类",
+    "algorithmLine": "直线命中",
     "paramYThreshold": "中心Y阈值",
     "paramOffset": "线偏移",
     "paramOverlapRatio": "合并阈值",
-    "algorithmCollectAll": "全部收集（扁平）"
+    "algorithmCollectAll": "直接收集"
   },
   "presetPanel": {
     "nodeTab": "节点",
@@ -219,7 +247,9 @@
     "group": "组合",
     "copy": "复制",
     "cut": "剪切",
-    "paste": "粘贴"
+    "paste": "粘贴",
+    "divergence": "发散",
+    "divergenceDirect": "直接发散"
   },
   "floatingEditor": {
     "nodeTitle": "节点",

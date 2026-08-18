@@ -99,6 +99,8 @@ export function useKeyboardShortcuts(
       const aiKey = e.key.toLowerCase()
       if (aiKey === 'i') {
         e.preventDefault()
+        // I 键与面板「直接生成」等价：一律触发任意发散（AI_DIRECTION_ANY），
+        // 不因选中节点而分流；定向发散由右键菜单「发散」子菜单提供。
         void aiWord.directGenerate()
       } else if (aiKey === 'c') {
         e.preventDefault()

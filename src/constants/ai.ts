@@ -3,6 +3,7 @@
  *
  * baseURL 采用 OpenAI 兼容端点（默认 Ollama: http://localhost:11434/v1）。
  */
+import type { AIDivergenceDirection } from '@/types/ai'
 
 /** AI 调用默认配置（不随主题，属数据/配置范畴） */
 export const AI_DEFAULT_CONFIG = {
@@ -11,17 +12,74 @@ export const AI_DEFAULT_CONFIG = {
   model: 'qwen2.5-coder:7b',
   // model: 'tiny-llama:1.1b',
   timeoutMs: 60000,
-  temperature: 1.2,
+  temperature: 1.5,
 }
 
-/** 词生成系统提示词：基于输入的节点灵感随机生成一批词，每行一个，无序号等其它信息 */
-export const AI_WORD_PROMPT = [
+/** 发散 system 提示词：AI 收到<strong>结构化节点文本</strong>（# 任务/上下文/# 指令/# 补充 分段）时的引导 */
+export const AI_GENERATE_IDEA_NODE = [
   '你现在是一个头脑风暴白板 AI 助手。',
-  '用户会提供当前视图的节点列表（每行一个节点文本）。',
-  '请根据这些节点发散灵感，随机生成 10 个词或短句。',
-  '要求：每个描述单独一行，用换行分隔；不要有序号、编号、标点、解释或任何其它信息，只输出 10 个描述。',
+  '用户会提供当前视图的结构化节点文本（每行一个节点）作为上下文，以及一条指令。',
+  '请先理解这些节点文本的结构与内容，然后严格按照指令并结合上下文发散灵感，生成一些词或短句。',
+  '要求：每个描述单独一行，用换行分隔；不要有序号、编号、标点、解释或任何其它信息。',
   '每个描述不要太长，尽可能简明、一目了然，不要过于文学性。',
 ].join('\n')
+
+/** 发散 system 提示词：AI 收到<strong>连贯自然语言描述</strong>时的引导（语义同结构化版本，面向连贯描述） */
+export const AI_GENERATE_IDEA_DESCRIPTION = [
+  '你现在是一个头脑风暴白板 AI 助手。',
+  '用户会提供一段连贯的自然语言描述作为上下文，以及一条指令。',
+  '请先理解这段描述的内容，然后严格按照指令并结合描述发散灵感，生成一些词或短句。',
+  '要求：每个描述单独一行，用换行分隔；不要有序号、编号、标点、解释或任何其它信息。',
+  '每个描述不要太长，尽可能简明、一目了然，不要过于文学性。',
+].join('\n')
+
+/** 特殊发散方向：任意发散（prompt 无 ${from}，基于上方上下文发散；面板「直接生成/重新生成」与 I 键默认用它） */
+export const AI_DIRECTION_ANY: AIDivergenceDirection = {
+  id: 'direction-any',
+  title: '任意发散',
+  prompt: '请基于上方上下文，发散一些能帮助用户思考的灵感词或短句。',
+  separator: ' ',
+}
+
+/** 特殊发散方向：聚焦发散（prompt 含 ${from}，围绕发散起点发散；对有起点但无具体角度的发散） */
+export const AI_DIRECTION_FOCUS: AIDivergenceDirection = {
+  id: 'direction-focus',
+  title: '聚焦发散',
+  prompt: '请围绕「${from}」发散灵感，生成一些能帮助用户思考的灵感词或短句。',
+  separator: ' ',
+}
+
+/** 剔除方向对象的 id，用于构造 Omit 版本（默认方向集合不含 id，由 aiDirections store 补发） */
+function omitDirectionId(d: AIDivergenceDirection): Omit<AIDivergenceDirection, 'id'> {
+  const { id, ...rest } = d
+  return rest
+}
+
+/** 默认发散方向集合（用户可增删改；前两项引用特殊方向常量，其后为内嵌 ${from} 的具体角度） */
+export const DEFAULT_AI_DIRECTIONS: Omit<AIDivergenceDirection, 'id'>[] = [
+  omitDirectionId(AI_DIRECTION_ANY),
+  omitDirectionId(AI_DIRECTION_FOCUS),
+  {
+    title: '为什么？',
+    prompt: '从「为什么（根因 / 动机）」的角度，围绕发散起点「${from}」发散灵感，生成一些词或短句。',
+    separator: ' ',
+  },
+  {
+    title: '然后呢？',
+    prompt: '从「然后呢（后果 / 下一步）」的角度，围绕发散起点「${from}」发散灵感，生成一些词或短句。',
+    separator: ' ',
+  },
+  {
+    title: '还可以怎样？',
+    prompt: '从「还可以怎样（替代方案 / 不同角度）」的角度，围绕发散起点「${from}」发散灵感，生成一些词或短句。',
+    separator: ' ',
+  },
+  {
+    title: '反过来呢',
+    prompt: '从「反过来（反转假设 / 视角）」的角度，围绕发散起点「${from}」发散灵感，生成一些词或短句。',
+    separator: ' ',
+  },
+]
 
 /** 连词成句系统提示词：把结构化节点/连线文本转为自然语言段落描述（二段式第一段） */
 export const AI_SENTENCE_PROMPT = [

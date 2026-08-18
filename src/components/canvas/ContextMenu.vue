@@ -5,8 +5,22 @@
  * 以 position:fixed 定位在视口坐标 (x, y) 处，
  * 超出视口边界时自动翻转方向。
  * 使用 Teleport 渲染到 body 避免被父级 overflow:hidden 裁切。
+ *
+ * 支持带 children 的父级项展开二级（及更深）子菜单：
+ * - 父级项 hover 时在其右侧展开子菜单，子菜单超出视口右/下边缘时向左/上翻转；
+ * - 父级项本身点击不触发 select/close，仅子菜单叶子项才 select；
+ * - 子菜单通过递归组件渲染，结构上支持任意层级。
  */
-import { ref, watch, nextTick, onUnmounted } from 'vue'
+import {
+  ref,
+  watch,
+  nextTick,
+  onUnmounted,
+  onMounted,
+  defineComponent,
+  h,
+} from 'vue'
+import type { PropType, VNode } from 'vue'
 import type { ContextMenuItem } from '@/composables/useContextMenu'
 
 // ── Props ──
@@ -35,9 +49,15 @@ const positionStyle = ref({ left: '0px', top: '0px' })
 
 // ── 事件处理 ──
 
-/** 点击菜单项：非 disabled 时 emit select 和 close */
+/**
+ * 点击菜单项：
+ * - disabled 项不响应；
+ * - 有 children 的父级项只负责展开子菜单，不触发选中/关闭；
+ * - 叶子项（无 children）才 emit select 和 close。
+ */
 function handleItemClick(item: ContextMenuItem): void {
   if (item.disabled) return
+  if (item.children && item.children.length > 0) return
   emit('select', item)
   emit('close')
 }
@@ -85,6 +105,82 @@ function onDocumentKeyDown(e: KeyboardEvent): void {
   }
 }
 
+// ── 递归子菜单渲染 ──
+// 用 render 函数实现任意层级子菜单（结构上支持更深层级，当前使用到二级）。
+// 子菜单始终挂载但默认隐藏（visibility:hidden），父项 hover 时显示，
+// 这样展开时无需重新挂载，边界翻转测量也只在挂载时进行一次。
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+let SubMenu: ReturnType<typeof defineComponent>
+/* eslint-enable @typescript-eslint/no-unused-vars */
+
+/** 渲染单个菜单项（含其下的子菜单容器） */
+function renderMenuItem(item: ContextMenuItem): VNode {
+  const hasChildren = !!(item.children && item.children.length > 0)
+  return h(
+    'div',
+    {
+      class: [
+        'context-menu-item',
+        { 'context-menu-item--disabled': item.disabled },
+        { 'context-menu-item--danger': item.danger },
+      ],
+      onClick: () => handleItemClick(item),
+    },
+    [
+      item.icon ? h(item.icon, { class: 'context-menu-item__icon' }) : null,
+      h('span', { class: 'context-menu-item__label' }, item.label),
+      hasChildren
+        ? h('span', { class: 'context-menu-item__arrow' }, '▸')
+        : null,
+      hasChildren
+        ? h(SubMenu, { items: item.children as ContextMenuItem[] })
+        : null,
+    ],
+  )
+}
+
+SubMenu = defineComponent({
+  name: 'SubMenu',
+  props: {
+    items: { type: Array as PropType<ContextMenuItem[]>, required: true },
+    /** 是否为最外层列表（最外层不参与子菜单翻转定位） */
+    isRoot: { type: Boolean, default: false },
+  },
+  setup(subProps) {
+    const listRef = ref<HTMLElement | null>(null)
+    const flip = ref({ x: false, y: false })
+
+    /** 测量子菜单是否超出视口右/下边缘，超出则向左/上翻转，保持 8px 边距 */
+    function calcFlip(): void {
+      const el = listRef.value
+      if (!el || subProps.isRoot) return
+      const rect = el.getBoundingClientRect()
+      const { innerWidth, innerHeight } = window
+      flip.value = {
+        x: rect.right > innerWidth - 8,
+        y: rect.bottom > innerHeight - 8,
+      }
+    }
+
+    onMounted(calcFlip)
+
+    return () =>
+      h(
+        'div',
+        {
+          ref: listRef,
+          class: [
+            subProps.isRoot ? 'context-menu__list' : 'context-menu-sub',
+            { 'context-menu-sub--flip-x': !subProps.isRoot && flip.value.x },
+            { 'context-menu-sub--flip-y': !subProps.isRoot && flip.value.y },
+          ],
+        },
+        subProps.items.map((item) => renderMenuItem(item)),
+      )
+  },
+})
+
 // ── 生命周期与监听 ──
 
 /**
@@ -124,24 +220,8 @@ onUnmounted(() => {
         class="context-menu"
         :style="positionStyle"
       >
-        <div
-          v-for="item in items"
-          :key="item.key"
-          class="context-menu-item"
-          :class="{
-            'context-menu-item--disabled': item.disabled,
-            'context-menu-item--danger': item.danger,
-          }"
-          @click="handleItemClick(item)"
-        >
-          <!-- 图标（约 16px） -->
-          <component
-            :is="item.icon"
-            v-if="item.icon"
-            class="context-menu-item__icon"
-          />
-          <span class="context-menu-item__label">{{ item.label }}</span>
-        </div>
+        <!-- 递归渲染菜单项（含任意层级子菜单） -->
+        <SubMenu :items="items" is-root />
       </div>
     </Transition>
   </Teleport>
@@ -158,11 +238,14 @@ onUnmounted(() => {
   z-index: 9999;
   font-size: 14px;
   user-select: none;
-  /* 防止菜单内容溢出圆角 */
-  overflow: hidden;
+  /* 子菜单以绝对定位向右展开，需允许溢出，不能裁剪子菜单 */
+  overflow: visible;
 }
 
-.context-menu-item {
+/* 以下规则命中的元素均由 render 函数 h() 动态创建（非模板元素），
+   拿不到本组件 scopeId，故统一用 :deep(...) 穿透。 */
+:deep(.context-menu-item) {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -172,24 +255,24 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.context-menu-item:hover:not(.context-menu-item--disabled) {
+:deep(.context-menu-item:hover:not(.context-menu-item--disabled)) {
   background-color: var(--color-bg);
 }
 
-.context-menu-item--disabled {
+:deep(.context-menu-item--disabled) {
   color: var(--color-text-secondary);
   cursor: not-allowed;
 }
 
-.context-menu-item--danger {
+:deep(.context-menu-item--danger) {
   color: var(--color-danger);
 }
 
-.context-menu-item--danger:hover:not(.context-menu-item--disabled) {
+:deep(.context-menu-item--danger:hover:not(.context-menu-item--disabled)) {
   background-color: var(--color-bg);
 }
 
-.context-menu-item__icon {
+:deep(.context-menu-item__icon) {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -198,8 +281,54 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.context-menu-item__label {
+:deep(.context-menu-item__label) {
   flex: 1;
+}
+
+/* 展开箭头（父级项右侧） */
+:deep(.context-menu-item__arrow) {
+  flex-shrink: 0;
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* 子菜单容器：默认隐藏，父项 hover 时显示；向右展开并按需翻转 */
+:deep(.context-menu-sub) {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  padding: 4px 0;
+  min-width: 160px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1;
+  font-size: 14px;
+  /* 默认隐藏，父项 hover 时显示（保持布局以利于测量） */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+:deep(.context-menu-item:hover > .context-menu-sub),
+:deep(.context-menu-item:focus-within > .context-menu-sub) {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* 超出视口右侧 → 向左翻转 */
+:deep(.context-menu-sub--flip-x) {
+  left: auto;
+  right: 100%;
+}
+
+/* 超出视口底部 → 向上翻转 */
+:deep(.context-menu-sub--flip-y) {
+  top: auto;
+  bottom: 0;
 }
 
 /* ── 过渡动画 ── */

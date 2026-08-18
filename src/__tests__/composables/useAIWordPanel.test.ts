@@ -8,9 +8,30 @@ import {
   regenerate,
   sentenceMaking,
   setAIMode,
+  generateDirectional,
 } from '@/composables/useAIWordPanel'
-import { AI_SENTENCE_PROMPT, AI_WORD_PROMPT } from '@/constants/ai'
+import { AI_SENTENCE_PROMPT, AI_GENERATE_IDEA_NODE, AI_GENERATE_IDEA_DESCRIPTION, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS } from '@/constants/ai'
 import type { AIConfig } from '@/types'
+import type { AIDivergenceDirection } from '@/types/ai'
+
+// 用 vi.hoisted Mock useAIDirectionsStore，隔离真实 localStorage，聚焦默认发散方向接线
+const dirMocks = vi.hoisted(() => ({
+  getDefaultDirection: vi.fn(),
+}))
+
+vi.mock('@/stores/aiDirections', () => ({
+  useAIDirectionsStore: () => ({
+    getDefaultDirection: dirMocks.getDefaultDirection,
+  }),
+}))
+
+/** 测试用默认方向（非任意发散，便于断言 directGenerate/regenerate 使用了 store 默认方向） */
+const MOCK_DIRECTION: AIDivergenceDirection = {
+  id: 'mock-default',
+  title: '默认方向',
+  prompt: '请基于默认方向发散灵感。',
+  separator: ' ',
+}
 
 /** 构造 OpenAI 兼容成功响应 */
 function okResponse(content: string): Response {
@@ -46,6 +67,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     nodeStore = useNodeStore()
     project = useProjectStore()
     resetState()
+    dirMocks.getDefaultDirection.mockReturnValue(MOCK_DIRECTION)
   })
 
   afterEach(() => {
@@ -71,16 +93,19 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     expect(panel.words.value).toEqual(['词一', '词二', '词三'])
     expect(panel.visible.value).toBe(true)
     expect(panel.error.value).toBeNull()
-    // 自动生成的上下文预览回填
+    // 自动生成的上下文预览回填（含当前视图根节点名称作为标题前缀）
     expect(panel.previewText.value).toContain('子A')
+    expect(panel.previewText.value).toContain('目标 :\n')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0]
     const body = JSON.parse(init.body as string)
-    expect(body.messages[0].content).toBe(AI_WORD_PROMPT)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_NODE)
     expect(body.messages[1].content).toContain('子A')
     expect(body.messages[1].content).toContain('子B')
     expect(body.messages[1].content).toContain('局部见解')
+    expect(body.messages[1].content).toContain('# 指令')
+    expect(body.messages[1].content).toContain(MOCK_DIRECTION.prompt) // 直接生成用 store 默认方向
     expect(body.messages[1].content).not.toContain('副标题A')
   })
 
@@ -112,7 +137,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
 
     const [, secondInit] = fetchMock.mock.calls[1]
     const secondBody = JSON.parse(secondInit.body as string)
-    expect(secondBody.messages[0].content).toBe(AI_WORD_PROMPT)
+    expect(secondBody.messages[0].content).toBe(AI_GENERATE_IDEA_DESCRIPTION)
     expect(secondBody.messages[1].content).toContain('目标下有两个子主题。')
   })
 
@@ -131,7 +156,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     expect(fetchMock).toHaveBeenCalledTimes(1) // 不重复连词成句
     const [, init] = fetchMock.mock.calls[0]
     const body = JSON.parse(init.body as string)
-    expect(body.messages[0].content).toBe(AI_WORD_PROMPT)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_DESCRIPTION)
     expect(body.messages[1].content).toContain('用户已编辑的句子')
   })
 
@@ -167,6 +192,7 @@ describe('useAIWordPanel - regenerate（无参）', () => {
     nodeStore = useNodeStore()
     project = useProjectStore()
     resetState()
+    dirMocks.getDefaultDirection.mockReturnValue(MOCK_DIRECTION)
   })
 
   afterEach(() => {
@@ -193,7 +219,10 @@ describe('useAIWordPanel - regenerate（无参）', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0]
     const body = JSON.parse(init.body as string)
-    expect(body.messages[0].content).toBe(AI_WORD_PROMPT)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_NODE)
+    // 重新生成也用 store 默认方向
+    expect(body.messages[1].content).toContain('# 指令')
+    expect(body.messages[1].content).toContain(MOCK_DIRECTION.prompt)
   })
 })
 
@@ -235,5 +264,184 @@ describe('useAIWordPanel - sentenceMaking / setAIMode', () => {
 
     expect(useAIWordPanel().mode.value).toBe('precise')
     expect(project.getAIConfig(project.currentNodeId).mode).toBe('precise')
+  })
+})
+
+describe('useAIWordPanel - generateDirectional（定向发散）', () => {
+  let nodeStore: ReturnType<typeof useNodeStore>
+  let project: ReturnType<typeof useProjectStore>
+
+  /** 构造一个发散方向（prompt 内嵌 ${from}） */
+  function dir(overrides: Partial<AIDivergenceDirection> = {}): AIDivergenceDirection {
+    return {
+      id: 'why',
+      title: '为什么？',
+      prompt: '围绕「${from}」从「为什么？」的角度展开深入追问。',
+      ...overrides,
+    }
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    nodeStore = useNodeStore()
+    project = useProjectStore()
+    resetState()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('fast 模式：system 用 AI_GENERATE_IDEA_NODE，user 含 # 上下文/# 指令/# 补充 与 from、body 上下文，返回拆行词并 show', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse('为什么词1\n为什么词2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子A')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ localPrompt: '局部见解', mode: 'fast' }))
+
+    const direction = dir()
+    const words = await generateDirectional(['选中起点'], direction)
+
+    expect(words).toEqual(['为什么词1', '为什么词2'])
+    const panel = useAIWordPanel()
+    expect(panel.words.value).toEqual(['为什么词1', '为什么词2'])
+    expect(panel.visible.value).toBe(true)
+    expect(panel.error.value).toBeNull()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_NODE)
+    const user = body.messages[1].content as string
+    expect(user).toContain('# 上下文')
+    expect(user).toContain('子A') // body 上下文
+    expect(user).toContain('# 指令')
+    // 方向 prompt 含 ${from}，from 被替换为 fromText
+    expect(user).toContain('围绕「选中起点」从「为什么？」的角度展开深入追问。')
+    expect(user).not.toContain('${from}')
+    expect(user).toContain('# 补充')
+    expect(user).toContain('局部见解') // global/local 提示词
+  })
+
+  it('precise 模式：先连词成句（两次 fetch），再传入 direction 定向发散', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(okResponse('目标下有两个子主题。'))
+      .mockResolvedValueOnce(okResponse('定向词1\n定向词2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ mode: 'precise' }))
+
+    const direction = dir()
+    const words = await generateDirectional(['选中起点'], direction)
+
+    expect(words).toEqual(['定向词1', '定向词2'])
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    const [, firstInit] = fetchMock.mock.calls[0]
+    const firstBody = JSON.parse(firstInit.body as string)
+    expect(firstBody.messages[0].content).toBe(AI_SENTENCE_PROMPT)
+
+    const panel = useAIWordPanel()
+    expect(panel.sentenceText.value).toContain('目标下有两个子主题。')
+
+    const [, secondInit] = fetchMock.mock.calls[1]
+    const secondBody = JSON.parse(secondInit.body as string)
+    expect(secondBody.messages[0].content).toBe(AI_GENERATE_IDEA_DESCRIPTION)
+    expect(secondBody.messages[1].content).toContain('目标下有两个子主题。') // body 用连词成句结果
+    expect(secondBody.messages[1].content).toContain('围绕「选中起点」从「为什么？」的角度展开深入追问。')
+  })
+
+  it('generateDirectional(AI_DIRECTION_FOCUS)：围绕 fromText 聚焦发散', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse('词1\n词2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+
+    const words = await generateDirectional(['选中起点'], AI_DIRECTION_FOCUS)
+
+    expect(words).toEqual(['词1', '词2'])
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_NODE)
+    expect(body.messages[1].content).toContain('请围绕「选中起点」发散灵感，生成一些能帮助用户思考的灵感词或短句。')
+  })
+
+  it('direction 无 ${from}（如任意发散）：from 被忽略，不注入起点', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse('词1\n词2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+
+    const words = await generateDirectional(['选中起点'], AI_DIRECTION_ANY)
+
+    expect(words).toEqual(['词1', '词2'])
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[0].content).toBe(AI_GENERATE_IDEA_NODE)
+    expect(body.messages[1].content).toContain(AI_DIRECTION_ANY.prompt)
+    expect(body.messages[1].content).not.toContain('选中起点')
+    expect(body.messages[1].content).not.toContain('发散起点')
+  })
+
+  it('from 为空但仍能发散（body 非空）', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse('词1\n词2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+
+    const words = await generateDirectional([], dir())
+
+    expect(words).toEqual(['词1', '词2'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[1].content).toContain('子1') // 仅 body 上下文
+    expect(body.messages[1].content).not.toContain('发散起点')
+  })
+
+  it('from 为空且 body 为空：返回空数组，不调用 fetch', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const words = await generateDirectional([], dir())
+
+    expect(words).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('调用失败：内部捕获异常置 error，不抛出', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
+    nodeStore.addNode(target, 0, 0, '子1')
+    project.switchView(target)
+    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+
+    const words = await generateDirectional(['选中起点'], dir())
+
+    expect(words).toEqual([])
+    expect(useAIWordPanel().error.value).toBeTruthy()
   })
 })

@@ -272,12 +272,14 @@ export function getViewTextAlgorithm(id: string): ViewTextAlgorithm | undefined 
  * @param nodes  - 视图节点（通常 = nodeStore.childrenOf(currentNodeId)）
  * @param algoId - 算法 id；未知时回退到第一个注册算法
  * @param params - 算法参数字典（缺失字段用该算法 schema 的默认值）
+ * @param title  - 可选：当前视图节点名称，非空时在结构化文本开头加 "{title} :\n"
  * @returns 格式化文本
  */
 export function buildViewText(
   nodes: ViewTextNode[],
   algoId: string,
   params: Record<string, unknown> = {},
+  title?: string,
 ): string {
   const algo = getViewTextAlgorithm(algoId) ?? VIEW_TEXT_ALGORITHMS[0]
   if (!algo) return ''
@@ -290,6 +292,13 @@ export function buildViewText(
 
   const result = algo.build(nodes, merged)
   // 按输出形态二选一调度：list 走 formatList，rows 走 formatRows（separator 取自 merged）
-  if (algo.output === 'list') return formatList(result as string[])
-  return formatRows(result as string[][], typeof merged.separator === 'string' ? merged.separator : '\t')
+  let text: string
+  if (algo.output === 'list') text = formatList(result as string[])
+  else text = formatRows(result as string[][], typeof merged.separator === 'string' ? merged.separator : '\t')
+
+  // 可选标题前缀：仅在正文非空时加 "{title} :"，保持空上下文仍为空
+  if (text.trim() && title && title.trim()) {
+    text = `${title.trim()} :\n${text}`
+  }
+  return text
 }

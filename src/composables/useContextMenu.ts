@@ -15,6 +15,8 @@ export interface ContextMenuItem {
   icon?: Component
   /** 点击该项时执行的行为（由调用方在 select 回调中触发） */
   action?: () => void
+  /** 二级子菜单项（有 children 时该项作为父级，hover/点击展开子菜单） */
+  children?: ContextMenuItem[]
 }
 
 /**

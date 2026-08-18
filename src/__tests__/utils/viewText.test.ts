@@ -76,6 +76,26 @@ describe('buildViewText - collectAll', () => {
   it('空列表返回空串', () => {
     expect(buildViewText([], 'collectAll')).toBe('')
   })
+
+  it('title 非空时在结构化文本开头加 "{title} :" 前缀', () => {
+    const nodes = [n('a', 0, 0, 'A'), n('b', 0, 0, 'B')]
+    expect(buildViewText(nodes, 'collectAll', {}, '目标')).toBe('目标 :\nA\nB')
+  })
+
+  it('title 带空白时 trim 后再作为前缀（strip）', () => {
+    const nodes = [n('a', 0, 0, 'A')]
+    expect(buildViewText(nodes, 'collectAll', {}, '  目标  ')).toBe('目标 :\nA')
+  })
+
+  it('title 为空/空白时不加前缀', () => {
+    const nodes = [n('a', 0, 0, 'A')]
+    expect(buildViewText(nodes, 'collectAll', {}, '')).toBe('A')
+    expect(buildViewText(nodes, 'collectAll', {}, '   ')).toBe('A')
+  })
+
+  it('上下文正文为空时即使有 title 也返回空串（不出现孤立标题）', () => {
+    expect(buildViewText([], 'collectAll', {}, '目标')).toBe('')
+  })
 })
 
 // ===================================================================

@@ -21,6 +21,8 @@ import { useNodeStore } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { buildViewText } from '@/utils/viewText'
 import { runGenerateIdea, runSentenceMaking } from '@/composables/useAIGenerate'
+import { useAIDirectionsStore } from '@/stores/aiDirections'
+import type { AIDivergenceDirection } from '@/types/ai'
 
 /** 展示模式：'strip' 底部小字条 | 'panel' 浮动面板（持久化到 localStorage） */
 const displayMode = useStorage<'strip' | 'panel'>('aidea-ai-word-mode', 'strip')
@@ -60,18 +62,22 @@ function splitLines(reply: string): string[] {
     .filter((line) => line.length > 0)
 }
 
-/** 拼接 user 正文：全局提示词 + 局部提示词 + 主体正文（非空白部分才拼接） */
-function composeUserText(body: string): string {
+/** 拼接补充分段（addition）：全局提示词 + 局部提示词（非空白部分才拼接，不含 body） */
+function composeAddition(): string {
   const project = useProjectStore()
   const cfg = project.getAIConfig(project.currentNodeId)
   const globalPrompt = project.globalPrompt
   const localPrompt = cfg.localPrompt
 
   const parts: string[] = []
-  if (globalPrompt.trim()) parts.push(`全局提示：${globalPrompt.trim()}`)
-  if (localPrompt.trim()) parts.push(`局部提示：${localPrompt.trim()}`)
-  if (body.trim()) parts.push(body.trim())
-  return parts.join('\n\n')
+  if (globalPrompt.trim()) parts.push(globalPrompt.trim())
+  if (localPrompt.trim()) parts.push(localPrompt.trim())
+  return parts.join('\n')
+}
+
+/** 推导是否「连贯描述」：精确模式 body 是连词成句的连贯描述→true；快速模式 body 是结构化→false */
+function isDescriptionBody(): boolean {
+  return state.mode === 'precise'
 }
 
 /** 从 project 同步 AI 模式（保证 I 键与 AIPanel 一致、跟随节点切换） */
@@ -85,9 +91,14 @@ export function generatePreview(): boolean {
   const project = useProjectStore()
   const nodeStore = useNodeStore()
   const cfg = project.getAIConfig(project.currentNodeId)
+  // 标题 = 当前视图根节点首行（如根节点即项目名），非空时作为结构化文本前缀
+  const current = nodeStore.getNode(project.currentNodeId)
+  const title = current?.text ? (current.text.split('\n')[0] ?? '').trim() : ''
   state.previewText = buildViewText(
     nodeStore.childrenOf(project.currentNodeId),
     cfg.viewTextAlgoId ?? 'collectAll',
+    {},
+    title,
   )
   return state.previewText.trim().length > 0
 }
@@ -99,7 +110,14 @@ export async function sentenceMaking(): Promise<string> {
   if (!state.previewText.trim()) return ''
   state.sentenceLoading = true
   state.error = null
-  const context = composeUserText(state.previewText)
+  // 连词成句正文：全局提示 + 局部提示 + 预览正文（非空白部分才拼接）
+  const project = useProjectStore()
+  const cfg = project.getAIConfig(project.currentNodeId)
+  const parts: string[] = []
+  if (project.globalPrompt.trim()) parts.push(`全局提示：${project.globalPrompt.trim()}`)
+  if (cfg.localPrompt.trim()) parts.push(`局部提示：${cfg.localPrompt.trim()}`)
+  if (state.previewText.trim()) parts.push(state.previewText.trim())
+  const context = parts.join('\n\n')
   try {
     state.sentenceText = await runSentenceMaking(context)
     return state.sentenceText
@@ -111,10 +129,14 @@ export async function sentenceMaking(): Promise<string> {
   }
 }
 
-/** 发散并展示到浮动面板（内部共用，body 为最终输入正文） */
-async function runIdeaAndShow(body: string): Promise<string[]> {
-  const userContent = composeUserText(body)
-  const reply = await runGenerateIdea(userContent)
+/** 发散并展示到浮动面板（内部共用；direction 为发散方向，body 为最终输入正文，addition 为全局+局部补充分段） */
+async function runIdeaAndShow(body: string, direction: AIDivergenceDirection): Promise<string[]> {
+  const reply = await runGenerateIdea({
+    text: body,
+    isDescription: isDescriptionBody(),
+    direction,
+    addition: composeAddition(),
+  })
   const words = splitLines(reply)
   show(words)
   return words
@@ -136,7 +158,9 @@ export async function directGenerate(): Promise<string[]> {
       body = state.sentenceText
     }
     if (!body.trim()) return []
-    return await runIdeaAndShow(body)
+    // 用用户设置的默认发散方向（未设置/失效时 store 回退任意发散）
+    const direction = useAIDirectionsStore().getDefaultDirection()
+    return await runIdeaAndShow(body, direction)
   } catch (err) {
     state.error = err instanceof Error ? err.message : String(err)
     return []
@@ -159,12 +183,65 @@ export async function regenerate(): Promise<string[]> {
       body = state.sentenceText
     }
     if (!body.trim()) return []
-    return await runIdeaAndShow(body)
+    // 用用户设置的默认发散方向（未设置/失效时 store 回退任意发散）
+    const direction = useAIDirectionsStore().getDefaultDirection()
+    return await runIdeaAndShow(body, direction)
   } catch (err) {
     state.error = err instanceof Error ? err.message : String(err)
     return []
   } finally {
     state.regenerating = false
+  }
+}
+
+/**
+ * 定向发散（发散起点 + 发散方向）：围绕指定起点按方向发散灵感。
+ *
+ * 语义与 directGenerate 一致的无参自包含 + 跟随 fast/precise 二段式：
+ * - mode 为 precise 时先连词成句，再以连词成句结果为正文定向发散
+ * - 上下文（previewText）为空时自动用 viewText 重算当前视图上下文
+ *
+ * @param from      发散起点（选中节点文本数组；与 text 全空时直接返回空数组，不调模型）
+ * @param direction 发散方向（必传）。「直接发散」语义由 AI_DIRECTION_FOCUS 表达；
+ *                  方向 prompt 含 ${from} 则注入起点，无 ${from}（如任意发散）则忽略 from
+ * @returns 拆行后的词数组；未生成或失败时返回空数组（不向外抛出）
+ */
+export async function generateDirectional(
+  from: string[],
+  direction: AIDivergenceDirection,
+): Promise<string[]> {
+  if (state.generating || state.regenerating) return []
+  syncAIMode()
+  state.generating = true
+  state.error = null
+  try {
+    // 上下文为空则自动生成预览
+    if (!state.previewText.trim()) generatePreview()
+    let body = state.previewText
+    // 精确模式：连词成句为空则自动连词成句，再以句子为正文
+    if (state.mode === 'precise') {
+      if (!state.sentenceText.trim()) {
+        state.sentenceText = await sentenceMaking()
+      }
+      body = state.sentenceText
+    }
+    // body 与 from 都为空 → 不调模型
+    if (!body.trim() && (from ?? []).every((s) => !s.trim())) return []
+    const reply = await runGenerateIdea({
+      text: body,
+      isDescription: isDescriptionBody(),
+      direction,
+      from,
+      addition: composeAddition(),
+    })
+    const words = splitLines(reply)
+    show(words)
+    return words
+  } catch (err) {
+    state.error = err instanceof Error ? err.message : String(err)
+    return []
+  } finally {
+    state.generating = false
   }
 }
 
@@ -218,6 +295,7 @@ export function useAIWordPanel() {
     sentenceMaking,
     directGenerate,
     regenerate,
+    generateDirectional,
     setAIMode,
   }
 }

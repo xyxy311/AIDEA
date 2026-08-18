@@ -6,6 +6,8 @@ import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useClipboard } from '@/composables/useClipboard'
+import { useAIWordPanel } from '@/composables/useAIWordPanel'
+import { useAIDirectionsStore } from '@/stores/aiDirections'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import { snapPosition, snapFocus } from '@/utils/grid'
 
@@ -32,6 +34,8 @@ export function useCanvasEvents(viewId: string) {
   const link = useNodeViewLink(viewId)
   const commands = useCommands()
   const clipboard = useClipboard()
+  const aiWord = useAIWordPanel()
+  const aiDirections = useAIDirectionsStore()
 
   /**
    * 处理画布点击事件
@@ -194,6 +198,25 @@ export function useCanvasEvents(viewId: string) {
         action: () => link.groupSelectedNodes(),
       })
     }
+
+    // ── AI 定向发散（有选中节点时追加「发散」父级子菜单）──
+    // 以选中节点文本数组作为发散起点（保留非空过滤）；父项本身不执行，
+    // 由 ContextMenu 展开子菜单，点击子项才触发对应方向。
+    const from = Array.from(view.selectedNodeIds)
+      .map((id) => nodeStore.getNode(id)?.text)
+      .filter((s): s is string => !!s && s.trim().length > 0)
+    const divergenceChildren: ContextMenuItem[] = [
+      ...aiDirections.directionList.map((d) => ({
+        key: `divergence-${d.id}`,
+        label: d.title,
+        action: () => { void aiWord.generateDirectional(from, d) },
+      })),
+    ]
+    items.push({
+      key: 'divergence',
+      label: t('canvas.divergence'),
+      children: divergenceChildren,
+    })
 
     contextMenu.open(e.evt.clientX, e.evt.clientY, items)
   }

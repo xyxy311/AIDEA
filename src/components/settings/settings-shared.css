@@ -1,0 +1,74 @@
+/* settings 各分类 section 组件共享的控件样式（非 scoped，随使用方 import 生效） */
+
+/* 分区内控件列表 */
+.settings-controls {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.setting-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* 行内文字与控件纵向对齐（控件偏高时） */
+.setting-row.row-stack {
+  align-items: flex-start;
+}
+
+.setting-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting-label {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* 分区内辅助说明（辅助→弱提示层级） */
+.settings-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+/* 色块选项（外观分区：内置主色） */
+.accent-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.accent-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 弹窗底部操作栏 */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}

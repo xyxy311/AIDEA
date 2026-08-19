@@ -1,16 +1,26 @@
 <script setup lang="ts">
 /**
- * MenuBar - 顶部菜单栏
+ * MenuBar - 顶部左侧图标栏（原菜单栏的图标化）
  *
- * 文件菜单：新建项目、保存、导出
- * 编辑菜单：撤销、重做、设置
+ * 取消原「文件/编辑」下拉菜单样式，改为一排纯图标按钮（从左到右）：
+ *   新建项目 → 打开 → 保存 → 撤销 → 重做 → 设置
+ * 每个按钮经 IconBar 封装渲染，悬停有文字提示；撤销/重做按 canUndo/canRedo 禁用。
+ *
+ * 项目文件操作经 inject('projectFile')（AppShell 注入），撤销/重做经命令层。
  */
-import { h, computed, inject, type Component } from 'vue'
-import { NDropdown, NButton, type DropdownOption } from 'naive-ui'
-import { AddOutline, SaveOutline, FolderOpenOutline, ArrowUndoOutline, ArrowRedoOutline, SettingsOutline } from '@vicons/ionicons5'
+import { computed, inject } from 'vue'
+import {
+  AddOutline,
+  FolderOpenOutline,
+  SaveOutline,
+  ArrowUndoOutline,
+  ArrowRedoOutline,
+  SettingsOutline,
+} from '@vicons/ionicons5'
 import { useCommands } from '@/composables/useCommands'
 import type { ProjectFileApi } from '@/composables/useProjectFile'
 import { t } from '@/composables/useT'
+import IconBar, { type IconBarItem } from './IconBar.vue'
 
 const emit = defineEmits<{
   openSettings: []
@@ -21,62 +31,53 @@ const commands = useCommands()
 // 从 AppShell 注入的项目文件操作（单实例共享状态）
 const projectFile = inject<ProjectFileApi | undefined>('projectFile')
 
-function renderIcon(icon: Component) {
-  return () => h(icon)
-}
-
-const fileOptions = computed<DropdownOption[]>(() => [
-  { label: t('menuBar.newProject'), key: 'new-project', icon: renderIcon(AddOutline) },
-  { type: 'divider', key: 'd1' },
-  { label: t('menuBar.open'), key: 'open', icon: renderIcon(FolderOpenOutline) },
-  { type: 'divider', key: 'd2' },
-  { label: t('menuBar.save'), key: 'save', icon: renderIcon(SaveOutline) },
+/** 左侧功能按钮配置（数组驱动 IconBar，未来加按钮只需在此追加一项） */
+const items = computed<IconBarItem[]>(() => [
+  {
+    id: 'new-project',
+    icon: AddOutline,
+    title: t('menuBar.newProject'),
+    onClick: () => projectFile?.newProject(),
+  },
+  {
+    id: 'open',
+    icon: FolderOpenOutline,
+    title: t('menuBar.open'),
+    onClick: () => projectFile?.openProject(),
+  },
+  {
+    id: 'save',
+    icon: SaveOutline,
+    title: t('menuBar.save'),
+    onClick: () => projectFile?.saveProject(),
+  },
+  {
+    id: 'undo',
+    icon: ArrowUndoOutline,
+    title: t('menuBar.undo'),
+    onClick: () => commands.undo(),
+    disabled: !commands.canUndo.value,
+  },
+  {
+    id: 'redo',
+    icon: ArrowRedoOutline,
+    title: t('menuBar.redo'),
+    onClick: () => commands.redo(),
+    disabled: !commands.canRedo.value,
+  },
+  {
+    id: 'settings',
+    icon: SettingsOutline,
+    title: t('menuBar.settings'),
+    onClick: () => emit('openSettings'),
+  },
 ])
-
-// 动态生成 editOptions：canUndo/canRedo 控制禁用状态
-const editOptions = computed<DropdownOption[]>(() => [
-  { label: t('menuBar.undo'), key: 'undo', icon: renderIcon(ArrowUndoOutline), disabled: !commands.canUndo.value },
-  { label: t('menuBar.redo'), key: 'redo', icon: renderIcon(ArrowRedoOutline), disabled: !commands.canRedo.value },
-  { type: 'divider', key: 'd3' },
-  { label: t('menuBar.settings'), key: 'settings', icon: renderIcon(SettingsOutline) },
-])
-
-function handleSelect(key: string): void {
-  if (key === 'settings') {
-    emit('openSettings')
-    return
-  }
-  if (key === 'undo') {
-    commands.undo()
-    return
-  }
-  if (key === 'redo') {
-    commands.redo()
-    return
-  }
-  if (key === 'new-project') {
-    projectFile?.newProject()
-    return
-  }
-  if (key === 'open') {
-    projectFile?.openProject()
-    return
-  }
-  if (key === 'save') {
-    projectFile?.saveProject()
-    return
-  }
-}
 </script>
 
 <template>
+  <!-- 左侧分区：只承载 IconBar，边框/背景由 AppShell 顶部条统一提供 -->
   <div class="menu-bar">
-    <NDropdown trigger="click" :options="fileOptions" @select="handleSelect">
-      <NButton text class="menu-btn">{{ t('menuBar.file') }}</NButton>
-    </NDropdown>
-    <NDropdown trigger="click" :options="editOptions" @select="handleSelect">
-      <NButton text class="menu-btn">{{ t('menuBar.edit') }}</NButton>
-    </NDropdown>
+    <IconBar :items="items" />
   </div>
 </template>
 
@@ -84,22 +85,7 @@ function handleSelect(key: string): void {
 .menu-bar {
   display: flex;
   align-items: center;
-  height: 28px;
   padding: 0 8px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
-  gap: 2px;
-}
-
-.menu-btn {
-  font-size: 13px;
-  color: var(--color-text);
-  padding: 2px 10px;
-  border-radius: 4px;
-}
-
-.menu-btn:hover {
-  background: var(--color-bg);
 }
 </style>

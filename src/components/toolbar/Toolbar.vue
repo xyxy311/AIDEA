@@ -1,18 +1,31 @@
 <script setup lang="ts">
 /**
- * Toolbar - 白板顶部工具栏
+ * Toolbar - 顶部右侧图标栏（原白板工具栏的图标化）
  *
- * 提供节点创建、删除、状态显示功能。
- * 通过 useWhiteboardStore 直接操作状态。
+ * 取消原文字按钮样式，改为一排纯图标按钮（左 → 右：调试 → AI 展示模式 → 网格 → 新建节点）。
+ * 整个分区在顶部条中右对齐，「新建节点（primary）」落在最右侧最为醒目。
+ *
+ * - 新建节点：在视口中央创建（主色/高亮）
+ * - 网格切换：激活态反映 gridMode，开启时自动对齐当前视图子节点
+ * - AI 展示模式：图标随 displayMode 切换，title 提示当前切换目标
+ * - 调试：打印当前画布状态到控制台
+ * - 节点计数：保留为右侧顶部条末端的纯文字弱显示（纯信息，不与图标化冲突）
  */
 import { computed } from 'vue'
-import { GridOutline, ListOutline, ContractOutline } from '@vicons/ionicons5'
+import {
+  GridOutline,
+  ListOutline,
+  ContractOutline,
+  BugOutline,
+  AddCircleOutline,
+} from '@vicons/ionicons5'
 import { useActiveView } from '@/composables/useActiveView'
 import { useCommands } from '@/composables/useCommands'
 import { useStageSize } from '@/composables/useStageSize'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { t } from '@/composables/useT'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
+import IconBar, { type IconBarItem } from '@/components/layout/IconBar.vue'
 
 const active = useActiveView()
 const commands = useCommands()
@@ -71,171 +84,64 @@ function handleAddNode() {
 function debugPrint() {
   console.log('当前画布节点:', nodes.value)
 }
+
+/**
+ * 右侧功能按钮配置（数组驱动 IconBar，未来加按钮只需在此追加一项）。
+ * 数组左 → 右：调试 → AI 展示 → 网格 → 新建节点（最右）。
+ */
+const items = computed<IconBarItem[]>(() => [
+  { id: 'debug', icon: BugOutline, title: t('toolbar.debug'), onClick: debugPrint },
+  {
+    id: 'ai-mode',
+    icon: displayMode.value === 'strip' ? ListOutline : ContractOutline,
+    title:
+      displayMode.value === 'strip'
+        ? t('aiWord.switchToPanel')
+        : t('aiWord.switchToStrip'),
+    onClick: () => setMode(displayMode.value === 'strip' ? 'panel' : 'strip'),
+  },
+  {
+    id: 'grid',
+    icon: GridOutline,
+    title: isGridMode.value ? t('toolbar.gridActive') : t('toolbar.grid'),
+    onClick: handleToggleGrid,
+    active: isGridMode.value,
+  },
+  {
+    id: 'add-node',
+    icon: AddCircleOutline,
+    title: t('toolbar.addNode'),
+    onClick: handleAddNode,
+    variant: 'primary',
+  },
+])
 </script>
 
 <template>
-  <header class="toolbar">
-    <div class="toolbar-left">
-      <h1 class="toolbar-title">{{ t('toolbar.title') }}</h1>
-    </div>
-
-    <div class="toolbar-center">
-      <button class="btn btn-primary" @click="handleAddNode">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          class="btn-icon"
-        >
-          <path
-            d="M8 3v10M3 8h10"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-        {{ t('toolbar.addNode') }}
-      </button>
-      <button
-        class="btn btn-grid"
-        :class="{ active: isGridMode }"
-        :title="isGridMode ? t('toolbar.gridActive') : t('toolbar.grid')"
-        @click="handleToggleGrid"
-      >
-        <GridOutline class="btn-icon" />
-        {{ t('toolbar.grid') }}
-      </button>
-      <!-- 切换 AI 生成词展示模式：strip（底部小字条）↔ panel（浮动面板） -->
-      <button
-        class="btn btn-grid"
-        :title="displayMode === 'strip' ? t('aiWord.switchToPanel') : t('aiWord.switchToStrip')"
-        @click="setMode(displayMode === 'strip' ? 'panel' : 'strip')"
-      >
-        <ListOutline v-if="displayMode === 'strip'" class="btn-icon" />
-        <ContractOutline v-else class="btn-icon" />
-      </button>
-      <button class="btn btn-primary" @click="debugPrint">
-        {{ t('toolbar.debug') }}
-      </button>
-    </div>
-
-    <div class="toolbar-right">
-      <span class="node-count">
-        {{ t('toolbar.nodeCount', { count: nodes.length }) }}
-      </span>
-    </div>
-  </header>
+  <!-- 右侧分区：图标按钮 + 尾部节点计数，整体在顶部条内右对齐 -->
+  <div class="toolbar">
+    <IconBar :items="items" />
+    <span class="node-count">
+      {{ t('toolbar.nodeCount', { count: nodes.length }) }}
+    </span>
+  </div>
 </template>
 
 <style scoped>
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: var(--toolbar-height, 56px);
-  padding: 0 16px;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+  padding: 0 8px;
+  flex-shrink: 0;
   user-select: none;
-  flex-shrink: 0;
 }
 
-.toolbar-left {
-  display: flex;
-  align-items: center;
-}
-
-.toolbar-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin: 0;
-  white-space: nowrap;
-}
-
-.toolbar-center {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-}
-
-/* ── 按钮基础样式 ── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
-  line-height: 1.5;
-}
-
-.btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* 按钮内图标尺寸（@vicons / 内联 svg 通用） */
-.btn-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-/* ── 网格切换按钮 ── */
-.btn-grid {
-  background-color: var(--color-surface);
-  color: var(--color-text);
-  border-color: var(--color-border);
-}
-
-.btn-grid:hover:not(.active) {
-  background-color: var(--color-primary-faint);
-  border-color: var(--color-primary-hover);
-}
-
-/* 激活态（网格开启）：主色高亮 */
-.btn-grid.active {
-  background-color: var(--color-primary);
-  color: var(--color-on-primary);
-  border-color: var(--color-primary);
-}
-
-.btn-grid.active:hover {
-  background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-/* ── 主要按钮（添加节点） ── */
-.btn-primary {
-  background-color: var(--color-primary);
-  color: var(--color-on-primary);
-  border-color: var(--color-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.btn-primary:active:not(:disabled) {
-  background-color: var(--color-primary-pressed);
-}
-
-/* ── 节点计数 ── */
+/* 节点计数：最右端纯文字弱信息显示 */
 .node-count {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  min-width: 0;
 }
 </style>

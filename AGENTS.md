@@ -36,11 +36,8 @@ config/     配色 colorSchemes.ts：亮/暗（Naive theme + overrides + CSS 变
 locales/    UI 文本 zh-CN.json（i18n 占位层）
 stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex/tagIndex) / tags(项目级标签定义) / view(工厂，视口/选中/编辑，不存数据)
             / project(导航+快照+销毁内联实例) / presets / history(undo+patch+batch+coalesce) / theme / layout(活动栏顺序/激活)
-composables/ useActiveView / useCommands(数据写统一入口) / useNodeTree / useNodeViewLink / useReferenceAutocomplete / useT
-            / useAIAssist(AI上下文解析+调用：buildNodeContext 把根→目标路径+子级+连线表转结构化语言描述、buildAIContext 按 includeConnections 分派 buildNodeContext(带连线)/viewText(空间布局) 双来源、assembleTaskMessages 组装 system+user 消息、runAISentenceMaking 连词成句(二段式第一步)；runAIAssist 发散当前视图、runAIWordGeneration 生成10个词，均支持 fast/precise 二段式，调 provider 后打印到控制台)
-components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
-             / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/MenuBar/AppShell/LeftSidebar/RightSidebar)
-             / common(DraggableSortList — 通用可拖拽排序列表 / DockPanel — 通用面板外壳(两侧共用) / DockContainer — 右侧多面板 dock) / floating(/FloatingPropertyEditor / FloatingColorStrip / FloatingPresetEditor — Word 风格浮动属性编辑器)
+components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / toolbar(现为右侧图标分区，含节点计数) / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
+             / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/MenuBar/AppShell/LeftSidebar/RightSidebar + IconBar — 通用图标按钮分区组件)
 ```
 
 组件通常经 `useActiveView()` 统一访问 nodeStore / project / view。
@@ -76,6 +73,12 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **左右互通**：面板可在左侧（活动栏/单面板区）与右侧（dock）之间拖拽移动。统一 HTML5 drag 协议由 `utils/dock.ts` 的 `PANEL_DRAG_MIME`/`writePanelDrag`/`readPanelDrag` 提供（dataTransfer 携带 `{panelId, from:'left'|'right'}`，MIME `aidea-panel`）：右侧面板拖到活动栏 → `moveToLeft`；活动栏图标/左侧面板拖到右侧 dock → `moveToRight`。活动栏底部「+」可把未放置面板加回左侧。
 - **layout store**：`rightPanels`（右侧顺序）/`rightSizes`（各面板 flex 比例）/`moveToLeft`/`moveToRight`/`reorderRight`/`setRightSize`/`removePanel`/`resetDock`。纯状态转换在 `utils/dock.ts`（可单测）。默认左右面板由品类表 `defaultPlacement` 派生（不硬编码）。归属/顺序/高度持久化到 localStorage，设置「恢复默认布局」一键重置。
 - 详见 `docs/可拖拽面板与左右侧边栏.md`。
+
+### 顶部图标条（MenuBar + Toolbar）
+
+- 原「菜单栏/文字工具栏」已取消，改为顶部一条纯图标栏 `.top-bar`：左侧 `MenuBar`（新建/打开/保存/撤销/重做/设置，从左到右）+ 右侧 `Toolbar`（调试/AI展示模式/网格/新建节点 + 节点计数，从右到左，新建节点 primary 最右最醒目），`space-between` 左右分开，共用同一视觉语言。
+- **通用分区组件 `IconBar`**（`layout/IconBar.vue`）：`:items` 数组驱动一排纯图标按钮，每按钮 `{id, icon, title(hover NTooltip 提示), onClick, disabled, active(底部主色指示条), variant:'default'|'primary'}`。新增顶部功能按钮只需在 `MenuBar.vue`（左）或 `Toolbar.vue`（右）的 `items` 计算数组加一项，无需改 IconBar。
+- 文件操作经 `inject('projectFile')`（AppShell 注入单实例）；撤销/重做经 `commands.undo()/redo()` 按 `canUndo/canRedo` 禁用；设置 `emit('openSettings')`。网格开启自动对齐、AI 展示模式图标随状态切换等行为与旧工具栏一致。
 
 ### 预设样式系统（presets store）
 

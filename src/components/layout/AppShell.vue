@@ -3,10 +3,9 @@
  * AppShell — 应用布局外壳
  *
  * 布局结构：
- *   ┌─────────────── MenuBar ───────────────┐
- *   ├ ActivityBar ┬ LeftSidebar ┬ Toolbar ┬ RightSB ┤
- *   │             │            ├ Canvas ──┤        │
- *   └─────────────┴────────────┴──────────┴────────┘
+ *   ┌──────── 顶部图标条（MenuBar 左 │ Toolbar 右）─────────┐
+ *   ├ ActivityBar ┬ LeftSidebar ┬ Canvas ┬ RightSidebar ┤
+ *   └─────────────┴────────────┴────────┴───────────────┘
  *
  * 左侧：活动栏（ActivityBar，始终可见）+ 面板区（LeftSidebar，渲染激活面板）。
  * 面板区收起状态由 layout store 驱动。
@@ -143,8 +142,11 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
 <template>
   <div class="app-shell">
-    <!-- 菜单栏 -->
-    <MenuBar @open-settings="showSettings = true" />
+    <!-- 顶部图标条：左侧菜单栏分区 + 右侧工具栏分区，左右两端分开但共用同一图标视觉语言 -->
+    <div class="top-bar">
+      <MenuBar @open-settings="showSettings = true" />
+      <Toolbar />
+    </div>
 
     <!-- 主体区域 -->
     <div class="app-body">
@@ -168,7 +170,6 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
       <!-- 中央画布区域 -->
       <div class="app-center">
-        <Toolbar />
         <main class="app-main">
           <WhiteboardCanvas />
         </main>
@@ -218,6 +219,19 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   display: flex;
   flex: 1;
   overflow: hidden;
+}
+
+/* 顶部图标条：承载左（MenuBar）右（Toolbar）两个图标分区 */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  flex-shrink: 0;
+  padding: 0 8px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  user-select: none;
 }
 
 .app-center {

@@ -5,7 +5,7 @@
  * 展示节点树结构（基于 nodeStore 的 parentId 构建），支持：
  * - 展开/收起子树
  * - 单击切换活跃视图（查看该节点的子级）
- * - 双击重命名节点（根节点重命名即改项目名）
+ * - 双击重命名节点（根节点文本即项目名，显示在顶部工具栏，可双击编辑）
  * - 纯图标按钮：在当前活跃视图下新建子节点 / 递归删除当前节点
  * - 逐节点删除（hover 显示）
  *
@@ -44,6 +44,19 @@ const {
 const active = useActiveView()
 const nodeStore = useNodeStore()
 const message = useMessage()
+
+/** 根节点名称（即项目名，单一数据源） */
+const rootName = computed(() => nodeStore.getNode(rootViewId.value)?.text ?? '')
+
+/**
+ * 渲染到列表的节点树：过滤掉根节点（根节点名称已放顶部工具栏），
+ * 并把子级深度左移 1，使首层子级从 0 对齐（缩进竖线同步随深度变化，不会错位）。
+ */
+const treeItems = computed(() =>
+  flatTree.value
+    .filter((item) => !item.isRoot)
+    .map((item) => ({ ...item, depth: item.depth - 1 })),
+)
 
 /** 画布中选中的节点 ID 集合（来自当前活跃视图） */
 const selectedSet = computed(() => active.view.selectedNodeIds)
@@ -124,8 +137,26 @@ function cancelRename(): void {
 
 <template>
   <div class="node-tree-panel">
-    <!-- 顶部操作工具栏 -->
+    <!-- 顶部操作工具栏：左侧显示根节点名称（双击可编辑项目名），右侧为操作按钮 -->
     <div class="panel-toolbar">
+      <div class="toolbar-title">
+        <!-- 根节点重命名（复用列表节点重命名逻辑） -->
+        <NInput
+          v-if="editingNodeId === rootViewId"
+          v-model:value="renameText"
+          class="node-rename-input"
+          size="tiny"
+          @blur="finishRename"
+          @keydown.enter.prevent="finishRename"
+          @keydown.escape.prevent="cancelRename"
+        />
+        <span
+          v-else
+          class="toolbar-title-name"
+          :title="rootName"
+          @dblclick.stop="handleDblClick(rootViewId, rootName)"
+        >{{ rootName }}</span>
+      </div>
       <div class="panel-actions">
         <!-- 纯图标按钮：新建子节点 -->
         <NButton
@@ -159,7 +190,7 @@ function cancelRename(): void {
     <NScrollbar class="panel-scroll" x-scrollable>
       <div class="node-list">
         <div
-          v-for="item in flatTree"
+          v-for="item in treeItems"
           :key="item.id"
           class="node-item"
           :class="{
@@ -240,9 +271,44 @@ function cancelRename(): void {
 .panel-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 8px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--color-border);
+}
+
+/* 左侧：根节点名称（双击可编辑项目名） */
+.toolbar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.toolbar-title-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text; /* 提示可编辑 */
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toolbar-title-name:hover {
+  background: var(--color-hover);
+  color: var(--color-primary-hover);
+}
+
+/* 根节点重命名输入框沿用列表节点输入框样式 */
+.toolbar-title .node-rename-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .panel-actions {

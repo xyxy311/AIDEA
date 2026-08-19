@@ -276,6 +276,11 @@
     "confirm": "确定",
     "cancel": "取消"
   },
+  "nodeItem": {
+    "path": "路径",
+    "tags": "标签",
+    "title": "名称"
+  },
   "aiWord": {
     "title": "AI 生成词",
     "generateBtn": "AI 生成词",

@@ -19,6 +19,7 @@ import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
 import { useNodeTree } from '@/composables/useNodeTree'
 import { t } from '@/composables/useT'
+import NodeItem from '@/components/common/NodeItem.vue'
 
 const project = useProjectStore()
 const nodeStore = useNodeStore()
@@ -74,6 +75,16 @@ function finishRename(): void {
 function cancelRename(): void {
   editingNodeId.value = null
 }
+
+/**
+ * 引用名首行中 `#名` 之后的剩余部分。
+ * 语义：text 以 `#` 开头，`#` 后首行 trim 即为 name（extractReferenceName 语义），
+ * 因此 `#名` 在首行开头；slice(1 + name.length) 即得剩余。空串表示无剩余、不渲染。
+ */
+function refNameSuffix(nodeId: string, name: string): string {
+  const firstLine = (nodeStore.getNode(nodeId)?.text ?? '').split('\n')[0].trim()
+  return firstLine.slice(1 + name.length)
+}
 </script>
 
 <template>
@@ -92,7 +103,7 @@ function cancelRename(): void {
           @click="handleSwitch(ref.nodeId)"
           @dblclick.stop="handleDblClick(ref.nodeId)"
         >
-          <!-- 引用名（# 前缀，主色高亮同画布语义） -->
+          <!-- 编辑态：仍用 NInput 替换整行内容 -->
           <NInput
             v-if="editingNodeId === ref.nodeId"
             v-model:value="renameText"
@@ -103,7 +114,15 @@ function cancelRename(): void {
             @keydown.enter.prevent="finishRename"
             @keydown.escape.prevent="cancelRename"
           />
-          <span v-else class="ref-name">#{{ ref.name }}</span>
+          <!-- 展示态：NodeItem 渲染标题 + 标签 + 路径（行内省略、含悬停提示） -->
+          <NodeItem v-else :node="nodeStore.getNode(ref.nodeId)!">
+            <template #title>
+              <!-- 引用名 `#名` 主色高亮（同画布语义） -->
+              <span class="ref-name-hi">#{{ ref.name }}</span>
+              <!-- `#名` 之后的正文剩余部分（无则省略） -->
+              <span v-if="refNameSuffix(ref.nodeId, ref.name)">{{ refNameSuffix(ref.nodeId, ref.name) }}</span>
+            </template>
+          </NodeItem>
 
           <!-- 删除按钮（hover 显示） -->
           <NPopconfirm
@@ -170,13 +189,8 @@ function cancelRename(): void {
   border: 1px solid var(--color-active-border);
 }
 
-.ref-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
+/* 引用名 `#名` 高亮：主色（与画布引用语义一致） */
+.ref-name-hi {
   color: var(--color-primary);
 }
 

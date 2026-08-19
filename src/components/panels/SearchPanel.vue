@@ -18,6 +18,7 @@ import { useTagsStore } from '@/stores/tags'
 import { searchNodes, type SearchScope } from '@/utils/search'
 import { t } from '@/composables/useT'
 import { pendingSearchFocus } from '@/composables/useSearchFocus'
+import NodeItem from '@/components/common/NodeItem.vue'
 
 const project = useProjectStore()
 const nodeStore = useNodeStore()
@@ -168,20 +169,23 @@ function handleSwitch(nodeId: string): void {
           :class="{ active: res.nodeId === project.currentNodeId }"
           @click="handleSwitch(res.nodeId)"
         >
-          <!-- 标题行 -->
-          <p class="search-title">
-            <template v-for="(seg, i) in res.title" :key="i">
-              <mark v-if="seg.match" class="hl">{{ seg.text }}</mark>
-              <span v-else>{{ seg.text }}</span>
+          <!-- NodeItem 统一渲染标题 + 标签 + 路径 + 悬停提示（标题/正文高亮经 slot 注入） -->
+          <NodeItem :node="nodeStore.getNode(res.nodeId)!">
+            <!-- 标题行高亮分段 -->
+            <template #title>
+              <template v-for="(seg, i) in res.title" :key="i">
+                <mark v-if="seg.match" class="hl">{{ seg.text }}</mark>
+                <span v-else>{{ seg.text }}</span>
+              </template>
             </template>
-          </p>
-          <!-- 命中行片段（命中在首行时不展示） -->
-          <p v-if="res.body" class="search-body">
-            <template v-for="(seg, i) in res.body" :key="i">
-              <mark v-if="seg.match" class="hl">{{ seg.text }}</mark>
-              <span v-else>{{ seg.text }}</span>
+            <!-- 命中行片段（命中在首行时不展示） -->
+            <template #body v-if="res.body">
+              <template v-for="(seg, i) in res.body" :key="i">
+                <mark v-if="seg.match" class="hl">{{ seg.text }}</mark>
+                <span v-else>{{ seg.text }}</span>
+              </template>
             </template>
-          </p>
+          </NodeItem>
         </div>
       </div>
     </NScrollbar>
@@ -255,26 +259,6 @@ function handleSwitch(nodeId: string): void {
 .search-item.active {
   background: var(--color-active-bg);
   border: 1px solid var(--color-active-border);
-}
-
-/* 标题行：单行省略号 */
-.search-title {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 命中行片段：单行省略号，颜色略淡 */
-.search-body {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* 命中高亮：主色淡底 + 主色文字 */

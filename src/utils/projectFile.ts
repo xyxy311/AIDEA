@@ -1,5 +1,6 @@
 import type { WhiteboardNode, Tag, AIConfig } from '@/types'
 import { createNode } from '@/utils/factory'
+import { generateId } from '@/utils/id'
 import { ROOT_NODE_ID } from '@/stores/node'
 
 /**
@@ -24,6 +25,12 @@ import { ROOT_NODE_ID } from '@/stores/node'
 /** 项目文件格式版本号 */
 export const PROJECT_FILE_VERSION = 1
 
+/** 可持久化的标签页 */
+export interface ProjectViewTab {
+  id?: string
+  viewedNodeId: string
+}
+
 /** 可持久化的视图状态 */
 export interface ProjectViewState {
   viewedNodeId: string
@@ -34,6 +41,10 @@ export interface ProjectViewState {
   inlineViews: Array<{ nodeId: string; width: number; height: number }>
   selectedNodeIds: string[]
   selectedConnectionIds: string[]
+  /** 标签页列表（可选：旧文件无此字段则向后兼容回退单视图） */
+  tabs?: ProjectViewTab[]
+  /** 活动标签页 ID（可选：旧文件无此字段） */
+  activeTabId?: string | null
 }
 
 /** 项目文件顶层数据结构 */
@@ -247,6 +258,25 @@ export function parseProjectFile(json: string): ParsedProject {
     selectedConnectionIds: Array.isArray(vs.selectedConnectionIds)
       ? vs.selectedConnectionIds.filter((id) => typeof id === 'string')
       : [],
+    // 标签页：剔除非对象项；失效 viewedNodeId 置 ROOT（与懒处理一致）；缺 id 用 generateId 补
+    tabs: Array.isArray(vs.tabs)
+      ? vs.tabs
+          .map((tb): ProjectViewTab | null => {
+            if (!tb || typeof tb !== 'object') return null
+            const o = tb as Record<string, unknown>
+            const viewedNodeId =
+              typeof o.viewedNodeId === 'string' && nodeById.has(o.viewedNodeId)
+                ? o.viewedNodeId
+                : ROOT_NODE_ID
+            return {
+              id: typeof o.id === 'string' && o.id ? o.id : generateId(),
+              viewedNodeId,
+            }
+          })
+          .filter((tb): tb is ProjectViewTab => tb !== null)
+      : undefined,
+    activeTabId:
+      typeof vs.activeTabId === 'string' && vs.activeTabId ? vs.activeTabId : null,
   }
 
   // —— 解析并自愈 AI 配置（旧文件缺字段回退默认；nodeConfigs 过滤悬空引用） ——

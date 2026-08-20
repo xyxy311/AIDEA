@@ -24,6 +24,13 @@
       "debug": "调试",
       "nodeCount": "节点：{count}"
     },
+  "viewTab": {
+    "placeholder": "未命名",
+    "add": "新建标签页",
+    "close": "关闭标签页",
+    "renameConflict": "该标题已被占用，请更换",
+    "nodeDeletedToast": "视图节点已删除，已回退到根视图"
+  },
   "settings": {
     "title": "设置",
     "appearance": "外观",

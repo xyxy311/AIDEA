@@ -1,5 +1,5 @@
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
-import { useProjectStore } from '@/stores/project'
+import { useProjectStore, type ProjectTab } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import { useViewStore } from '@/stores/view'
 import { useFileStore } from '@/stores/file'
@@ -86,6 +86,9 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       })),
       selectedNodeIds: Array.from(view.selectedNodeIds),
       selectedConnectionIds: Array.from(view.selectedConnectionIds),
+      // 标签页（映射 id + viewedNodeId）与活动标签 ID
+      tabs: project.tabs.map((t) => ({ id: t.id, viewedNodeId: t.viewedNodeId })),
+      activeTabId: project.activeTabId,
     }
   }
 
@@ -136,12 +139,37 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     if (!expanded.has(ROOT_NODE_ID)) expanded.add(ROOT_NODE_ID)
     project.expandedIds = expanded
 
-    // 5. 恢复 viewedNodeId：先归位 root，再切换到目标节点
-    project.switchView(ROOT_NODE_ID)
-    const targetView = data.viewState.viewedNodeId
-    if (targetView && targetView !== ROOT_NODE_ID && existingIds.has(targetView)) {
-      project.switchView(targetView)
+    // 5. 按 viewState 重建标签列表并切换活动标签视图
+    //    resetForNewProject（内调 resetTabsForProject）已建立单根标签并 doSwitch(ROOT)，
+    //    此处基于文件中的 tabs 重建：失效 viewedNodeId 置 ROOT；缺 id 用 generateId 补。
+    let viewTabs = data.viewState.tabs
+    let tabs: ProjectTab[]
+    if (viewTabs && viewTabs.length > 0) {
+      tabs = viewTabs.map((tb) => ({
+        id: tb.id ?? generateId(),
+        viewedNodeId:
+          tb.viewedNodeId && existingIds.has(tb.viewedNodeId)
+            ? tb.viewedNodeId
+            : ROOT_NODE_ID,
+      }))
+    } else {
+      // 旧文件（无 tabs）向后兼容：以单视图 viewedNodeId 作为唯一标签的观察节点
+      const legacyNode =
+        data.viewState.viewedNodeId && existingIds.has(data.viewState.viewedNodeId)
+          ? data.viewState.viewedNodeId
+          : ROOT_NODE_ID
+      tabs = [{ id: generateId(), viewedNodeId: legacyNode }]
     }
+    project.tabs = tabs
+
+    // 选择活动标签：activeTabId 命中则激活，否则激活第一个
+    let activeId = tabs[0].id
+    if (data.viewState.activeTabId && tabs.some((t) => t.id === data.viewState.activeTabId)) {
+      activeId = data.viewState.activeTabId
+    }
+    // 临时清空 activeTabId，确保 switchToTab 不因「已是该标签」而早退，触发 doSwitch
+    project.activeTabId = null
+    project.switchToTab(activeId)
 
     const view = useViewStore('main')
 

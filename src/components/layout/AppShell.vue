@@ -30,6 +30,7 @@ import LeftSidebar from './LeftSidebar.vue'
 import RightSidebar from './RightSidebar.vue'
 import SettingsModal from '@/components/settings/SettingsModal.vue'
 import Toolbar from '@/components/toolbar/Toolbar.vue'
+import TabBar from './TabBar.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
 import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
@@ -170,6 +171,8 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
       <!-- 中央画布区域 -->
       <div class="app-center">
+        <!-- 多标签页栏：位于画布之上的一条横向栏 -->
+        <TabBar />
         <main class="app-main">
           <WhiteboardCanvas />
         </main>

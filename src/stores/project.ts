@@ -3,6 +3,7 @@ import { defineStore, getActivePinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { markDataDirty } from '@/utils/dirtyMarker'
+import { generateId } from '@/utils/id'
 import type { InlineViewItem } from '@/stores/view'
 import type { AIConfig } from '@/types'
 
@@ -31,6 +32,12 @@ export interface ViewSnapshot {
   editingNodeId: string | null
   connectingFrom: string | null
   inlineViews: InlineViewSnapshot[]
+}
+
+/** 项目标签页（多标签观察同一节点时共享其快照） */
+export interface ProjectTab {
+  id: string
+  viewedNodeId: string
 }
 
 /**
@@ -66,6 +73,30 @@ export const useProjectStore = defineStore('project', () => {
 
   /** 各节点的主视图状态快照（非响应式，仅用于保存/恢复） */
   const viewSnapshots = new Map<string, ViewSnapshot>()
+
+  // ── 标签页 ──
+
+  /** 标签页列表（多标签页，每个观察一个节点） */
+  const tabs = ref<ProjectTab[]>([])
+
+  /** 当前活动标签页 ID（null 表示无活动标签，仅在加载/重置的过渡态） */
+  const activeTabId = ref<string | null>(null)
+
+  /** 当前活动标签页（computed） */
+  const activeTab = computed<ProjectTab | null>(
+    () => tabs.value.find((t) => t.id === activeTabId.value) ?? null,
+  )
+
+  /** 标签懒检查回退标志：某标签 viewedNodeId 失效被重置为 ROOT 时置 true（UI 层提示用） */
+  const tabFallbackNotice = ref(false)
+
+  // 启动即保证至少一个根标签（刷新/首次加载的默认项目不经过 resetForNewProject）。
+  // 主视图 viewedNodeId 初始即为 ROOT（useViewStore init），与此标签已同步，无需 doSwitch。
+  if (tabs.value.length === 0) {
+    const initialId = generateId()
+    tabs.value = [{ id: initialId, viewedNodeId: ROOT_NODE_ID }]
+    activeTabId.value = initialId
+  }
 
   // ── 项目名（根节点 text 单一数据源）──
 
@@ -222,14 +253,12 @@ export const useProjectStore = defineStore('project', () => {
   // ── 视图切换 ──
 
   /**
-   * 切换主视图到指定节点。
-   * 切换前保存当前节点快照，切换后恢复目标节点快照。
-   * 仅当该节点存在且不同于当前节点时切换。
+   * 私有：切换主视图到指定节点。
+   * 保存当前节点快照 → 销毁主视图内联视图实例 → 改 viewedNodeId → 恢复目标快照。
+   * 调用方负责维护「当前活动标签 viewedNodeId 与 main.viewedNodeId 同步」。
    */
-  function switchView(id: string): void {
+  function doSwitch(nodeId: string): void {
     const view = useViewStore('main')
-    if (view.viewedNodeId === id) return
-    if (!nodeStore.nodes.has(id)) return
     // 保存当前快照
     saveSnapshot(view.viewedNodeId)
     // 销毁当前内联视图实例
@@ -238,9 +267,83 @@ export const useProjectStore = defineStore('project', () => {
     }
     view.inlineViews = []
     // 切换目标节点
-    view.viewedNodeId = id
+    view.viewedNodeId = nodeId
     // 恢复目标快照
-    restoreSnapshot(id)
+    restoreSnapshot(nodeId)
+  }
+
+  /**
+   * 切换到指定标签页。
+   * 若 activeTabId 已是该标签直接 return；
+   * 懒检查：目标 viewedNodeId 不存在则置为 ROOT 并置 tabFallbackNotice=true；
+   * 最后 doSwitch 到该标签 viewedNodeId。
+   */
+  function switchToTab(tabId: string): void {
+    if (activeTabId.value === tabId) return
+    const tab = tabs.value.find((t) => t.id === tabId)
+    if (!tab) return
+    // 懒检查：无效 viewedNodeId 重置为 ROOT
+    let nodeId = tab.viewedNodeId
+    if (!nodeStore.nodes.has(nodeId)) {
+      tab.viewedNodeId = ROOT_NODE_ID
+      nodeId = ROOT_NODE_ID
+      tabFallbackNotice.value = true
+    }
+    activeTabId.value = tabId
+    doSwitch(nodeId)
+  }
+
+  /**
+   * 切换主视图到指定节点（所有操作共用此语义）：
+   * - 节点不存在 → return；
+   * - 活动标签已观察此节点 → return；
+   * - 存在其它标签观察此节点 → switchToTab 到该标签并 return；
+   * - 否则：设当前活动标签 viewedNodeId=nodeId 并 doSwitch（活动标签不变）。
+   */
+  function switchView(id: string): void {
+    if (!nodeStore.nodes.has(id)) return
+    if (activeTab.value?.viewedNodeId === id) return
+    const observing = tabs.value.find((t) => t.viewedNodeId === id)
+    if (observing) {
+      switchToTab(observing.id)
+      return
+    }
+    if (activeTab.value) {
+      activeTab.value.viewedNodeId = id
+    }
+    doSwitch(id)
+  }
+
+  /** 新增一个标签页（观察根节点）并切到它 */
+  function addTab(): void {
+    const tabId = generateId()
+    tabs.value.push({ id: tabId, viewedNodeId: ROOT_NODE_ID })
+    switchToTab(tabId)
+  }
+
+  /**
+   * 关闭标签页。
+   * 仅剩一个时忽略；若关的是活动标签 → 激活右侧邻居（无则左侧）。
+   */
+  function closeTab(tabId: string): void {
+    if (tabs.value.length <= 1) return
+    const index = tabs.value.findIndex((t) => t.id === tabId)
+    if (index === -1) return
+    const wasActive = activeTabId.value === tabId
+    tabs.value.splice(index, 1)
+    if (wasActive && tabs.value.length > 0) {
+      const neighbor = tabs.value[index] ?? tabs.value[index - 1]
+      switchToTab(neighbor.id)
+    }
+  }
+
+  /** 纯数组重排标签页顺序 */
+  function moveTab(from: number, to: number): void {
+    if (from === to) return
+    if (from < 0 || from >= tabs.value.length) return
+    if (to < 0 || to >= tabs.value.length) return
+    const [tab] = tabs.value.splice(from, 1)
+    tabs.value.splice(to, 0, tab)
   }
 
   /** 进入节点子视图（语义同 switchView，保留此方法供调用） */
@@ -288,23 +391,29 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   /**
+   * 重置标签页与主视图（新建 / 打开项目 / 加载时调用）。
+   * 清空标签、活动标签、视图快照；新建单标签（观察 ROOT）并 activate + doSwitch(ROOT)。
+   */
+  function resetTabsForProject(): void {
+    tabs.value = []
+    activeTabId.value = null
+    viewSnapshots.clear()
+    // 新建单根标签并激活
+    const tabId = generateId()
+    tabs.value.push({ id: tabId, viewedNodeId: ROOT_NODE_ID })
+    activeTabId.value = tabId
+    tabFallbackNotice.value = false
+    doSwitch(ROOT_NODE_ID)
+  }
+
+  /**
    * 重置为新项目（新建 / 打开项目时调用）。
-   * 清空视图快照、展开态，销毁所有内联视图实例，重置主视图（视口归零、清选中）。
+   * 清空展开态、标签页与主视图状态，销毁所有内联视图实例，重置主视图（视口归零、清选中）。
    */
   function resetForNewProject(): void {
-    viewSnapshots.clear()
     expandedIds.value = new Set([ROOT_NODE_ID])
-    const view = useViewStore('main')
-    // 销毁所有内联视图实例
-    for (const iv of [...view.inlineViews]) {
-      destroyView(iv.viewId)
-    }
-    view.inlineViews = []
-    view.resetViewState()
-    view.stageX = 0
-    view.stageY = 0
-    view.stageScale = 1
-    view.viewedNodeId = ROOT_NODE_ID
+    // 重置标签页与主视图（清空快照、销毁内联实例、归位根节点）
+    resetTabsForProject()
     // 重置 AI 配置为默认（新建 / 打开项目时）
     nodeAIConfigs.clear()
     globalPrompt.value = ''
@@ -330,6 +439,16 @@ export const useProjectStore = defineStore('project', () => {
     // 视图切换
     switchView,
     enterNodeView,
+    // 标签页
+    tabs,
+    activeTabId,
+    activeTab,
+    tabFallbackNotice,
+    switchToTab,
+    addTab,
+    closeTab,
+    moveTab,
+    resetTabsForProject,
     // AI 配置
     globalPrompt,
     defaultAIConfig,

@@ -12,13 +12,24 @@ import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import { snapPosition, snapFocus } from '@/utils/grid'
 
 /**
+ * 空白画布双击判定窗口（与 Konva.dblClickWindow 对齐，毫秒）
+ */
+const DBL_CLICK_WINDOW = 400
+
+/**
+ * 空白画布双击判定的两次单击之间的最大屏幕像素距离。
+ * Konva 自带 dblclick 只做全局计时、不校验位置，会导致「第一次点击在别处/节点上、
+ * 第二次落在空白」也误判为双击新建节点；这里手动配对两次空白单击并限制距离。
+ */
+const DBL_CLICK_DISTANCE = 12
+
+/**
  * 画布事件处理
  *
  * @param viewId - 视图 ID（主视图传 'main'）
  *
  * 提供针对 v-stage 事件的回调：
- * - handleStageClick：点击空白区域取消选中
- * - handleStageDblClick：双击空白区域创建新节点（并进入编辑态）
+ * - handleStageClick：点击空白区域取消选中；两次快速且邻近的空白单击视为「空白双击」，创建新节点（并进入编辑态）
  * - handleStageContextMenu：右键弹出上下文菜单（按选中数量生成菜单项）
  *
  * 右键菜单内容：
@@ -38,34 +49,57 @@ export function useCanvasEvents(viewId: string) {
   const aiDirections = useAIDirectionsStore()
 
   /**
-   * 处理画布点击事件
-   * 当点击目标为 Stage 本身（非节点）时，取消选中
+   * 上一次「空白画布单击」的记录（时间 + 屏幕坐标），用于手动判定空白双击。
+   * 仅在本视图实例内共享，跨实例无关。
    */
-  function handleStageClick(e: KonvaEventObject<MouseEvent>) {
-    // Konva 中：点击空白区域时，e.target === e.currentTarget (Stage)
-    if (e.target === e.currentTarget) {
-      view.clearSelection()
-    }
-  }
+  let lastEmptyClick: { time: number; screenX: number; screenY: number } | null = null
 
   /**
-   * 处理画布双击事件
-   * 仅在空白区域双击时创建新节点（避免双击节点时误创建）
+   * 处理画布点击事件
+   * - 点击空白区域：取消选中
+   * - 两次快速且邻近的空白单击：视为「空白双击」，创建新节点（并进入编辑态）
+   *
+   * Konva 自带的 dblclick 事件只做全局计时双点判定、不校验位置，会把
+   * 「第一次点击落在节点/远处、第二次落在空白」误判为空白双击。此处手动配对
+   * 两次空白单击（时间窗 + 屏幕距离），避免该误触发。
    */
-  function handleStageDblClick(e: KonvaEventObject<MouseEvent>) {
-    // 仅响应左键双击；右键双击留给 contextmenu，避免误触发新建节点
-    if (e.evt.button !== 0) return
-    // 仅在点击 Stage 空白区域时创建节点（非节点/形状之上）
+  function handleStageClick(e: KonvaEventObject<MouseEvent>) {
+    // 点击落在节点/形状上（含连线）：重置空白双击暂存，避免其与后续空白单击被误配成双击
     if (e.target !== e.currentTarget) {
+      lastEmptyClick = null
       return
     }
+
     const stage = e.target.getStage()
-    // getRelativePointerPosition() 返回世界坐标（已考虑 Stage 的 scale/offset）
-    const pos = stage?.getRelativePointerPosition()
-    if (pos) {
+    // 世界坐标：用于计算节点落点（已考虑 Stage 的 scale/offset）
+    const world = stage?.getRelativePointerPosition()
+    // 屏幕坐标：仅用于两次单击的距离判定（不受缩放影响）
+    const screen = stage?.getPointerPosition()
+
+    // 判定是否为「空白双击」：与上一次空白单击在时间窗内、且屏幕距离足够近
+    const now = performance.now()
+    const isDouble =
+      lastEmptyClick !== null &&
+      now - lastEmptyClick.time <= DBL_CLICK_WINDOW &&
+      screen !== undefined &&
+      screen !== null &&
+      Math.abs(screen.x - lastEmptyClick.screenX) <= DBL_CLICK_DISTANCE &&
+      Math.abs(screen.y - lastEmptyClick.screenY) <= DBL_CLICK_DISTANCE
+
+    // 更新暂存，作为下一次判定的「前一次」点击
+    lastEmptyClick = {
+      time: now,
+      screenX: screen?.x ?? 0,
+      screenY: screen?.y ?? 0,
+    }
+
+    if (isDouble && world) {
+      // 空白双击：创建新节点，并清空暂存，避免三连击再次触发
+      lastEmptyClick = null
+
       // 减去半个节点尺寸，使节点的中心对齐鼠标光标位置
-      const left = pos.x - DEFAULT_NODE_WIDTH / 2
-      const top = pos.y - DEFAULT_NODE_HEIGHT / 2
+      const left = world.x - DEFAULT_NODE_WIDTH / 2
+      const top = world.y - DEFAULT_NODE_HEIGHT / 2
 
       let newX = left
       let newY = top
@@ -88,6 +122,9 @@ export function useCanvasEvents(viewId: string) {
       // 新建后选中并进入编辑态（数据与视图状态分离，需手动编排）
       view.selectNode(newId)
       view.startEditing(newId)
+    } else {
+      // 空白单击：取消选中
+      view.clearSelection()
     }
   }
 
@@ -223,7 +260,6 @@ export function useCanvasEvents(viewId: string) {
 
   return {
     handleStageClick,
-    handleStageDblClick,
     handleStageContextMenu,
     /** 右键菜单状态（供画布组件渲染 ContextMenu） */
     contextMenu,

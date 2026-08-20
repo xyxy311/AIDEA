@@ -133,6 +133,26 @@ function finishRename(): void {
 function cancelRename(): void {
   editingNodeId.value = null
 }
+
+// ── 根节点名称：单击即时切换根视图 / 双击编辑项目名 ──
+//
+// 单击立即切换（与点击其它节点/标签一致、无延迟）。
+// 注意：双击会先触发两次 click，故双击编辑前会先切到根视图（闪切一次）。
+// 受限于「单击即时响应」与「双击编辑」无法在不延时下两全，此处选择即时切换。
+
+/**
+ * 单击根节点名称 → 立即切换到项目根节点视图。
+ */
+function handleRootClick(): void {
+  project.switchView(rootViewId.value)
+}
+
+/**
+ * 双击根节点名称 → 编辑项目名。
+ */
+function handleRootDblClick(): void {
+  handleDblClick(rootViewId.value, rootName.value)
+}
 </script>
 
 <template>
@@ -154,7 +174,9 @@ function cancelRename(): void {
           v-else
           class="toolbar-title-name"
           :title="rootName"
-          @dblclick.stop="handleDblClick(rootViewId, rootName)"
+          :class="{ 'root-view-active': project.currentNodeId === rootViewId }"
+          @click="handleRootClick"
+          @dblclick.stop="handleRootDblClick"
         >{{ rootName }}</span>
       </div>
       <div class="panel-actions">
@@ -293,7 +315,7 @@ function cancelRename(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: text; /* 提示可编辑 */
+  cursor: pointer; /* 单击切换根视图（双击仍可编辑项目名） */
   border-radius: 4px;
   padding: 2px 6px;
   margin-left: -6px;
@@ -302,6 +324,11 @@ function cancelRename(): void {
 
 .toolbar-title-name:hover {
   background: var(--color-hover);
+  color: var(--color-primary-hover);
+}
+
+/* 当前正查看根节点视图时高亮项目名 */
+.toolbar-title-name.root-view-active {
   color: var(--color-primary-hover);
 }
 

@@ -534,11 +534,6 @@ function handleStageClick(e: unknown): void {
   canvasEvents.handleStageClick(ke)
 }
 
-/** 处理画布双击 */
-function handleStageDblClick(e: unknown): void {
-  canvasEvents.handleStageDblClick(e as KonvaEventObject<MouseEvent>)
-}
-
 /** 处理画布右键菜单 */
 function handleStageContextMenu(e: unknown): void {
   canvasEvents.handleStageContextMenu(e as KonvaEventObject<MouseEvent>)
@@ -643,7 +638,6 @@ function handleStageMouseUp(e: unknown): void {
       :scaleY="view.stageScale"
       :draggable="nav.isPanMode.value"
       @click="handleStageClick"
-      @dblclick="handleStageDblClick"
       @contextmenu="handleStageContextMenu"
       @wheel="handleStageWheel"
       @dragmove="handleStageDragMove"

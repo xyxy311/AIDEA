@@ -86,6 +86,6 @@ const items = computed<IconBarItem[]>(() => [
   display: flex;
   align-items: center;
   padding: 0 8px;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 保持自然宽度：被 WheelScroll 包裹时超出可按滚轮横向滚动 */
 }
 </style>

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * TabBar - 多标签页栏（位于 .app-center 内、画布 .app-main 之上）
+ * TabBar - 多标签页栏（并入顶部图标条中段，由 AppShell 居中、定宽放置）
  *
  * 功能：
  * - 渲染 project.tabs 每个标签，标题 = 观察节点 text 首行（trim，`#` 参考名规则一致；根节点即项目名）
  * - 活动标签高亮（主色底部指示条 + 淡背景，与 IconBar 活动态一致）；点击 switchToTab
  * - 每标签 hover 显示关闭 ×（tabs<=1 时隐藏），点击 closeTab
- * - 最右侧 "+" 主色按钮 addTab
+ * - 最右侧 "+" 主色按钮 addTab，固定覆盖在标签带右端之上（不随滚轮滚动，标签过多时遮住滑过的标签）
+ * - 标签带经 `common/WheelScroll` 提供滚轮横向滚动，隐藏滚动条（与左/右两区滚动方式一致）
  * - HTML5 拖拽排序 → moveTab（复用活动栏拖拽抑制误触 click 模式）
  * - 双击标签标题行内改名（useNodeTree.renameNode，保留 2..n 行 body，只改标题行）
  * - 监听 tabFallbackNotice，true 时 toast 提示并复位为 false
@@ -14,6 +15,7 @@
 import { ref, watch, nextTick } from 'vue'
 import { NTooltip, useMessage } from 'naive-ui'
 import { AddOutline, CloseOutline } from '@vicons/ionicons5'
+import WheelScroll from '@/components/common/WheelScroll.vue'
 import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
 import { useNodeTree } from '@/composables/useNodeTree'
@@ -164,83 +166,92 @@ watch(
 
 <template>
   <div class="tab-bar">
-    <div class="tabs">
-      <div
-        v-for="(tab, index) in project.tabs"
-        :key="tab.id"
-        class="tab"
-        :class="{
-          active: tab.id === project.activeTabId,
-          'is-dragging': dragIndex === index,
-          'is-drop-target': dropIndex === index && dragIndex !== null && dragIndex !== index,
-        }"
-        :draggable="true"
-        @dragstart.stop="onDragStart(index, $event)"
-        @dragenter.prevent="dropIndex = index"
-        @dragover.prevent="onDragOver(index, $event)"
-        @dragleave="dropIndex === index && (dropIndex = null)"
-        @drop.prevent="onDrop(index, $event)"
-        @dragend="onDragEnd"
-      >
-        <!-- 标题区：单击切换、双击改名 -->
-        <div class="tab-label" @click="onTabClick(tab)" @dblclick="startRename(tab)">
-          <input
-            v-if="editingId === tab.id"
-            ref="editInput"
-            v-model="editValue"
-            class="tab-edit"
-            @keydown.enter.prevent="commitRename"
-            @keydown.esc.prevent="cancelRename"
-            @blur="commitRename"
-          />
-          <span v-else class="tab-title">{{ tabTitle(tab) }}</span>
-        </div>
-
-        <!-- 关闭按钮：hover 显示；仅剩一个标签时隐藏 -->
-        <button
-          v-if="project.tabs.length > 1"
-          type="button"
-          class="tab-close"
-          :title="t('viewTab.close')"
-          @click.stop="project.closeTab(tab.id)"
+    <!-- 滚轮横向滚动区（WheelScroll 隐藏滚动条）：标签 + 新增按钮一起滚动 -->
+    <WheelScroll class="tab-scroll">
+      <div class="tabs">
+        <div
+          v-for="(tab, index) in project.tabs"
+          :key="tab.id"
+          class="tab"
+          :class="{
+            active: tab.id === project.activeTabId,
+            'is-dragging': dragIndex === index,
+            'is-drop-target': dropIndex === index && dragIndex !== null && dragIndex !== index,
+          }"
+          :draggable="true"
+          @dragstart.stop="onDragStart(index, $event)"
+          @dragenter.prevent="dropIndex = index"
+          @dragover.prevent="onDragOver(index, $event)"
+          @dragleave="dropIndex === index && (dropIndex = null)"
+          @drop.prevent="onDrop(index, $event)"
+          @dragend="onDragEnd"
         >
-          <CloseOutline class="tab-close-icon" />
-        </button>
-      </div>
-    </div>
+          <!-- 标题区：单击切换、双击改名 -->
+          <div class="tab-label" @click="onTabClick(tab)" @dblclick="startRename(tab)">
+            <input
+              v-if="editingId === tab.id"
+              ref="editInput"
+              v-model="editValue"
+              class="tab-edit"
+              @keydown.enter.prevent="commitRename"
+              @keydown.esc.prevent="cancelRename"
+              @blur="commitRename"
+            />
+            <span v-else class="tab-title">{{ tabTitle(tab) }}</span>
+          </div>
 
-    <!-- 最右侧新增标签按钮 -->
-    <NTooltip placement="bottom">
-      <template #trigger>
-        <button type="button" class="tab-add" @click="project.addTab()">
-          <AddOutline class="tab-add-icon" />
-        </button>
-      </template>
-      {{ t('viewTab.add') }}
-    </NTooltip>
+          <!-- 关闭按钮：hover 显示；仅剩一个标签时隐藏 -->
+          <button
+            v-if="project.tabs.length > 1"
+            type="button"
+            class="tab-close"
+            :title="t('viewTab.close')"
+            @click.stop="project.closeTab(tab.id)"
+          >
+            <CloseOutline class="tab-close-icon" />
+          </button>
+        </div>
+      </div>
+
+      <!-- 新增标签按钮：位于所有标签右侧，随标签带一起滚动（简洁"+"，无背景色） -->
+      <NTooltip placement="bottom">
+        <template #trigger>
+          <button type="button" class="tab-add" @click="project.addTab()">
+            <AddOutline class="tab-add-icon" />
+          </button>
+        </template>
+        {{ t('viewTab.add') }}
+      </NTooltip>
+    </WheelScroll>
   </div>
 </template>
 
 <style scoped>
+/* 并入顶部图标条中段：由 AppShell 的 `.top-center` 定宽居中，本体占满该宽度 */
 .tab-bar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  flex-shrink: 0;
-  padding: 0 8px;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  width: 100%;
+  height: 100%;
+  padding: 0;
   user-select: none;
-  overflow-x: auto;
-  overflow-y: hidden;
+}
+
+/* 滚轮滚动区（WheelScroll 隐藏滚动条），占满中段，仅标签带在其中横向滚动 */
+.tab-bar :deep(.wheel-scroll) {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .tabs {
   display: flex;
   align-items: center;
   gap: 4px;
-  /* 不占满剩余宽度：让 "+" 按钮紧挨最后一个标签右侧（浏览器式） */
+  flex-shrink: 0;
   min-width: 0;
 }
 
@@ -370,7 +381,9 @@ watch(
   height: 13px;
 }
 
-/* ── 新增标签按钮（主色）── */
+/* ── 新增标签按钮：位于所有标签右侧，随标签带一起滚动 ──
+ * 简洁"+"展示，无背景色；hover 时仅显示淡背景提示可点击。
+ */
 .tab-add {
   display: flex;
   align-items: center;
@@ -379,19 +392,20 @@ watch(
   height: 26px;
   flex-shrink: 0;
   border: none;
-  border-radius: 8px;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .tab-add:hover {
-  background: var(--color-primary-hover);
+  background: var(--color-hover);
+  color: var(--color-text);
 }
 
 .tab-add:active {
-  background: var(--color-primary-pressed);
+  background: var(--color-hover);
 }
 
 .tab-add-icon {

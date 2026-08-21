@@ -29,8 +29,9 @@ import ActivityBar from './ActivityBar.vue'
 import LeftSidebar from './LeftSidebar.vue'
 import RightSidebar from './RightSidebar.vue'
 import SettingsModal from '@/components/settings/SettingsModal.vue'
-import Toolbar from '@/components/toolbar/Toolbar.vue'
+import Toolbar from '@/components/layout/Toolbar.vue'
 import TabBar from './TabBar.vue'
+import WheelScroll from '@/components/common/WheelScroll.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
 import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
@@ -143,10 +144,30 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
 <template>
   <div class="app-shell">
-    <!-- 顶部图标条：左侧菜单栏分区 + 右侧工具栏分区，左右两端分开但共用同一图标视觉语言 -->
+    <!-- 顶部图标条：左(菜单栏)│中(多标签页栏)│右(工具栏)三区，分隔条隔开，各自滚轮横向滚动 -->
     <div class="top-bar">
-      <MenuBar @open-settings="showSettings = true" />
-      <Toolbar />
+      <!-- 左区：菜单栏（WheelScroll 滚轮滚动，隐藏滚动条） -->
+      <div class="top-section top-left">
+        <WheelScroll>
+          <MenuBar @open-settings="showSettings = true" />
+        </WheelScroll>
+      </div>
+
+      <div class="top-divider" />
+
+      <!-- 中区：多标签页栏（定宽居中，标签带滚轮滚动 + 右端覆盖式新增按钮） -->
+      <div class="top-section top-center">
+        <TabBar />
+      </div>
+
+      <div class="top-divider" />
+
+      <!-- 右区：工具栏（WheelScroll 滚轮滚动，隐藏滚动条，整体右对齐） -->
+      <div class="top-section top-right">
+        <WheelScroll>
+          <Toolbar />
+        </WheelScroll>
+      </div>
     </div>
 
     <!-- 主体区域 -->
@@ -171,8 +192,6 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
       <!-- 中央画布区域 -->
       <div class="app-center">
-        <!-- 多标签页栏：位于画布之上的一条横向栏 -->
-        <TabBar />
         <main class="app-main">
           <WhiteboardCanvas />
         </main>
@@ -224,17 +243,71 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   overflow: hidden;
 }
 
-/* 顶部图标条：承载左（MenuBar）右（Toolbar）两个图标分区 */
+/* 顶部图标条：左(菜单栏) │ 中(多标签栏) │ 右(工具栏) 三区，以分隔条隔开 */
 .top-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 44px;
   flex-shrink: 0;
-  padding: 0 8px;
+  padding: 0;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   user-select: none;
+}
+
+/* 三区共通：撑满高度、允许内容横向溢出（交给 WheelScroll 滚轮滚动） */
+.top-section {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+
+/* 左区：菜单栏，占用左右剩余空间的左侧部分 */
+.top-left {
+  flex: 1;
+  padding-left: 8px;
+}
+
+.top-left :deep(.wheel-scroll) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 中区：多标签页栏——固定宽度（标签过多时内部滚轮滚动 + 右端覆盖式新增按钮） */
+.top-center {
+  flex: 0 0 50%;
+  align-items: stretch; /* 覆盖 .top-section 的居中，让 TabBar 占满中段全高 */
+}
+
+/* 右区：工具栏，占用左右剩余空间的右侧部分，整体右对齐 */
+.top-right {
+  flex: 1;
+  justify-content: flex-end;
+  padding-right: 8px;
+}
+
+.top-right :deep(.wheel-scroll) {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 空间充足时工具栏整体靠右；溢出时（滚轮滚动态）自动退化为可滚的左对齐内容 */
+.top-right :deep(.toolbar) {
+  margin-left: auto;
+}
+
+/* 分隔条：三区之间的竖向分隔线 */
+.top-divider {
+  width: 1px;
+  height: 24px;
+  flex-shrink: 0;
+  background: var(--color-border);
+  margin: 0 8px;
 }
 
 .app-center {

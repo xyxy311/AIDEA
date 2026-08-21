@@ -133,7 +133,7 @@ const items = computed<IconBarItem[]>(() => [
   align-items: center;
   gap: 12px;
   padding: 0 8px;
-  flex-shrink: 0;
+  flex-shrink: 0; /* 保持自然宽度：被 WheelScroll 包裹时超出可按滚轮横向滚动 */
   user-select: none;
 }
 

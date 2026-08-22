@@ -20,7 +20,7 @@ import {
 import { useCommands } from '@/composables/useCommands'
 import type { ProjectFileApi } from '@/composables/useProjectFile'
 import { t } from '@/composables/useT'
-import IconBar, { type IconBarItem } from './IconBar.vue'
+import IconBar, { type IconBarItem, type IconBarMenuOption } from './IconBar.vue'
 
 const emit = defineEmits<{
   openSettings: []
@@ -31,25 +31,47 @@ const commands = useCommands()
 // 从 AppShell 注入的项目文件操作（单实例共享状态）
 const projectFile = inject<ProjectFileApi | undefined>('projectFile')
 
+/** 「打开最近文件」子菜单项（由 recentFiles 动态生成，空列表时禁用） */
+const recentMenuOptions = computed<IconBarMenuOption[]>(() => {
+  const list = projectFile?.recentFiles.value ?? []
+  return list.map((f) => ({
+    key: f.id,
+    label: f.name,
+    onSelect: () => projectFile?.openRecentFile(f.name),
+  }))
+})
+
+/** 「打开项目」下拉菜单：新建 + 打开最近文件 */
+const openMenu = computed<IconBarMenuOption[]>(() => [
+  { key: 'new', label: t('menuBar.newProject'), onSelect: () => projectFile?.newProject() },
+  {
+    key: 'open-recent',
+    label: t('menuBar.openRecent'),
+    disabled: recentMenuOptions.value.length === 0,
+    children: recentMenuOptions.value.length > 0 ? recentMenuOptions.value : undefined,
+  },
+])
+
+/** 「保存」下拉菜单：另存为 */
+const saveMenu = computed<IconBarMenuOption[]>(() => [
+  { key: 'save-as', label: t('menuBar.saveAs'), onSelect: () => projectFile?.saveAsProject() },
+])
+
 /** 左侧功能按钮配置（数组驱动 IconBar，未来加按钮只需在此追加一项） */
 const items = computed<IconBarItem[]>(() => [
-  {
-    id: 'new-project',
-    icon: AddOutline,
-    title: t('menuBar.newProject'),
-    onClick: () => projectFile?.newProject(),
-  },
   {
     id: 'open',
     icon: FolderOpenOutline,
     title: t('menuBar.open'),
     onClick: () => projectFile?.openProject(),
+    menu: openMenu.value,
   },
   {
     id: 'save',
     icon: SaveOutline,
     title: t('menuBar.save'),
     onClick: () => projectFile?.saveProject(),
+    menu: saveMenu.value,
   },
   {
     id: 'undo',

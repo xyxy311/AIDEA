@@ -1,8 +1,10 @@
+import { computed } from 'vue'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore, type ProjectTab } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import { useViewStore } from '@/stores/view'
 import { useFileStore } from '@/stores/file'
+import { useRecentFilesStore } from '@/stores/recentFiles'
 import { useTagsStore } from '@/stores/tags'
 import { useCommands } from '@/composables/useCommands'
 import { useMessage } from 'naive-ui'
@@ -55,7 +57,16 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   const history = useHistoryStore()
   const commands = useCommands()
   const fileStore = useFileStore()
+  const recentFilesStore = useRecentFilesStore()
   const tagsStore = useTagsStore()
+
+  /**
+   * 最近打开文件（响应式 Ref）。
+   * Pinia setup store 返回的 list 会被解包成数组；若直接暴露该数组，
+   * 普通对象字段会固定旧引用，store 替换数组时菜单无法感知（bug 根因），
+   * 故经 computed 二次包装，保证每次读取都追踪 store 的最新数组。
+   */
+  const recentFiles = computed(() => recentFilesStore.list)
   const message = useMessage()
 
   const confirm = options?.confirm
@@ -246,6 +257,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   /** 读取项目文件内容（优先 showOpenFilePicker，否则 input[type=file] 兜底） */
   function readProjectFile(): Promise<{
     text: string
+    name: string
     handle: FileSystemFileHandle | null
   }> {
     return new Promise((resolve, reject) => {
@@ -265,7 +277,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
           .then(async (handles) => {
             const handle = handles[0]
             const text = await handle.getFile().then((file) => file.text())
-            resolve({ text, handle })
+            resolve({ text, name: handle.name, handle })
           })
           .catch((err) => {
             if (err && err.name === 'AbortError') {
@@ -288,7 +300,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
         }
         file
           .text()
-          .then((text) => resolve({ text, handle: null }))
+          .then((text) => resolve({ text, name: file.name, handle: null }))
           .catch(reject)
       }
       input.click()
@@ -323,16 +335,36 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   async function openProject(): Promise<void> {
     if (!(await confirmDiscard())) return
     try {
-      const { text, handle } = await readProjectFile()
+      const { text, name, handle } = await readProjectFile()
       const data = parseProjectFile(text)
       loadProjectIntoApp(data)
       // 记住打开的文件句柄，后续保存直接覆盖该文件；仅清 dirty，不清句柄
       fileStore.markClean()
       fileStore.setSavedHandle(handle)
+      recentFilesStore.add(name, text)
       message.success(t('menuBar.opened'))
     } catch (e) {
       // 用户取消文件选择对话框不提示错误
       if (e && typeof e === 'object' && (e as CancelSignal).cancelled) return
+      const msg = e instanceof Error ? e.message : String(e)
+      message.error(t('menuBar.openFailed', { message: msg }))
+    }
+  }
+
+  /** 打开最近文件（从 localStorage 内联内容载入） */
+  async function openRecentFile(name: string): Promise<void> {
+    const entry = recentFilesStore.list.find((f) => f.name === name)
+    if (!entry) return
+    if (!(await confirmDiscard())) return
+    try {
+      const data = parseProjectFile(entry.content)
+      loadProjectIntoApp(data)
+      // 最近文件无持久化句柄：清 dirty、清句柄，后续保存走另存为
+      fileStore.resetFileState()
+      // 刷新为最近（置顶 + 更新时间）
+      recentFilesStore.add(name, entry.content)
+      message.success(t('menuBar.opened'))
+    } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       message.error(t('menuBar.openFailed', { message: msg }))
     }
@@ -384,6 +416,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
         await writable.close()
         fileStore.setSavedHandle(handle)
         fileStore.markClean()
+        recentFilesStore.add(name, json)
         message.success(t('menuBar.saved'))
       } catch (e) {
         // 用户取消（AbortError）不报错
@@ -398,14 +431,17 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     // 下载兜底
     downloadProject(json, name)
     fileStore.markClean()
+    recentFilesStore.add(name, json)
     message.success(t('menuBar.saved'))
   }
 
   return {
     newProject,
     openProject,
+    openRecentFile,
     saveProject,
     saveAsProject,
+    recentFiles,
     dirty: fileStore.dirty,
     suggestedName: fileStore.suggestedName,
   }

@@ -5,6 +5,8 @@
     "newProject": "新建项目",
     "open": "打开项目",
     "save": "保存",
+    "saveAs": "另存为",
+    "openRecent": "打开最近文件",
     "undo": "撤销",
     "redo": "重做",
     "settings": "设置",

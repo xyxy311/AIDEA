@@ -16,10 +16,12 @@ import {
   BrushOutline,
   LayersOutline,
   CompassOutline,
+  KeypadOutline,
 } from '@vicons/ionicons5'
 import AppearanceSection from '@/components/settings/AppearanceSection.vue'
 import LayoutSection from '@/components/settings/LayoutSection.vue'
 import AIDirectionsSection from '@/components/settings/AIDirectionsSection.vue'
+import ShortcutsSection from '@/components/settings/ShortcutsSection.vue'
 import { t } from '@/composables/useT'
 
 defineProps<{
@@ -33,7 +35,7 @@ const emit = defineEmits<{
 // ── 左侧分类导航（数据驱动） ──
 
 /** 设置分类 id */
-type SettingsCategoryId = 'appearance' | 'layout' | 'aiDirections'
+type SettingsCategoryId = 'appearance' | 'layout' | 'aiDirections' | 'shortcuts'
 
 /** 单个设置分类定义 */
 interface CategoryDef {
@@ -55,6 +57,7 @@ const sections: Record<SettingsCategoryId, Component> = {
   appearance: AppearanceSection,
   layout: LayoutSection,
   aiDirections: AIDirectionsSection,
+  shortcuts: ShortcutsSection,
 }
 
 /** 当前选中分类右侧内容组件 */
@@ -65,6 +68,7 @@ const categories: CategoryDef[] = [
   { id: 'appearance', titleKey: 'settings.appearance', icon: BrushOutline },
   { id: 'layout', titleKey: 'settings.layout', icon: LayersOutline },
   { id: 'aiDirections', titleKey: 'settings.aiDirections', icon: CompassOutline },
+  { id: 'shortcuts', titleKey: 'settings.shortcuts', icon: KeypadOutline },
 ]
 </script>
 

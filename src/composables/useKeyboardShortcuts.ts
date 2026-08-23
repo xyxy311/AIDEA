@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, type Ref } from 'vue'
+import { onMounted, onUnmounted, computed, type Ref } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useCommands } from '@/composables/useCommands'
@@ -6,37 +6,34 @@ import { useProjectStore } from '@/stores/project'
 import { usePresetsStore } from '@/stores/presets'
 import { useLayoutStore } from '@/stores/layout'
 import { useTagsStore } from '@/stores/tags'
+import { useShortcutsStore } from '@/stores/shortcuts'
 import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
+import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
+import { toChordString, normalizeKey } from '@/utils/shortcuts'
+import type { ShortcutScope } from '@/types/shortcuts'
 
 /**
  * 全局键盘快捷键
  *
- * @param isEditing - 是否正在文本编辑中，编辑时禁用快捷键
+ * 采用「规范化 chord + 单一运行时 Map」匹配：
+ * - 每次 keydown 用 toChordString(e) 归一到字符串，直接 O(1) 查 Map 得到
+ *   该键对应的条目 { id, scope, run }，结构上保证「一个键至多命中一个动作」。
+ * - scope 决定触发时机：'always' 在输入框/编辑守卫之前执行（保存/打开/新建/搜索，
+ *   与既有行为一致）；'canvas' 在守卫之后执行（其余全部可改动作 + 锁定动作）。
+ * - 锁定键（撤销/重做、复制/剪切/粘贴、删除、Escape）与可改动作同进一个 Map，
+ *   冲突由 shortcuts store 的 assign 在设置时挡住，无需额外判断。
+ * - 序号键 1-9：按住「序号修饰键」(默认 T) 时打标签，否则应用可见预设。
  *
- * Ctrl/Cmd + Z       - 撤销
- * Ctrl/Cmd + Shift+Z - 重做
- * Ctrl/Cmd + Y       - 重做
- * Ctrl/Cmd + C       - 复制选中节点（含子树与内部连线）
- * Ctrl/Cmd + X       - 剪切选中节点
- * Ctrl/Cmd + V       - 粘贴到当前视图
- * Delete / Backspace - 删除选中节点 / 连线
- * Escape             - 取消选中
- * A                  - 进入选中节点的子级视图（任何节点均可进入）
- * Ctrl/Cmd + G       - 组合选中节点
- * 1-9                - 对选中节点/连线应用对应序号预设
- * T + 1-9            - 按住 t 时按数字，对选中节点批量添加/删除"标签列表"中对应序号标签
- * Tab                - 单选节点时展开/收起内联视图
- * R                  - 选中内联视图时自适应视图（以宽度为基准调整缩放与高度）
- * Ctrl/Cmd + S       - 保存项目
- * Ctrl/Cmd + O       - 打开项目
- * Ctrl/Cmd + N       - 新建项目
- * I                  - 打开 / 重新生成 AI 生成词
- * C                  - 清除 AI 生成词状态
+ * Ctrl/Cmd + Z       - 撤销（锁定）
+ * Ctrl/Cmd + Shift+Z / Y - 重做（锁定）
+ * Ctrl/Cmd + C / X / V  - 复制 / 剪切 / 粘贴（锁定）
+ * Delete / Backspace / D- 删除选中（锁定）
+ * Escape             - 取消选中（锁定）
+ * 1-9                - 应用预设 / 序号修饰键+1-9 打标签（锁定）
  *
- * @param isEditing   - 是否正在文本编辑中，编辑时禁用快捷键
- * @param projectFile - 项目文件操作（可选），提供后启用 S/O/N 文件快捷键
+ * S/O/N/F/G/A/Q/Tab/R/I/C  - 可自定义（见 constants/shortcuts.ts）
  */
 export function useKeyboardShortcuts(
   isEditing: Ref<boolean>,
@@ -53,150 +50,115 @@ export function useKeyboardShortcuts(
   const layout = useLayoutStore()
   const tagsStore = useTagsStore()
   const aiWord = useAIWordPanel()
+  const shortcuts = useShortcutsStore()
 
-  /** t 键是否处于按下状态（作为"t + 数字"打标签的修饰） */
-  let tHeld = false
+  /** 序号修饰键是否处于按下状态（决定 1-9 走预设还是打标签） */
+  let seqHeld = false
 
-  function onKeydown(e: KeyboardEvent) {
-    // ── 文件操作快捷键（置于编辑判定之前，编辑状态下也可保存 / 打开 / 新建）──
-    if (e.ctrlKey || e.metaKey) {
-      const key = e.key.toLowerCase()
-      if (key === 's' && projectFile) {
-        e.preventDefault()
-        projectFile.saveProject()
-        return
-      }
-      if (key === 'o' && projectFile) {
-        e.preventDefault()
-        projectFile.openProject()
-        return
-      }
-      if (key === 'n' && projectFile) {
-        e.preventDefault()
-        projectFile.newProject()
-        return
-      }
-
-    // Ctrl/Cmd + F：打开搜索面板并聚焦搜索输入框（置于输入框焦点守卫之前，编辑文本时也可触发）
-      if (key === 'f') {
-        e.preventDefault()
-        layout.setActive('search')
-        requestSearchFocus()
-        return
-      }
-    }
-
-    // 焦点在输入框或文本域时，不触发快捷键（避免删除/退格误删节点）
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-
-    // 编辑状态下不触发快捷键
-    if (isEditing.value) return
-
-    // ── AI 生成词快捷键（无修饰符，非 ctrl/meta/alt）──
-    // I：打开/重新生成 AI 生成词；C：清除 AI 生成词状态。
-    // C 分支在 ctrl 判断之外且仅当无修饰符时触发，避免与 Ctrl+C 复制冲突。
-    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-      const aiKey = e.key.toLowerCase()
-      if (aiKey === 'i') {
-        e.preventDefault()
-        // I 键与面板「直接生成」等价：一律触发任意发散（AI_DIRECTION_ANY），
-        // 不因选中节点而分流；定向发散由右键菜单「发散」子菜单提供。
-        void aiWord.directGenerate()
-      } else if (aiKey === 'c') {
-        e.preventDefault()
-        aiWord.clear()
-      }
-    }
-
-    // 记录 t 键按下状态（作为"t + 数字"打标签的修饰）
-    if (e.key.toLowerCase() === 't') tHeld = true
-
-    const view = active.view
-
-    // ── 撤销 / 重做 ──
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+  // ── 可自定义动作的 run 实现（闭包捕获各 store / projectFile）──
+  const customRuns: Record<string, (e: KeyboardEvent) => void> = {
+    save: (e) => {
       e.preventDefault()
-      if (e.shiftKey) {
-        commands.redo()
-      } else {
-        commands.undo()
-      }
-      return
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      projectFile?.saveProject()
+    },
+    open: (e) => {
       e.preventDefault()
-      commands.redo()
-      return
-    }
-
-    if (e.key === 'd' || e.key === 'Delete' || e.key === 'Backspace') {
-      // 先删除所有选中的连线
-      if (view.selectedConnectionIds.size > 0) {
-        e.preventDefault()
-        active.deleteSelectedConnections()
-      }
-      // 再删除所有选中的节点
-      else if (view.selectedNodeIds.size > 0) {
-        e.preventDefault()
-        active.deleteSelectedNodes()
-      }
-    }
-
-    // ── 复制 / 剪切 / 粘贴（对象剪贴板，不进入撤销重做）──
-    if (e.ctrlKey || e.metaKey) {
-      const key = e.key.toLowerCase()
-      if (key === 'c') {
-        if (view.selectedNodeIds.size > 0) {
-          e.preventDefault()
-          active.copySelectedNodes()
-        }
-        return
-      }
-      if (key === 'x') {
-        if (view.selectedNodeIds.size > 0) {
-          e.preventDefault()
-          active.cutSelectedNodes()
-        }
-        return
-      }
-      if (key === 'v') {
-        if (active.canPaste.value) {
-          e.preventDefault()
-          active.pasteIntoView()
-        }
-        return
-      }
-    }
-
-    if (e.key === 'Escape') {
-      view.clearSelection()
-    }
-
-    // A 键：选中单个节点时，进入其子级视图（任何节点均可进入）
-    if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey) {
-      if (view.selectedNodeIds.size === 1) {
-        e.preventDefault()
-        link.enterNodeView()
-      }
-    }
-
-    if (e.key === 'q' && !e.ctrlKey && !e.metaKey) {
+      projectFile?.openProject()
+    },
+    new: (e) => {
       e.preventDefault()
-      link.enterParentNodeView()
-    }
-
-    // Ctrl/Cmd + G：选中多个节点时组合
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
-      if (view.selectedNodeIds.size >= 2) {
+      projectFile?.newProject()
+    },
+    search: (e) => {
+      e.preventDefault()
+      layout.setActive('search')
+      requestSearchFocus()
+    },
+    group: (e) => {
+      if (active.view.selectedNodeIds.size >= 2) {
         e.preventDefault()
         link.groupSelectedNodes()
       }
-    }
+    },
+    enterChild: (e) => {
+      if (active.view.selectedNodeIds.size === 1) {
+        e.preventDefault()
+        link.enterNodeView()
+      }
+    },
+    enterParent: (e) => {
+      e.preventDefault()
+      link.enterParentNodeView()
+    },
+    toggleInline: (e) => {
+      const view = active.view
+      if (view.selectedNodeIds.size === 1) {
+        e.preventDefault()
+        link.toggleInlineView(view.selectedNodeId)
+      }
+    },
+    fitInline: (e) => {
+      const view = active.view
+      if (view.selectedNodeIds.size === 1) {
+        const nodeId = view.selectedNodeId
+        if (nodeId && view.getInlineViewRect(nodeId)) {
+          e.preventDefault()
+          link.fitInlineView(nodeId)
+        }
+      }
+    },
+    aiGenerate: (e) => {
+      e.preventDefault()
+      // 与面板「直接生成」等价：一律触发任意发散，不因选中节点分流
+      void aiWord.directGenerate()
+    },
+    aiClear: (e) => {
+      e.preventDefault()
+      aiWord.clear()
+    },
+    // 字母 d 的删除（可自定义，默认 d）；Delete/Backspace 在锁定层固定
+    deleteSelected: runDelete,
+  }
 
-    // 数字键 1-9：对选中节点/连线快速应用当前"可见列表"（受分组筛选影响）中对应序号的预设
-    // （按住 t 时数字键用于打标签，故假设 !tHeld 才走预设）
-    if (!tHeld && !e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
-      const index = Number(e.key) - 1
+  /** 删除所有选中的连线 / 节点（锁定） */
+  function runDelete(e: KeyboardEvent): void {
+    const view = active.view
+    if (view.selectedConnectionIds.size > 0) {
+      e.preventDefault()
+      active.deleteSelectedConnections()
+    } else if (view.selectedNodeIds.size > 0) {
+      e.preventDefault()
+      active.deleteSelectedNodes()
+    }
+  }
+
+  /** 序号键 1-9（锁定）的 run：按住序号修饰键 → 打标签；否则应用可见预设 */
+  function makeSeqRun(n: number): (e: KeyboardEvent) => void {
+    return (e) => {
+      const view = active.view
+      const index = n - 1
+      if (seqHeld) {
+        const tag = tagsStore.tagList[index]
+        if (tag && view.selectedNodeIds.size > 0) {
+          e.preventDefault()
+          const ids = Array.from(view.selectedNodeIds)
+          const nodes = ids
+            .map((nodeId) => active.nodeStore.getNode(nodeId))
+            .filter((node): node is WhiteboardNode => !!node)
+          if (nodes.length === 0) return
+          const allHave = nodes.every((node) => (node.tagIds ?? []).includes(tag.id))
+          const apply = !allHave
+          const perNode = nodes.map((node) => {
+            const cur = node.tagIds ?? []
+            const has = cur.includes(tag.id)
+            if (apply) return has ? cur : [...cur, tag.id]
+            return has ? cur.filter((tagId) => tagId !== tag.id) : cur
+          })
+          commands.updateNodesTagsPerNode(ids, perNode)
+        }
+        return
+      }
+      // 预设：节点优先，其次连线
       if (view.selectedNodeIds.size > 0) {
         const preset = presets.visibleNodePresets[index]
         if (preset) {
@@ -212,57 +174,86 @@ export function useKeyboardShortcuts(
           e.preventDefault()
           commands.updateConnectionsStyleByIds(
             Array.from(view.selectedConnectionIds),
-            // applyText 为真时把预设名称写入连线文字
-            { lineStyle: preset.lineStyle, strokeWidth: preset.strokeWidth, strokeColor: preset.strokeColor, directed: preset.directed, ...(preset.applyText ? { text: preset.name } : {}) },
+            {
+              lineStyle: preset.lineStyle,
+              strokeWidth: preset.strokeWidth,
+              strokeColor: preset.strokeColor,
+              directed: preset.directed,
+              ...(preset.applyText ? { text: preset.name } : {}),
+            },
           )
         }
       }
     }
+  }
 
-    // T + 数字 1-9：按住 t 时按数字键，对选中节点批量添加/删除"标签列表"中对应序号的标签
-    // （纯数字 1-9 已用于应用预设，这里用"按住 t"作为修饰，避免与 Ctrl 快捷键冲突）
-    if (tHeld && !e.ctrlKey && !e.metaKey && !e.altKey && e.key >= '1' && e.key <= '9') {
-      const index = Number(e.key) - 1
-      const tag = tagsStore.tagList[index]
-      if (tag && view.selectedNodeIds.size > 0) {
-        e.preventDefault()
-        const ids = Array.from(view.selectedNodeIds)
-        const nodes = ids
-          .map((id) => active.nodeStore.getNode(id))
-          .filter((n): n is WhiteboardNode => !!n)
-        if (nodes.length === 0) return
-        // 全含则从所有节点移除，否则添加到所有节点；各节点保留自有其它标签
-        const allHave = nodes.every((n) => (n.tagIds ?? []).includes(tag.id))
-        const apply = !allHave
-        const perNode = nodes.map((n) => {
-          const cur = n.tagIds ?? []
-          const has = cur.includes(tag.id)
-          if (apply) return has ? cur : [...cur, tag.id]
-          return has ? cur.filter((id) => id !== tag.id) : cur
-        })
-        commands.updateNodesTagsPerNode(ids, perNode)
+  /** 运行时匹配表：规范化 chord → 条目。锁定 + 可改动作统一进入同一 Map。 */
+  const runtimeMap = computed<Map<string, { id: string; scope: ShortcutScope; run: (e: KeyboardEvent) => void }>>(
+    () => {
+      const map = new Map<string, { id: string; scope: ShortcutScope; run: (e: KeyboardEvent) => void }>()
+      const canvas = 'canvas' as const
+
+      // ── 锁定动作 ──
+      map.set('mod+z', { id: 'undo', scope: canvas, run: (e) => { e.preventDefault(); commands.undo() } })
+      map.set('mod+shift+z', { id: 'redo', scope: canvas, run: (e) => { e.preventDefault(); commands.redo() } })
+      map.set('mod+y', { id: 'redo', scope: canvas, run: (e) => { e.preventDefault(); commands.redo() } })
+      map.set('mod+c', {
+        id: 'copy', scope: canvas, run: (e) => {
+          if (active.view.selectedNodeIds.size > 0) { e.preventDefault(); active.copySelectedNodes() }
+        },
+      })
+      map.set('mod+x', {
+        id: 'cut', scope: canvas, run: (e) => {
+          if (active.view.selectedNodeIds.size > 0) { e.preventDefault(); active.cutSelectedNodes() }
+        },
+      })
+      map.set('mod+v', {
+        id: 'paste', scope: canvas, run: (e) => {
+          if (active.canPaste.value) { e.preventDefault(); active.pasteIntoView() }
+        },
+      })
+      map.set('delete', { id: 'delete', scope: canvas, run: runDelete })
+      map.set('backspace', { id: 'delete', scope: canvas, run: runDelete })
+      map.set('escape', { id: 'escape', scope: canvas, run: (e) => { active.view.clearSelection() } })
+      for (let n = 1; n <= 9; n++) {
+        map.set(String(n), { id: `seq${n}`, scope: canvas, run: makeSeqRun(n) })
       }
+
+      // ── 可自定义动作（scope 来自注册表，绑定来自 store）──
+      for (const def of CUSTOM_SHORTCUTS) {
+        const chord = shortcuts.getBinding(def.id)
+        if (chord) {
+          map.set(chord, { id: def.id, scope: def.scope, run: customRuns[def.id] })
+        }
+      }
+
+      return map
+    },
+  )
+
+  function onKeydown(e: KeyboardEvent) {
+    // 追踪「序号修饰键」按住态（在最前，即使该键同时被约绑定也不影响打标签）
+    if (normalizeKey(e.key) === shortcuts.seqModKey) seqHeld = true
+
+    const entry = runtimeMap.value.get(toChordString(e))
+    if (!entry) return
+
+    // scope='always'：在守卫之前执行（文件操作 / 搜索，编辑中也可用）
+    if (entry.scope === 'always') {
+      entry.run(e)
       return
     }
 
-    // Tab：单选节点时展开/收起内联视图（仅主视图）
-    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (view.selectedNodeIds.size === 1) {
-        e.preventDefault()
-        link.toggleInlineView(view.selectedNodeId)
-      }
-    }
+    // canvas scope：输入框 / 文本域守卫，以及编辑态守卫
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    if (isEditing.value) return
 
-    // R 键：选中内联视图宿主节点时，自适应内联视图（以宽度为基准调整缩放与高度）
-    if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      if (view.selectedNodeIds.size === 1) {
-        const nodeId = view.selectedNodeId
-        if (nodeId && view.getInlineViewRect(nodeId)) {
-          e.preventDefault()
-          link.fitInlineView(nodeId)
-        }
-      }
-    }
+    entry.run(e)
+  }
+
+  /** keyup：释放「序号修饰键」时复位 seqHeld */
+  function onKeyup(e: KeyboardEvent) {
+    if (normalizeKey(e.key) === shortcuts.seqModKey) seqHeld = false
   }
 
   onMounted(() => {
@@ -274,9 +265,4 @@ export function useKeyboardShortcuts(
     window.removeEventListener('keydown', onKeydown)
     window.removeEventListener('keyup', onKeyup)
   })
-
-  /** keyup：释放 t 键时复位 tHeld，避免"按住 t + 数字"后再按数字误触发 */
-  function onKeyup(e: KeyboardEvent) {
-    if (e.key.toLowerCase() === 't') tHeld = false
-  }
 }

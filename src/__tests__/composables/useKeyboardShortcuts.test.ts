@@ -6,6 +6,8 @@ import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
+import { useShortcutsStore } from '@/stores/shortcuts'
+import { useTagsStore } from '@/stores/tags'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 
 /** 构造 OpenAI 兼容成功响应 */
@@ -155,5 +157,74 @@ describe('useKeyboardShortcuts', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'i' }))
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
     expect(useAIWordPanel().visible.value).toBe(false)
+  })
+
+  it('自定义快捷键：把 aiClear 由 c 重绑为 k 后，k 触发清除、c 失效', () => {
+    const panel = useAIWordPanel()
+    panel.show(['词'])
+    expect(panel.visible.value).toBe(true)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    // 默认 c：清除
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
+    expect(panel.visible.value).toBe(false)
+
+    // 重绑 aiClear → k
+    useShortcutsStore().assign('aiClear', 'k')
+
+    panel.show(['词'])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k' }))
+    expect(panel.visible.value).toBe(false)
+
+    // 原 c 不再触发
+    panel.show(['词'])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }))
+    expect(panel.visible.value).toBe(true)
+  })
+
+  it('序号修饰键改为 b 后，b+1 打标签', () => {
+    const tag = useTagsStore().addTag('红')
+    useShortcutsStore().setSeqModKey('b')
+
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    useViewStore('main').selectNode(id)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }))
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'b' }))
+
+    expect(nodeStore.getNode(id)?.tagIds).toContain(tag.id)
+  })
+
+  it('可自定义删除键：把 deleteSelected 由 d 改为 x 后，x 删除、d 不再删除', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    // 默认 d 删除
+    const id1 = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id1)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }))
+    expect(nodeStore.getNode(id1)).toBeUndefined()
+
+    // 重绑 deleteSelected → x
+    useShortcutsStore().assign('deleteSelected', 'x')
+
+    const id2 = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id2)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd' }))
+    expect(nodeStore.getNode(id2)).toBeDefined() // d 不再删除
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }))
+    expect(nodeStore.getNode(id2)).toBeUndefined()
   })
 })

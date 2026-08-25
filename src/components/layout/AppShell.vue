@@ -3,12 +3,15 @@
  * AppShell — 应用布局外壳
  *
  * 布局结构：
- *   ┌──────── 顶部图标条（MenuBar 左 │ Toolbar 右）─────────┐
+ *   ┌────── 顶部图标条（LeftTopBar 左 │ TabBar 中 │ RightTopBar 右）──────┐
  *   ├ ActivityBar ┬ LeftSidebar ┬ Canvas ┬ RightSidebar ┤
  *   └─────────────┴────────────┴────────┴───────────────┘
  *
  * 左侧：活动栏（ActivityBar，始终可见）+ 面板区（LeftSidebar，渲染激活面板）。
  * 面板区收起状态由 layout store 驱动。
+ *
+ * 顶部左/右图标按钮条（LeftTopBar / RightTopBar）：按钮经 constants/topbar.ts
+ * 品类表注册，可拖拽排序与跨区放置（状态由 layout store 管理）。
  *
  * 拖拽调整侧边栏宽度：
  * - 左右侧边栏边缘有可拖拽的 resize handle
@@ -24,12 +27,12 @@ import { useViewStore } from '@/stores/view'
 import { useProjectFile } from '@/composables/useProjectFile'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { t } from '@/composables/useT'
-import MenuBar from './MenuBar.vue'
+import LeftTopBar from './LeftTopBar.vue'
 import ActivityBar from './ActivityBar.vue'
 import LeftSidebar from './LeftSidebar.vue'
 import RightSidebar from './RightSidebar.vue'
 import SettingsModal from '@/components/settings/SettingsModal.vue'
-import Toolbar from '@/components/layout/Toolbar.vue'
+import RightTopBar from '@/components/layout/RightTopBar.vue'
 import TabBar from './TabBar.vue'
 import WheelScroll from '@/components/common/WheelScroll.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
@@ -124,9 +127,14 @@ function confirm(message: string): Promise<boolean> {
   })
 }
 
-// 单实例创建并注入，MenuBar 等子孙组件通过 inject 共享同一状态
+// 单实例创建并注入，各按钮组件等子孙组件通过 inject 共享同一状态
 const projectFile = useProjectFile({ confirm })
 provide('projectFile', projectFile)
+
+// 设置按钮注入：打开设置弹窗
+provide('openSettings', () => {
+  showSettings.value = true
+})
 
 // ── 键盘快捷键（全局单份，含文件快捷键）──
 const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
@@ -144,12 +152,12 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
 <template>
   <div class="app-shell">
-    <!-- 顶部图标条：左(菜单栏)│中(多标签页栏)│右(工具栏)三区，分隔条隔开，各自滚轮横向滚动 -->
+    <!-- 顶部图标条：左(LeftTopBar)│中(多标签页栏)│右(RightTopBar)三区，分隔条隔开，各自滚轮横向滚动 -->
     <div class="top-bar">
-      <!-- 左区：菜单栏（WheelScroll 滚轮滚动，隐藏滚动条） -->
+      <!-- 左区：左顶部按钮条（WheelScroll 滚轮滚动，隐藏滚动条） -->
       <div class="top-section top-left">
         <WheelScroll>
-          <MenuBar @open-settings="showSettings = true" />
+          <LeftTopBar />
         </WheelScroll>
       </div>
 
@@ -162,10 +170,10 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
 
       <div class="top-divider" />
 
-      <!-- 右区：工具栏（WheelScroll 滚轮滚动，隐藏滚动条，整体右对齐） -->
+      <!-- 右区：右顶部按钮条（WheelScroll 滚轮滚动，隐藏滚动条，整体右对齐） -->
       <div class="top-section top-right">
         <WheelScroll>
-          <Toolbar />
+          <RightTopBar />
         </WheelScroll>
       </div>
     </div>
@@ -282,7 +290,7 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   align-items: stretch; /* 覆盖 .top-section 的居中，让 TabBar 占满中段全高 */
 }
 
-/* 右区：工具栏，占用左右剩余空间的右侧部分，整体右对齐 */
+/* 右区：右顶部按钮条，占用左右剩余空间的右侧部分，整体右对齐 */
 .top-right {
   flex: 1;
   justify-content: flex-end;
@@ -296,8 +304,8 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   min-width: 0;
 }
 
-/* 空间充足时工具栏整体靠右；溢出时（滚轮滚动态）自动退化为可滚的左对齐内容 */
-.top-right :deep(.toolbar) {
+/* 空间充足时右顶部条整体靠右；溢出时（滚轮滚动态）自动退化为可滚的左对齐内容 */
+.top-right :deep(.right-top-bar) {
   margin-left: auto;
 }
 

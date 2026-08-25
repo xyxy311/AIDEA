@@ -12,7 +12,7 @@ import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
  * - 按住空格键 + 鼠标拖拽 -> 平移画布
  * - Ctrl + 滚轮 -> 缩放画布（以鼠标位置为中心）
  *
- * 导航状态存储在当前视图的 viewStore 中，以便 Toolbar 等组件
+ * 导航状态存储在当前视图的 viewStore 中，以便 RightTopBar 等组件
  * 读取当前视口状态来计算"视口中央"的世界坐标。
  */
 export function useCanvasNavigation(viewId: string) {

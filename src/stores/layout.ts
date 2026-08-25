@@ -18,6 +18,19 @@ import {
   setRightSizeCore,
   type DockState,
 } from '@/utils/dock'
+import {
+  DEFAULT_LEFT_TOP,
+  DEFAULT_RIGHT_TOP,
+  type TopBarId,
+  type TopBarZone,
+} from '@/constants/topbar'
+import {
+  defaultTopBarState,
+  normalizeTopBarState,
+  reorderTopCore,
+  moveTopZoneCore,
+  type TopBarState,
+} from '@/utils/topbar'
 
 /** 左侧活动栏顺序持久化 key */
 const STORAGE_LEFT = 'aidea-dock-left'
@@ -25,24 +38,30 @@ const STORAGE_LEFT = 'aidea-dock-left'
 const STORAGE_RIGHT = 'aidea-dock-right'
 /** 右侧高度比例持久化 key */
 const STORAGE_SIZES = 'aidea-dock-sizes'
+/** 左顶部条按钮顺序持久化 key */
+const STORAGE_TOP_LEFT = 'aidea-top-left'
+/** 右顶部条按钮顺序持久化 key */
+const STORAGE_TOP_RIGHT = 'aidea-top-right'
 
 /**
- * 布局 Store - 左侧活动栏 + 右侧多面板 dock
+ * 布局 Store - 左侧活动栏 + 右侧多面板 dock + 顶部左右按钮条
  *
  * 职责：
  * - 活动栏面板顺序（panels，左侧单面板区，可持久化）
  * - 当前激活面板（activePanelId，null 表示面板区收起）
  * - 右侧 dock 面板列表（rightPanels）与高度比例（rightSizes）
+ * - 左 / 右顶部条按钮顺序（leftTop / rightTop，可持久化，可拖拽排序与跨区放置）
  *
- * 互通：面板可在左侧（活动栏）与右侧（dock）之间移动：
- * - moveToLeft：右侧 → 左侧活动栏
- * - moveToRight：左侧 → 右侧 dock
+ * 互通：
+ * - 面板可在左侧（活动栏）与右侧（dock）之间移动（moveToLeft / moveToRight）
+ * - 顶部按钮可在左 / 右顶部条之间移动（moveTopZone），同侧可 reorderTop 排序
  *
- * 面板注册表（id / 图标 / 标题）位于 constants/panels.ts。
- * 纯状态转换逻辑位于 utils/dock.ts（可单测）。
+ * 面板注册表位于 constants/panels.ts；顶部按钮注册表位于 constants/topbar.ts。
+ * 纯状态转换逻辑位于 utils/dock.ts（面板）与 utils/topbar.ts（顶部按钮），均可单测。
  */
 export const useLayoutStore = defineStore('layout', () => {
   const allPanelIds = PANEL_CATALOG.map((p) => p.id)
+  const allTopBarIds = DEFAULT_LEFT_TOP.concat(DEFAULT_RIGHT_TOP)
 
   // ── 持久化状态（localStorage）──
   /** 活动栏面板顺序（默认 = 品类表 defaultPlacement='left'） */
@@ -68,6 +87,21 @@ export const useLayoutStore = defineStore('layout', () => {
   panels.value = normalized.leftPanels
   rightPanels.value = normalized.rightPanels
   rightSizes.value = normalized.rightSizes
+
+  // ── 顶部按钮条（左 / 右）──
+  /** 左顶部条按钮顺序（默认 = 品类表 defaultZone='left'） */
+  const leftTop = useStorage<TopBarId[]>(STORAGE_TOP_LEFT, [...DEFAULT_LEFT_TOP])
+  /** 右顶部条按钮顺序（默认 = 品类表 defaultZone='right'） */
+  const rightTop = useStorage<TopBarId[]>(STORAGE_TOP_RIGHT, [...DEFAULT_RIGHT_TOP])
+
+  // 加载时归一化（清理脏数据 / 补新增默认按钮）
+  const normalizedTop = normalizeTopBarState(
+    { leftTop: leftTop.value, rightTop: rightTop.value },
+    allTopBarIds,
+    { left: DEFAULT_LEFT_TOP, right: DEFAULT_RIGHT_TOP },
+  )
+  leftTop.value = normalizedTop.leftTop
+  rightTop.value = normalizedTop.rightTop
 
   // ── 左侧激活面板（内存态，不持久化）──
   /** 当前激活面板 id；null = 面板区收起 */
@@ -200,17 +234,60 @@ export const useLayoutStore = defineStore('layout', () => {
     }
   }
 
-  /** 恢复默认布局：删除持久化数据并重置为默认配置。 */
+  /** 恢复默认布局：删除持久化数据并重置面板 + 顶部按钮条为默认配置。 */
   function resetDock(): void {
     localStorage.removeItem(STORAGE_LEFT)
     localStorage.removeItem(STORAGE_RIGHT)
     localStorage.removeItem(STORAGE_SIZES)
+    resetTopBar()
     const d = defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
     panels.value = d.leftPanels
     rightPanels.value = d.rightPanels
     rightSizes.value = d.rightSizes
     activePanelId.value = PANEL_CATALOG[0]?.id ?? null
     lastPanelId.value = PANEL_CATALOG[0]?.id ?? null
+  }
+
+  // ── 顶部按钮条（左 / 右）──
+
+  /** 顶部栏布局是否为空（左右都无按钮）。 */
+  const topEmpty = computed(() => leftTop.value.length === 0 && rightTop.value.length === 0)
+
+  /** 读某侧顺序（供容器按 zone 取） */
+  function topOrder(zone: TopBarZone): TopBarId[] {
+    return zone === 'left' ? leftTop.value : rightTop.value
+  }
+
+  /** 某侧内换位：把 from 位按钮移动到 to 位。 */
+  function reorderTop(zone: TopBarZone, from: number, to: number): void {
+    const next = reorderTopCore(
+      { leftTop: leftTop.value, rightTop: rightTop.value },
+      zone,
+      from,
+      to,
+    )
+    leftTop.value = next.leftTop
+    rightTop.value = next.rightTop
+  }
+
+  /** 把按钮移入目标侧（另一侧移除 + 加入目标侧末尾）。 */
+  function moveTopZone(buttonId: TopBarId, toZone: TopBarZone): void {
+    const next = moveTopZoneCore(
+      { leftTop: leftTop.value, rightTop: rightTop.value },
+      buttonId,
+      toZone,
+    )
+    leftTop.value = next.leftTop
+    rightTop.value = next.rightTop
+  }
+
+  /** 恢复默认顶部按钮排列（删除左 / 右下标的持久化数据并复位默认配置）。 */
+  function resetTopBar(): void {
+    localStorage.removeItem(STORAGE_TOP_LEFT)
+    localStorage.removeItem(STORAGE_TOP_RIGHT)
+    const t = defaultTopBarState(DEFAULT_LEFT_TOP, DEFAULT_RIGHT_TOP)
+    leftTop.value = t.leftTop
+    rightTop.value = t.rightTop
   }
 
   return {
@@ -233,5 +310,12 @@ export const useLayoutStore = defineStore('layout', () => {
     setRightSize,
     removePanel,
     resetDock,
+    leftTop,
+    rightTop,
+    topEmpty,
+    topOrder,
+    reorderTop,
+    moveTopZone,
+    resetTopBar,
   }
 })

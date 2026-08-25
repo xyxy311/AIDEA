@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useLayoutStore } from '@/stores/layout'
 import { PANEL_CATALOG } from '@/constants/panels'
+import { DEFAULT_LEFT_TOP, DEFAULT_RIGHT_TOP } from '@/constants/topbar'
 
 describe('useLayoutStore', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
   })
 
@@ -96,5 +98,43 @@ describe('useLayoutStore', () => {
     expect(layout.collapsed).toBe(true)
     layout.expand()
     expect(layout.activeId).toBe(secondId)
+  })
+
+  describe('顶部按钮条（leftTop / rightTop）', () => {
+    it('默认左右顺序来自品类表 defaultZone', () => {
+      const layout = useLayoutStore()
+      expect(layout.leftTop).toEqual(DEFAULT_LEFT_TOP)
+      expect(layout.rightTop).toEqual(DEFAULT_RIGHT_TOP)
+    })
+
+    it('reorderTop：某侧内换位', () => {
+      const layout = useLayoutStore()
+      layout.reorderTop('left', 0, layout.leftTop.length - 1)
+      expect(layout.leftTop[layout.leftTop.length - 1]).toBe('open')
+      expect(layout.leftTop[0]).toBe('save')
+    })
+
+    it('moveTopZone：跨侧移动（源侧移除 + 目标侧末尾追加）', () => {
+      const layout = useLayoutStore()
+      layout.moveTopZone('debug', 'left')
+      expect(layout.leftTop).toEqual([...DEFAULT_LEFT_TOP, 'debug'])
+      expect(layout.rightTop).toEqual(DEFAULT_RIGHT_TOP.filter((id) => id !== 'debug'))
+    })
+
+    it('resetTopBar：清除持久化并复位默认', () => {
+      const layout = useLayoutStore()
+      layout.reorderTop('left', 0, 1)
+      layout.resetTopBar()
+      expect(layout.leftTop).toEqual(DEFAULT_LEFT_TOP)
+      expect(layout.rightTop).toEqual(DEFAULT_RIGHT_TOP)
+    })
+
+    it('resetDock 同时复位顶部按钮条', () => {
+      const layout = useLayoutStore()
+      layout.moveTopZone('grid', 'left')
+      layout.resetDock()
+      expect(layout.leftTop).toEqual(DEFAULT_LEFT_TOP)
+      expect(layout.rightTop).toEqual(DEFAULT_RIGHT_TOP)
+    })
   })
 })

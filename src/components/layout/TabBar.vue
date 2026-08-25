@@ -4,7 +4,7 @@
  *
  * 功能：
  * - 渲染 project.tabs 每个标签，标题 = 观察节点 text 首行（trim，`#` 参考名规则一致；根节点即项目名）
- * - 活动标签高亮（主色底部指示条 + 淡背景，与 IconBar 活动态一致）；点击 switchToTab
+ * - 活动标签高亮（主色底部指示条 + 淡背景，与 TopBarButton 活动态一致）；点击 switchToTab
  * - 每标签 hover 显示关闭 ×（tabs<=1 时隐藏），点击 closeTab
  * - 最右侧 "+" 主色按钮 addTab，固定覆盖在标签带右端之上（不随滚轮滚动，标签过多时遮住滑过的标签）
  * - 标签带经 `common/WheelScroll` 提供滚轮横向滚动，隐藏滚动条（与左/右两区滚动方式一致）
@@ -272,7 +272,7 @@ watch(
   transition: background 0.15s, opacity 0.15s;
 }
 
-/* 活动标签：主色淡背景 + 底部主色指示条（与 IconBar 激活态同体系） */
+/* 活动标签：主色淡背景 + 底部主色指示条（与 TopBarButton 激活态同体系） */
 .tab.active {
   background: var(--color-primary-soft);
 }

@@ -2,7 +2,7 @@
  * adapter.ts —— 插件适配层（稳定壳，插件对外唯一入口）
  *
  * 组装并导出最终 `PluginAdapter`：
- * - 分类好的应用 api 在 `./api/`（node / connection / tag / stylePreset / project / view），
+ * - 分类好的应用 api 在 `./api/`（node / connection / tag / project / view），
  *   类型由实现派生；本文件只装配并在下方 re-export。
  * - 插件运行时契约类型（PluginAdapter / PluginContext / AideaPlugin）也定在这里，
  *   与实现型 api 类型聚于同一入口，插件统一从本文件导入。
@@ -10,7 +10,7 @@
  * 插件经 `ctx.adapter.api` 这个唯一对象查询数据或执行命令，没有命令表 / 命令类。
  */
 import type { PluginManifest } from '@/types'
-import { SDK_VERSION } from '@/types'
+import { SDK_VERSION } from '@/types/plugin'
 import { createPluginApi } from './api'
 import type { PluginApi } from './api'
 
@@ -52,6 +52,6 @@ export function createPluginAdapter(): PluginAdapter {
 
 // ── 重新导出（插件从这里取类型 / 工厂 / 版本）──
 export { createPluginApi } from './api'
-export type { PluginApi, NodeApi, ConnectionApi, TagApi, StylePresetApi, ProjectApi, ViewApi } from './api'
-export { SDK_VERSION } from '@/types'
+export type { PluginApi, NodeApi, ConnectionApi, TagApi, ProjectApi, ViewApi } from './api'
+export { SDK_VERSION } from '@/types/plugin'
 export type { PluginManifest } from '@/types'

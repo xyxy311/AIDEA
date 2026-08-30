@@ -30,8 +30,6 @@ export interface PluginManifest {
   author?: string
   /** 本插件声明的适配层版本，须与 SDK_VERSION 匹配，否则禁用 */
   sdkVersion: string
-  /** 是否启用（默认 false，安装需手动启用） */
-  enabled?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────

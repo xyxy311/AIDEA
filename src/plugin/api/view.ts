@@ -2,6 +2,7 @@
  * api/view.ts —— 视图域：活动视图 / 选中 / 视图切换 + 视图统计
  * 接口类型由实现派生（`ViewApi = ReturnType<typeof createViewApi>`）。
  */
+import type { ActiveViewInfo, SelectionInfo, ViewStats } from '@/types/plugin'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { extractReferenceName } from '@/utils/reference'
@@ -9,11 +10,11 @@ import { mainView } from './shared'
 
 export function createViewApi() {
   const api = {
-    active() {
+    active(): ActiveViewInfo {
       const nodeId = useProjectStore().currentNodeId
       return { viewedNodeId: nodeId, isMain: nodeId === ROOT_NODE_ID }
     },
-    selection() {
+    selection(): SelectionInfo {
       const v = mainView()
       return {
         nodeIds: Array.from(v.selectedNodeIds),
@@ -29,7 +30,7 @@ export function createViewApi() {
     clearSelection(): void {
       mainView().clearSelection()
     },
-    stats() {
+    stats(): ViewStats {
       const nodeStore = useNodeStore()
       const viewedNodeId = useProjectStore().currentNodeId
       const children = nodeStore.childrenOf(viewedNodeId)

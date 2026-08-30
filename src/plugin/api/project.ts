@@ -2,6 +2,7 @@
  * api/project.ts —— 项目域：历史控制 + 批量 + 项目统计
  * 接口类型由实现派生（`ProjectApi = ReturnType<typeof createProjectApi>`）。
  */
+import type { ProjectStats } from '@/types/plugin'
 import { useNodeStore } from '@/stores/node'
 import { useCommands } from '@/composables/useCommands'
 import { walkTree } from './shared'
@@ -33,7 +34,7 @@ export function createProjectApi() {
     rollbackBatch(): void {
       useCommands().rollbackBatch()
     },
-    stats() {
+    stats(): ProjectStats {
       const nodeStore = useNodeStore()
       let totalNodes = 0
       let maxDepth = 0

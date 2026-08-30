@@ -4,7 +4,7 @@ import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
 
 /**
- * 适配层分类 api 测试（node / connection / tag / stylePreset / project / view）。
+ * 适配层分类 api 测试（node / connection / tag / project / view）。
  * 只读方法如实反映 store；写方法产生可撤销历史（undo/redo）；batch 合并单条历史。
  */
 function makeApi() {
@@ -16,10 +16,10 @@ describe('createPluginAdapter 分类 api', () => {
     setActivePinia(createPinia())
   })
 
-  it('exposes the adapter + six categorized api groups', () => {
+  it('exposes the adapter + five categorized api groups', () => {
     const adapter = createPluginAdapter()
     expect(adapter.sdkVersion).toBe(SDK_VERSION)
-    for (const key of ['node', 'connection', 'tag', 'stylePreset', 'project', 'view']) {
+    for (const key of ['node', 'connection', 'tag', 'project', 'view']) {
       expect(adapter.api).toHaveProperty(key)
     }
   })

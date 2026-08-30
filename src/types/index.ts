@@ -9,4 +9,3 @@ export type {
   SelectionInfo,
   TreeVisitInfo,
 } from './plugin'
-export { SDK_VERSION } from './plugin'

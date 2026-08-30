@@ -1,17 +1,70 @@
 /**
- * manager.ts —— 插件生命周期：装载 / 启禁用 / 错误隔离（按 manifest.id 路由）
+ * manager.ts —— 插件「加载 + 生命周期」单一模块
  *
- * 与加载方式解耦：只依赖 PluginSource（可变层）。启停**不卸载代码文件**，
- * 而是不调 setup（禁用状态）、触发 onDispose + teardown（卸载清理）。
+ * 合并原 source.ts（静态 glob 收集）与 context.ts（上下文组装），收敛过度抽象的接口：
+ * - 踩点收集（`collectPluginEntries`）在模块内完成并产出 `PluginEntry[]`；
+ *   测试可注入假 entries，不依赖 Vite glob。
+ * - 启停意愿经 `getEnabled` 回调只读进入（持久化写入是 store 专属职责）。
+ * - 启停**不卸载代码文件**，而是不调 setup（禁用状态）；setup 抛错走 onDispose → dispose() 回滚（活路径）。
  *
- * 本模块不感知 pinia：记录快照经 onChange 订阅暴露，启停意愿经注入的 storage 持久化——
+ * 本模块不感知 pinia：记录快照经 onChange 订阅暴露，启停意愿经注入的 getEnabled 读取——
  * 便于在 vitest 中仅构造源码即测试（不依赖 localStorage / Vite glob）。
  */
-import type { PluginAdapter, AideaPlugin } from './adapter'
-import { SDK_VERSION } from '@/types'
-import type { PluginSource, PluginSourceEntry } from './source'
-import type { InternalPluginContext } from './context'
-import { createPluginContext } from './context'
+import type { PluginAdapter, AideaPlugin, PluginContext, PluginManifest } from './adapter'
+import { SDK_VERSION } from '@/types/plugin'
+
+/** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。这是内部/注入的装载项。 */
+export interface PluginEntry {
+  id: string
+  loader: () => Promise<{ default?: AideaPlugin; [k: string]: unknown }>
+}
+
+/** 从编译期路径推断插件 id：取 `…/<name>/index.ts` 中的 <name> */
+export function pluginIdFromPath(path: string): string {
+  const match = /([^/]+)\/index\.(ts|js|vue)$/.exec(path)
+  return match ? match[1] : path
+}
+
+/**
+ * 编译期 glob 收集 `../../plugins/**` 各插件入口，产出 `PluginEntry[]`。
+ * loader 惰性 `import` 对应模块，与 Vue 组件一样受 dev HMR 监看。
+ */
+export function collectPluginEntries(): PluginEntry[] {
+  const modules = import.meta.glob('../../plugins/**/index.{ts,js}')
+  return Object.entries(modules).map(([path, loader]) => ({
+    id: pluginIdFromPath(path),
+    loader: loader as PluginEntry['loader'],
+  }))
+}
+
+/** PluginContext 内部形态：额外携带触发全部 onDispose 回调的 dispose() */
+interface InternalPluginContext extends PluginContext {
+  /** 卸载：依次执行插件经 onDispose 注册的所有清理函数（单条抛错不影响其余） */
+  dispose(): void
+}
+
+/** 组装 PluginContext：注入共享适配层 + manifest，收集 onDispose 清理函数 */
+function createPluginContext(adapter: PluginAdapter, manifest: PluginManifest): InternalPluginContext {
+  const disposers: Array<() => void> = []
+
+  return {
+    adapter,
+    manifest,
+    onDispose(fn: () => void): void {
+      disposers.push(fn)
+    },
+    dispose(): void {
+      for (const fn of disposers.splice(0)) {
+        try {
+          fn()
+        } catch (e) {
+          // 单条清理函数抛错不阻断其余清理
+          console.warn('[plugin] onDispose 回调抛错', e)
+        }
+      }
+    },
+  }
+}
 
 /** 插件运行时状态：installed=已安装但未启用 / active=运行中 / error=装载或启用失败 */
 export type PluginStatus = 'installed' | 'active' | 'error'
@@ -31,40 +84,31 @@ export interface PluginRecord {
   /** 错误态下的单插件错误信息 */
   error?: string
   /** 源提供的装载入口 */
-  entry: PluginSourceEntry
+  entry: PluginEntry
   /** 已加载的原始模块（读 manifest / 取 default） */
   module?: { default?: AideaPlugin; [k: string]: unknown }
-  /** active 时持有的插件模块（含 setup / teardown） */
-  plugin?: AideaPlugin
-}
-
-/** 启停意愿的持久化（当前由 pinia store 落地到 localStorage('aidea-plugins')） */
-export interface PluginStorage {
-  /** 读取"已启用集合"（id → enabled） */
-  get(): Record<string, boolean>
-  /** 单插件启停切换时持久化（不禁止中间态为 false 的写入） */
-  set(id: string, enabled: boolean): void
 }
 
 export interface PluginManagerOptions {
-  source: PluginSource
+  /** 装载候选集合（测试可注入假 entries） */
+  entries: PluginEntry[]
   /** 单一适配层实例，所有插件共享（无命名空间） */
   adapter: PluginAdapter
-  storage: PluginStorage
+  /** 只读的"已启用集合"（id → enabled），持久化写入是 store 专属职责 */
+  getEnabled: () => Record<string, boolean>
 }
 
 export class PluginManager {
-  private readonly source: PluginSource
+  private readonly entries: PluginEntry[]
   private readonly adapter: PluginAdapter
-  private readonly storage: PluginStorage
+  private readonly getEnabled: () => Record<string, boolean>
   private readonly records = new Map<string, PluginRecord>()
-  private readonly contexts = new Map<string, InternalPluginContext>()
   private readonly listeners = new Set<(records: PluginRecord[]) => void>()
 
   constructor(options: PluginManagerOptions) {
-    this.source = options.source
+    this.entries = options.entries
     this.adapter = options.adapter
-    this.storage = options.storage
+    this.getEnabled = options.getEnabled
   }
 
   /** 订阅记录快照变化（返回取消订阅函数） */
@@ -79,8 +123,8 @@ export class PluginManager {
 
   /** 引导装载：扫描全部插件，启用启用的调 setup（单插件失败仅置 error，不影响其他） */
   async installAll(): Promise<void> {
-    const enabledSet = this.storage.get()
-    for (const entry of this.source.list()) {
+    const enabledSet = this.getEnabled()
+    for (const entry of this.entries) {
       const record = await this.loadRecord(entry, enabledSet[entry.id] ?? false)
       this.records.set(record.id, record)
       if (record.enabled && record.status !== 'error') {
@@ -91,18 +135,17 @@ export class PluginManager {
   }
 
   /**
-   * 切换启停（**仅持久化 → 重启应用生效**），不做动态卸载注册。
-   * 运行时间表按启动时的 enabled 快照决定。
+   * 切换启停（**仅更新启用意愿 → 重启应用生效**），不做动态卸载注册。
+   * 运行时间表按启动时的 getEnabled 快照决定。
    */
   setEnabled(id: string, enabled: boolean): void {
-    this.storage.set(id, enabled)
     const record = this.records.get(id)
     if (record) record.enabled = enabled
     this.emit()
   }
 
   /** 单插件装载：读 manifest 建记录（不运行 setup）。独立 try/catch 保证错误隔离。 */
-  private async loadRecord(entry: PluginSourceEntry, enabled: boolean): Promise<PluginRecord> {
+  private async loadRecord(entry: PluginEntry, enabled: boolean): Promise<PluginRecord> {
     const base: PluginRecord = {
       id: entry.id,
       name: entry.id,
@@ -153,7 +196,6 @@ export class PluginManager {
     if (manifest && manifest.sdkVersion !== SDK_VERSION) {
       record.status = 'error'
       record.error = `SDK 版本不匹配：插件需要 ${manifest.sdkVersion ?? '？'}，当前 ${SDK_VERSION}`
-      this.contexts.delete(id)
       return
     }
 
@@ -161,7 +203,6 @@ export class PluginManager {
     if (!plugin || typeof plugin.setup !== 'function') {
       record.status = 'error'
       record.error = '插件模块缺少 setup（入口需默认导出 AideaPlugin）'
-      this.contexts.delete(id)
       return
     }
 
@@ -170,35 +211,11 @@ export class PluginManager {
       plugin.setup(context)
       record.status = 'active'
       record.error = undefined
-      record.plugin = plugin
-      this.contexts.set(id, context)
     } catch (e) {
       context.dispose()
       record.status = 'error'
       record.error = `setup 抛错：${toMessage(e)}`
-      record.plugin = undefined
-      this.contexts.delete(id)
     }
-  }
-
-  /** 卸载：触发 onDispose + teardown → 置回 installed。单插件清理异常不抛出。 */
-  private deactivate(id: string): void {
-    const record = this.records.get(id)
-    if (!record) return
-
-    const context = this.contexts.get(id)
-    if (context) {
-      context.dispose()
-      this.contexts.delete(id)
-    }
-    try {
-      record.plugin?.teardown?.()
-    } catch (e) {
-      console.warn('[plugin] teardown 抛错', e)
-    }
-    record.plugin = undefined
-    record.error = undefined
-    record.status = 'installed'
   }
 
   private emit(): void {

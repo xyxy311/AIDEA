@@ -1,27 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { PluginManager } from '@/plugin/manager'
-import type { PluginStorage } from '@/plugin/manager'
-import type { PluginSource, PluginSourceEntry } from '@/plugin/source'
+import type { PluginEntry } from '@/plugin/manager'
 import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
 import type { AideaPlugin, PluginContext } from '@/plugin/adapter'
-
-/** 内存版 storage */
-function memoryStorage(initial: Record<string, boolean> = {}): PluginStorage {
-  const map: Record<string, boolean> = { ...initial }
-  return {
-    get: () => ({ ...map }),
-    set: (id, enabled) => {
-      map[id] = enabled
-    },
-  }
-}
 
 /** 构造单个插件装载项，可注入各类异常 */
 function makeEntry(
   id: string,
   opts: { throwsOnSetup?: boolean; sdkMismatch?: boolean; idMismatch?: boolean; missingDefault?: boolean } = {},
-): PluginSourceEntry {
+): PluginEntry {
   const plugin: AideaPlugin = {
     manifest: {
       id: opts.idMismatch ? `${id}-x` : id,
@@ -39,21 +27,13 @@ function makeEntry(
   return { id, loader: async () => (opts.missingDefault ? {} : { default: plugin }) }
 }
 
-class FakeSource implements PluginSource {
-  constructor(private readonly entries: PluginSourceEntry[]) {}
-  list(): PluginSourceEntry[] {
-    return this.entries
-  }
-}
-
-function makeManager(entries: PluginSourceEntry[], enabled: Record<string, boolean>) {
-  const persistence = memoryStorage(enabled)
+function makeManager(entries: PluginEntry[], enabled: Record<string, boolean>) {
   const mgr = new PluginManager({
-    source: new FakeSource(entries),
+    entries,
     adapter: createPluginAdapter(),
-    storage: persistence,
+    getEnabled: () => ({ ...enabled }),
   })
-  return { mgr, persistence }
+  return { mgr, enabled }
 }
 
 describe('PluginManager', () => {
@@ -65,7 +45,7 @@ describe('PluginManager', () => {
     const setupCalls: string[] = []
     let idx = 0
     // 用动态 setup 追踪
-    const mk = (id: string): PluginSourceEntry => ({
+    const mk = (id: string): PluginEntry => ({
       id,
       loader: async () => {
         idx += 1
@@ -89,21 +69,29 @@ describe('PluginManager', () => {
     expect(mgr.getRecords().map((r) => `${r.id}:${r.status}`)).toContain('b:installed')
   })
 
-  it('启停切换仅持久化，重启才生效（不动态调 setup）', async () => {
-    const { mgr, persistence } = makeManager(
+  it('启停切换仅更新启用意愿 → 重启（新实例装载）才生效，不动态调 setup', async () => {
+    const { mgr, enabled } = makeManager(
       [makeEntry('a'), makeEntry('b')],
       { a: true },
     )
     await mgr.installAll()
-    const before = mgr.getRecords().find((r) => r.id === 'b')!.status
+    expect(mgr.getRecords().find((r) => r.id === 'b')!.status).toBe('installed')
 
     mgr.setEnabled('b', true)
 
     const rec = mgr.getRecords().find((r) => r.id === 'b')!
     expect(rec.enabled).toBe(true)
-    expect(before).toBe('installed')
-    expect(rec.status).toBe('installed') // 重启前仍是 installed
-    expect(persistence.get().b).toBe(true) // 已持久化
+    expect(rec.status).toBe('installed') // 重启前仍是 installed，不动态调 setup
+
+    // 模拟 store 持久化（manager 不落地）+ 重启：新的启用快照下重建实例 → b 被激活
+    enabled.b = true
+    const restarted = new PluginManager({
+      entries: [makeEntry('a'), makeEntry('b')],
+      adapter: createPluginAdapter(),
+      getEnabled: () => ({ ...enabled }),
+    })
+    await restarted.installAll()
+    expect(restarted.getRecords().find((r) => r.id === 'b')!.status).toBe('active')
   })
 
   it('单插件 setup 抛错仅置该插件 error，不影响其他', async () => {
@@ -132,7 +120,7 @@ describe('PluginManager', () => {
   it('setup 抛错时先触发已注册的 onDispose 回调（错误隔离清理）', async () => {
     const disposed: string[] = []
     let called = false
-    const entry: PluginSourceEntry = {
+    const entry: PluginEntry = {
       id: 'leaky',
       loader: async () => ({
         default: {

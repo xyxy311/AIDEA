@@ -4,11 +4,10 @@
  * 持有 PluginManager 实例与记录快照；负责 localStorage('aidea-plugins') 启停持久化。
  * 启动装载在 main.ts 的 `init()` 完成；运行时间表（setup 是否执行）由启动时的 enabled 快照决定。
  */
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { PluginManager } from '@/plugin/manager'
+import { PluginManager, collectPluginEntries } from '@/plugin/manager'
 import type { PluginRecord } from '@/plugin/manager'
-import { StaticPluginSource } from '@/plugin/source'
 import { createPluginAdapter } from '@/plugin/adapter'
 
 const STORAGE_KEY = 'aidea-plugins'
@@ -30,25 +29,14 @@ export const usePluginStore = defineStore('plugin', () => {
   const records = ref<PluginRecord[]>([])
   const ready = ref(false)
 
-  /** 当前启用的插件 id 集合（供面板） */
-  const enabledIds = computed(() => new Set(records.value.filter((r) => r.enabled).map((r) => r.id)))
-
   /** 引导装载插件（应用启动后调用一次） */
   async function init(): Promise<void> {
     if (manager.value) return
     const adapter = createPluginAdapter()
     const mgr = new PluginManager({
-      source: new StaticPluginSource(),
+      entries: collectPluginEntries(),
       adapter,
-      storage: {
-        get: readEnabled,
-        set(id, enabled) {
-          const next = readEnabled()
-          if (enabled) next[id] = true
-          else delete next[id]
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-        },
-      },
+      getEnabled: readEnabled,
     })
     mgr.onChange((snapshot) => {
       records.value = snapshot
@@ -58,10 +46,14 @@ export const usePluginStore = defineStore('plugin', () => {
     ready.value = true
   }
 
-  /** 切换启停（仅持久化 → 重启应用生效） */
+  /** 切换启停（**仅持久化 → 重启应用生效**），持久化写入在 store 落地。 */
   function setEnabled(id: string, enabled: boolean): void {
+    const next = readEnabled()
+    if (enabled) next[id] = true
+    else delete next[id]
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     manager.value?.setEnabled(id, enabled)
   }
 
-  return { manager, records, ready, enabledIds, init, setEnabled }
+  return { manager, records, ready, init, setEnabled }
 })

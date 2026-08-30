@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { StaticPluginSource, pluginIdFromPath } from '@/plugin/source'
+import { collectPluginEntries, pluginIdFromPath } from '@/plugin/manager'
 
-describe('StaticPluginSource', () => {
+describe('静态插件收集（原 StaticPluginSource，并入 manager）', () => {
   it('从编译期 glob 扫描到示例插件 hello，并按 id 路由', async () => {
-    const entries = new StaticPluginSource().list()
+    const entries = collectPluginEntries()
     expect(entries.length).toBeGreaterThan(0)
 
     const hello = entries.find((e) => e.id === 'hello')

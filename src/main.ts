@@ -4,6 +4,7 @@ import VueKonva from 'vue-konva'
 import Konva from 'konva'
 import App from './App.vue'
 import './assets/main.css'
+import { usePluginStore } from '@/stores/plugin'
 
 // Konva 全局画布像素密度：默认 stage canvas 按像素比 1 渲染，
 // 在 DPR>1 的高分屏会被拉大导致画布内容模糊（而 HTML 组件由浏览器自动高清化）。
@@ -16,3 +17,6 @@ app.use(createPinia())
 app.use(VueKonva)
 
 app.mount('#app')
+
+// 引导装载插件（需要 pinia 已安装；run 时间表由启动时的 enabled 快照决定）
+void usePluginStore().init()

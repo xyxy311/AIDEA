@@ -17,11 +17,13 @@ import {
   LayersOutline,
   CompassOutline,
   KeypadOutline,
+  PulseOutline,
 } from '@vicons/ionicons5'
 import AppearanceSection from '@/components/settings/AppearanceSection.vue'
 import LayoutSection from '@/components/settings/LayoutSection.vue'
 import AIDirectionsSection from '@/components/settings/AIDirectionsSection.vue'
 import ShortcutsSection from '@/components/settings/ShortcutsSection.vue'
+import PluginManagerSection from '@/components/plugin/PluginManagerSection.vue'
 import { t } from '@/composables/useT'
 
 defineProps<{
@@ -35,7 +37,7 @@ const emit = defineEmits<{
 // ── 左侧分类导航（数据驱动） ──
 
 /** 设置分类 id */
-type SettingsCategoryId = 'appearance' | 'layout' | 'aiDirections' | 'shortcuts'
+type SettingsCategoryId = 'appearance' | 'layout' | 'aiDirections' | 'shortcuts' | 'plugins'
 
 /** 单个设置分类定义 */
 interface CategoryDef {
@@ -58,6 +60,7 @@ const sections: Record<SettingsCategoryId, Component> = {
   layout: LayoutSection,
   aiDirections: AIDirectionsSection,
   shortcuts: ShortcutsSection,
+  plugins: PluginManagerSection,
 }
 
 /** 当前选中分类右侧内容组件 */
@@ -69,6 +72,7 @@ const categories: CategoryDef[] = [
   { id: 'layout', titleKey: 'settings.layout', icon: LayersOutline },
   { id: 'aiDirections', titleKey: 'settings.aiDirections', icon: CompassOutline },
   { id: 'shortcuts', titleKey: 'settings.shortcuts', icon: KeypadOutline },
+  { id: 'plugins', titleKey: 'settings.plugins', icon: PulseOutline },
 ]
 </script>
 

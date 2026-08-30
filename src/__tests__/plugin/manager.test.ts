@@ -1,0 +1,181 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import { PluginManager } from '@/plugin/manager'
+import type { PluginStorage } from '@/plugin/manager'
+import type { PluginSource, PluginSourceEntry } from '@/plugin/source'
+import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
+import type { AideaPlugin, PluginContext } from '@/plugin/adapter'
+
+/** 内存版 storage */
+function memoryStorage(initial: Record<string, boolean> = {}): PluginStorage {
+  const map: Record<string, boolean> = { ...initial }
+  return {
+    get: () => ({ ...map }),
+    set: (id, enabled) => {
+      map[id] = enabled
+    },
+  }
+}
+
+/** 构造单个插件装载项，可注入各类异常 */
+function makeEntry(
+  id: string,
+  opts: { throwsOnSetup?: boolean; sdkMismatch?: boolean; idMismatch?: boolean; missingDefault?: boolean } = {},
+): PluginSourceEntry {
+  const plugin: AideaPlugin = {
+    manifest: {
+      id: opts.idMismatch ? `${id}-x` : id,
+      name: id,
+      version: '0.1.0',
+      description: '',
+      author: 'tests',
+      sdkVersion: opts.sdkMismatch ? '9' : SDK_VERSION,
+    },
+    setup():
+      void {
+      if (opts.throwsOnSetup) throw new Error(`boom-${id}`)
+    },
+  }
+  return { id, loader: async () => (opts.missingDefault ? {} : { default: plugin }) }
+}
+
+class FakeSource implements PluginSource {
+  constructor(private readonly entries: PluginSourceEntry[]) {}
+  list(): PluginSourceEntry[] {
+    return this.entries
+  }
+}
+
+function makeManager(entries: PluginSourceEntry[], enabled: Record<string, boolean>) {
+  const persistence = memoryStorage(enabled)
+  const mgr = new PluginManager({
+    source: new FakeSource(entries),
+    adapter: createPluginAdapter(),
+    storage: persistence,
+  })
+  return { mgr, persistence }
+}
+
+describe('PluginManager', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('装载启动时启用的插件并调 setup，未启用的不调 setup', async () => {
+    const setupCalls: string[] = []
+    let idx = 0
+    // 用动态 setup 追踪
+    const mk = (id: string): PluginSourceEntry => ({
+      id,
+      loader: async () => {
+        idx += 1
+        return {
+          default: {
+            manifest: { id, name: id, version: '0.1.0', sdkVersion: SDK_VERSION },
+            setup(ctx: PluginContext): void {
+              setupCalls.push(id)
+              void ctx
+            },
+          },
+        }
+      },
+    })
+
+    const { mgr } = makeManager([mk('a'), mk('b')], { a: true })
+    await mgr.installAll()
+
+    expect(setupCalls).toEqual(['a'])
+    expect(mgr.getRecords().map((r) => `${r.id}:${r.status}`)).toContain('a:active')
+    expect(mgr.getRecords().map((r) => `${r.id}:${r.status}`)).toContain('b:installed')
+  })
+
+  it('启停切换仅持久化，重启才生效（不动态调 setup）', async () => {
+    const { mgr, persistence } = makeManager(
+      [makeEntry('a'), makeEntry('b')],
+      { a: true },
+    )
+    await mgr.installAll()
+    const before = mgr.getRecords().find((r) => r.id === 'b')!.status
+
+    mgr.setEnabled('b', true)
+
+    const rec = mgr.getRecords().find((r) => r.id === 'b')!
+    expect(rec.enabled).toBe(true)
+    expect(before).toBe('installed')
+    expect(rec.status).toBe('installed') // 重启前仍是 installed
+    expect(persistence.get().b).toBe(true) // 已持久化
+  })
+
+  it('单插件 setup 抛错仅置该插件 error，不影响其他', async () => {
+    const { mgr } = makeManager(
+      [makeEntry('good'), makeEntry('bad', { throwsOnSetup: true })],
+      { good: true, bad: true },
+    )
+    await mgr.installAll()
+
+    const good = mgr.getRecords().find((r) => r.id === 'good')!
+    const bad = mgr.getRecords().find((r) => r.id === 'bad')!
+    expect(good.status).toBe('active')
+    expect(bad.status).toBe('error')
+    expect(bad.error).toContain('boom-bad')
+  })
+
+  it('SDK 大版本不匹配 → 置 error 而非启用', async () => {
+    const { mgr } = makeManager([makeEntry('old', { sdkMismatch: true })], { old: true })
+    await mgr.installAll()
+
+    const rec = mgr.getRecords()[0]
+    expect(rec.status).toBe('error')
+    expect(rec.error).toContain('SDK')
+  })
+
+  it('setup 抛错时先触发已注册的 onDispose 回调（错误隔离清理）', async () => {
+    const disposed: string[] = []
+    let called = false
+    const entry: PluginSourceEntry = {
+      id: 'leaky',
+      loader: async () => ({
+        default: {
+          manifest: { id: 'leaky', name: 'leaky', version: '0.1.0', sdkVersion: SDK_VERSION },
+          setup(ctx: PluginContext): void {
+            called = true
+            ctx.onDispose(() => disposed.push('leaky-disposed'))
+            throw new Error('boom')
+          },
+        },
+      }),
+    }
+
+    const { mgr } = makeManager([entry], { leaky: true })
+    await mgr.installAll()
+
+    expect(called).toBe(true)
+    const rec = mgr.getRecords()[0]
+    expect(rec.status).toBe('error')
+    expect(disposed).toEqual(['leaky-disposed'])
+  })
+
+  it('manifest id 与装载源不一致 → 置 error', async () => {
+    const { mgr } = makeManager([makeEntry('a', { idMismatch: true })], { a: true })
+    await mgr.installAll()
+
+    const rec = mgr.getRecords()[0]
+    expect(rec.status).toBe('error')
+    expect(rec.id).toBe('a')
+    expect(rec.error).toContain('不匹配')
+  })
+
+  it('onChange 订阅收到记录快照变化', async () => {
+    const { mgr } = makeManager([makeEntry('a', { throwsOnSetup: true })], { a: true })
+    const listener = vi.fn()
+    mgr.onChange(listener)
+
+    await mgr.installAll()
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    const snapshot = listener.mock.calls[0][0] as { id: string; status: string }[]
+    expect(snapshot.length).toBe(1)
+    expect(snapshot[0].id).toBe('a')
+    expect(snapshot[0].status).toBe('error')
+  })
+})

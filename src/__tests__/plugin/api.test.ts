@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { createPluginAdapter } from '@/plugin/adapter'
-import { SDK_VERSION } from '@/types'
+import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
 
 /**

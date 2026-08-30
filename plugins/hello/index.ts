@@ -7,8 +7,8 @@
  *    **无需注册**（命令已并入 api）。
  * 3. 写方法自动入历史（可撤销）；`project.beginBatch/commitBatch` 合并单条历史。
  */
-import type { AideaPlugin, PluginContext, PluginApi } from '@/types'
-import { SDK_VERSION } from '@/types'
+import type { AideaPlugin, PluginContext, PluginApi } from '@/plugin/adapter'
+import { SDK_VERSION } from '@/plugin/adapter'
 
 /**
  * 插件内部私有"命令"（复用 api 的组合动作）——无需注册。

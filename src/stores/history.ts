@@ -3,8 +3,15 @@ import { defineStore } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useViewStore } from '@/stores/view'
+import { useAdditionsStore } from '@/stores/additions'
 import type { WhiteboardNode } from '@/types'
-import type { DataPatch, HistoryEntry, NodeChange, ConnectionChange } from '@/utils/command'
+import type {
+  DataPatch,
+  HistoryEntry,
+  NodeChange,
+  ConnectionChange,
+  AdditionChange,
+} from '@/utils/command'
 import { deepClone } from '@/utils/command'
 import { markDataDirty } from '@/utils/dirtyMarker'
 
@@ -29,6 +36,7 @@ const COALESCE_WINDOW = 1000
 export const useHistoryStore = defineStore('history', () => {
   const nodeStore = useNodeStore()
   const project = useProjectStore()
+  const additionsStore = useAdditionsStore()
 
   // ── State ──
   const past = ref<HistoryEntry[]>([])
@@ -131,6 +139,17 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  /** 应用 additions 变更（additions 的底层写入不经命令层、不入栈，直接改 store） */
+  function applyAdditionChange(ac: AdditionChange, isUndo: boolean): void {
+    if (isUndo) {
+      // undo：恢复旧值（old undefined 即删除该键）
+      additionsStore.applyValue(ac.key, ac.old)
+    } else {
+      // redo：set → 恢复新值；remove → 删除
+      additionsStore.applyValue(ac.key, ac.type === 'remove' ? undefined : ac.new)
+    }
+  }
+
   /** 应用 patch（正向 redo 或反向 undo） */
   function applyPatch(patch: DataPatch, isUndo: boolean): void {
     if (isUndo) {
@@ -141,6 +160,11 @@ export const useHistoryStore = defineStore('history', () => {
       for (let i = patch.nodeChanges.length - 1; i >= 0; i--) {
         applyNodeChange(patch.nodeChanges[i], true)
       }
+      // additions 与节点/连线无交集，顺序无耦合，放最后（逆序）
+      const acs = patch.additionsChanges ?? []
+      for (let i = acs.length - 1; i >= 0; i--) {
+        applyAdditionChange(acs[i], true)
+      }
     } else {
       // redo: 正序应用（先 node 后 conn，正序遍历）
       for (const nc of patch.nodeChanges) {
@@ -148,6 +172,10 @@ export const useHistoryStore = defineStore('history', () => {
       }
       for (const cc of patch.connChanges) {
         applyConnChange(cc, false)
+      }
+      // additions（正序）
+      for (const ac of patch.additionsChanges ?? []) {
+        applyAdditionChange(ac, false)
       }
     }
   }
@@ -251,6 +279,7 @@ export const useHistoryStore = defineStore('history', () => {
     if (batchPatch) {
       batchPatch.nodeChanges.push(...patch.nodeChanges)
       batchPatch.connChanges.push(...patch.connChanges)
+      batchPatch.additionsChanges?.push(...(patch.additionsChanges ?? []))
       return
     }
 
@@ -328,6 +357,9 @@ export const useHistoryStore = defineStore('history', () => {
         target.connChanges.push(scc)
       }
     }
+    // additions：保守追加（不做同 key 合并，保证 old/new 原样保留）
+    target.additionsChanges ??= []
+    target.additionsChanges.push(...(source.additionsChanges ?? []))
   }
 
   /** 撤销 */
@@ -377,7 +409,7 @@ export const useHistoryStore = defineStore('history', () => {
    * 注意：beginBatch 后必须 commitBatch 或 rollbackBatch，否则后续命令都会被吞。
    */
   function beginBatch(): void {
-    batchPatch = { nodeChanges: [], connChanges: [] }
+    batchPatch = { nodeChanges: [], connChanges: [], additionsChanges: [] }
   }
 
   /** 提交 batch 事务，合并为单条历史入栈 */
@@ -385,7 +417,11 @@ export const useHistoryStore = defineStore('history', () => {
     if (!batchPatch) return
     const patch = batchPatch
     batchPatch = null
-    if (patch.nodeChanges.length > 0 || patch.connChanges.length > 0) {
+    if (
+      patch.nodeChanges.length > 0 ||
+      patch.connChanges.length > 0 ||
+      (patch.additionsChanges?.length ?? 0) > 0
+    ) {
       pushCommand(patch)
     }
   }

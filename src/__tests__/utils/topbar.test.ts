@@ -71,6 +71,45 @@ describe('topbar 纯函数', () => {
     })
   })
 
+  describe('normalizeTopBarState isExtraValid（插件按钮 key 合法性）', () => {
+    const known = new Set<string>(['demo:btn', 'demo:export'])
+    const isExtraValid = (id: string): boolean => known.has(id)
+
+    it('插件 key 在 isExtraValid 命中时保留', () => {
+      const s = normalizeTopBarState(
+        { leftTop: ['open', 'demo:btn' as TopBarId], rightTop: ['grid', 'demo:export' as TopBarId] },
+        REGISTRY,
+        undefined,
+        { isExtraValid },
+      )
+      expect(s.leftTop).toContain('demo:btn')
+      expect(s.rightTop).toContain('demo:export')
+    })
+
+    it('插件 key 未命中 isExtraValid 时剔除', () => {
+      const s = normalizeTopBarState(
+        { leftTop: ['open', 'ghost:x' as TopBarId], rightTop: ['ghost:y' as TopBarId] },
+        REGISTRY,
+        undefined,
+        { isExtraValid },
+      )
+      expect(s.leftTop).not.toContain('ghost:x')
+      expect(s.rightTop).not.toContain('ghost:y')
+    })
+
+    it('内置默认按钮补充行为不变（回归）', () => {
+      const s = normalizeTopBarState(
+        { leftTop: ['open', 'save', 'undo', 'redo', 'demo:btn' as TopBarId], rightTop: ['debug', 'ai-mode', 'grid'] },
+        REGISTRY,
+        DEFAULTS,
+        { isExtraValid },
+      )
+      // settings 左侧缺失补全；add-node 右侧缺失补全；插件 key 保留
+      expect(s.leftTop).toEqual(['open', 'save', 'undo', 'redo', 'demo:btn', 'settings'])
+      expect(s.rightTop).toEqual(['debug', 'ai-mode', 'grid', 'add-node'])
+    })
+  })
+
   describe('reorderTopCore', () => {
     it('同一侧内换位', () => {
       const s: ReturnType<typeof baseState> = defaultTopBarState(

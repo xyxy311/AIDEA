@@ -6,6 +6,7 @@ import { useViewStore } from '@/stores/view'
 import { useFileStore } from '@/stores/file'
 import { useRecentFilesStore } from '@/stores/recentFiles'
 import { useTagsStore } from '@/stores/tags'
+import { useAdditionsStore } from '@/stores/additions'
 import { useCommands } from '@/composables/useCommands'
 import { useMessage } from 'naive-ui'
 import { t } from '@/composables/useT'
@@ -59,6 +60,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   const fileStore = useFileStore()
   const recentFilesStore = useRecentFilesStore()
   const tagsStore = useTagsStore()
+  const additionsStore = useAdditionsStore()
 
   /**
    * 最近打开文件（响应式 Ref）。
@@ -110,7 +112,11 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     tags?: Tag[]
     viewState: ProjectViewState
     aiConfig?: ProjectAIConfigData
+    additions?: Record<string, unknown>
   }): void {
+    // 0. 载入插件项目化扩展数据（逐一过滤 `pluginId:` 前缀，仅保留合法键）
+    additionsStore.load(data.additions)
+
     // 1. 整树替换，确保根节点存在
     const map = new Map<string, WhiteboardNode>()
     for (const n of data.nodes) map.set(n.id, n)
@@ -232,7 +238,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
         config,
       })),
     }
-    return serializeProject(nodes, projectName, viewState, tags, aiConfig)
+    return serializeProject(nodes, projectName, viewState, tags, aiConfig, additionsStore.serialize())
   }
 
   /** 默认保存文件名（项目名 + '.aidea.json'） */
@@ -327,6 +333,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       },
     })
     fileStore.resetFileState()
+    // 新建项目：清空插件项目化扩展数据
+    additionsStore.clear()
     // 标签定义已由 loadProjectIntoApp 的 `tags ?? []` 兜底清空（无需重复 clearTags）
     message.success(t('menuBar.newProjectDone'))
   }

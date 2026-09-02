@@ -1,4 +1,4 @@
-import type { TopBarId, TopBarZone } from '@/constants/topbar'
+import type { TopBarId, TopBarKey, TopBarZone } from '@/constants/topbar'
 
 /**
  * 顶部栏布局纯函数（模仿 utils/dock.ts）
@@ -14,12 +14,16 @@ import type { TopBarId, TopBarZone } from '@/constants/topbar'
  *
  * 默认布局（哪些按钮默认放哪侧）由按钮品类表 constants/topbar.ts 的
  * defaultZone 派生，本文件不硬编码任何按钮 id。
+ *
+ * 按钮键：内置按钮用 TopBarId；插件按钮用 `${pluginId}:${id}`（TopBarKey 联合）。
+ * 归一化对插件 key 的合法性由 opts.isExtraValid 判定（pluginId 前缀 ∈ 已发现插件集合），
+ * 保证「禁用→启用」循环不丢布局记录，仅「彻底移除插件」才清除。
  */
 
 /** 顶部栏布局状态 */
 export interface TopBarState {
-  leftTop: TopBarId[]
-  rightTop: TopBarId[]
+  leftTop: TopBarKey[]
+  rightTop: TopBarKey[]
 }
 
 /** 创建默认布局状态 */
@@ -30,39 +34,53 @@ export function defaultTopBarState(
   return { leftTop: [...left], rightTop: [...right] }
 }
 
+/** 归一化额外选项 */
+export interface NormalizeTopBarOptions {
+  /**
+   * 额外合法性判定：返回 true 时该 id 视为有效（即使不在 registry 内）。
+   * 用于插件按钮 key（`${pluginId}:${id}`）：只要其 pluginId 前缀仍在
+   * 「已发现插件」集合中即保留布局记录。
+   */
+  isExtraValid?: (id: string) => boolean
+}
+
 /**
  * 清理并规整顶部栏状态：
- * - 过滤无效 / 重复 id（左右独立去重）
+ * - 过滤无效 / 重复 id（左右独立去重；插件 key 经 opts.isExtraValid 判定）
  * - 补充「新增的默认按钮」：defaults 中未出现在任一侧的按钮，按默认侧追加到末尾，
  *   保证新增按钮只需在品类表登记，即可对已有用户自动生效（旧 localStorage 不含新按钮时）。
+ *   注意：defaults 仅含内置按钮；插件按钮的首次落位由 layout.ensureTop 负责。
  */
 export function normalizeTopBarState(
   state: TopBarState,
-  registry: TopBarId[],
+  registry: TopBarKey[],
   defaults?: { left: TopBarId[]; right: TopBarId[] },
+  opts?: NormalizeTopBarOptions,
 ): TopBarState {
-  const valid = new Set<TopBarId>(registry)
+  const valid = new Set<TopBarKey>(registry)
+  const isValid = (id: TopBarKey): boolean =>
+    valid.has(id) || (opts?.isExtraValid?.(id) === true)
 
-  const seenLeft = new Set<TopBarId>()
-  const leftTop: TopBarId[] = []
+  const seenLeft = new Set<TopBarKey>()
+  const leftTop: TopBarKey[] = []
   for (const id of state.leftTop) {
-    if (valid.has(id) && !seenLeft.has(id)) {
+    if (isValid(id) && !seenLeft.has(id)) {
       seenLeft.add(id)
       leftTop.push(id)
     }
   }
 
-  const seenRight = new Set<TopBarId>()
-  const rightTop: TopBarId[] = []
+  const seenRight = new Set<TopBarKey>()
+  const rightTop: TopBarKey[] = []
   for (const id of state.rightTop) {
-    if (valid.has(id) && !seenRight.has(id)) {
+    if (isValid(id) && !seenRight.has(id)) {
       seenRight.add(id)
       rightTop.push(id)
     }
   }
 
   if (defaults) {
-    const placed = new Set<TopBarId>([...leftTop, ...rightTop])
+    const placed = new Set<TopBarKey>([...leftTop, ...rightTop])
     for (const id of defaults.left) {
       if (valid.has(id) && !placed.has(id)) {
         leftTop.push(id)
@@ -104,7 +122,7 @@ export function reorderTopCore(
  */
 export function moveTopZoneCore(
   state: TopBarState,
-  buttonId: TopBarId,
+  buttonId: TopBarKey,
   toZone: TopBarZone,
 ): TopBarState {
   const removeOther = toZone === 'left' ? state.rightTop : state.leftTop
@@ -123,7 +141,7 @@ export const TOP_DRAG_MIME = 'aidea-topbar'
 
 /** 顶部栏按钮拖拽数据（跨容器移动时携带） */
 export interface TopBarDragData {
-  buttonId: TopBarId
+  buttonId: TopBarKey
   zone: TopBarZone
 }
 

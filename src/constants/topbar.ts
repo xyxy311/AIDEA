@@ -34,6 +34,12 @@ export type TopBarId =
   | 'grid'
   | 'add-node'
 
+/** 插件顶栏按钮 key（注册表归一后的完整键：`${pluginId}:${id}`，插件经适配层注册） */
+export type PluginTopBarKey = `${string}:${string}`
+
+/** 顶栏按钮布局键：内置按钮 id 或插件按钮 key（layout store / 渲染层统一使用） */
+export type TopBarKey = TopBarId | PluginTopBarKey
+
 /** 顶部栏按钮放置侧 */
 export type TopBarZone = 'left' | 'right'
 

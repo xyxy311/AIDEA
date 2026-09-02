@@ -12,7 +12,7 @@
 import { computed } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
 import { writePanelDrag, type PanelDragData } from '@/utils/dock'
-import type { PanelId } from '@/constants/panels'
+import type { PanelKey } from '@/constants/panels'
 import DockPanel from '@/components/common/DockPanel.vue'
 
 defineProps<{
@@ -23,16 +23,16 @@ defineProps<{
 
 const layout = useLayoutStore()
 
-/** 激活面板 id（收起时为 null） */
+/** 激活面板 id（收起时为 null；可为插件面板 key） */
 const activeId = computed(() => layout.activeId)
 
 /** 关闭按钮：把面板移出回未放置（removePanel 会同时收起左侧面板区） */
-function onClose(panelId: PanelId): void {
+function onClose(panelId: PanelKey): void {
   layout.removePanel(panelId)
 }
 
 /** 拖拽手柄启动：写入跨容器拖拽协议（from='left'） */
-function onDragStart(panelId: PanelId, e: DragEvent): void {
+function onDragStart(panelId: PanelKey, e: DragEvent): void {
   writePanelDrag(e, { panelId, from: 'left' } satisfies PanelDragData)
 }
 </script>

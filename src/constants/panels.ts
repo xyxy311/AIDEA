@@ -60,6 +60,12 @@ const HashIcon = defineComponent({
  */
 export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property' | 'ai'
 
+/** 插件面板 key（注册表归一后的完整键：`${pluginId}:${id}`，插件经适配层注册） */
+export type PluginPanelKey = `${string}:${string}`
+
+/** 面板布局键：内置面板 id 或插件面板 key（layout store / 渲染层统一使用） */
+export type PanelKey = PanelId | PluginPanelKey
+
 /** 面板默认放置侧 */
 export type PanelPlacement = 'left' | 'right'
 

@@ -2,6 +2,7 @@ import type { WhiteboardNode, Tag, AIConfig } from '@/types'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
 import { ROOT_NODE_ID } from '@/stores/node'
+import { deepClone } from '@/utils/command'
 
 /**
  * projectFile - 项目文件序列化 / 解析（纯函数，不依赖 store 实例）
@@ -15,6 +16,9 @@ import { ROOT_NODE_ID } from '@/stores/node'
  *   "viewState": {
  *     "viewedNodeId", "stageX", "stageY", "stageScale",
  *     "expandedIds", "inlineViews", "selectedNodeIds", "selectedConnectionIds"
+ *   },
+ *   "additions": {                  // 插件项目化数据（键 → 插件原始数据，保存时全量写出）
+ *     "stats:counter": { "count": 3 }
  *   }
  * }
  *
@@ -55,6 +59,8 @@ export interface ProjectFileData {
   tags: Tag[]
   viewState: ProjectViewState
   aiConfig: ProjectAIConfigData
+  /** 插件项目化扩展数据（键须匹配 `pluginId:` 前缀；无键时可为空对象） */
+  additions?: Record<string, unknown>
 }
 
 /** 项目文件中可持久化的 AI 配置数据 */
@@ -71,6 +77,8 @@ export interface ParsedProject {
   tags: Tag[]
   viewState: ProjectViewState
   aiConfig: ProjectAIConfigData
+  /** 插件项目化扩展数据（解析缺省 {}；仅保留匹配 `pluginId:` 前缀的键） */
+  additions: Record<string, unknown>
 }
 
 /** 默认的 AI 配置数据（与 project store 默认一致） */
@@ -93,6 +101,7 @@ export function serializeProject(
   viewState: ProjectViewState,
   tags: Tag[],
   aiConfig: ProjectAIConfigData,
+  additions: Record<string, unknown>,
 ): string {
   const data: ProjectFileData = {
     version: PROJECT_FILE_VERSION,
@@ -101,6 +110,7 @@ export function serializeProject(
     tags,
     viewState,
     aiConfig,
+    additions,
   }
   return JSON.stringify(data)
 }
@@ -282,5 +292,16 @@ export function parseProjectFile(json: string): ParsedProject {
   // —— 解析并自愈 AI 配置（旧文件缺字段回退默认；nodeConfigs 过滤悬空引用） ——
   const aiConfig = parseAIConfig(raw.aiConfig, nodeById)
 
-  return { projectName, nodes, tags, viewState, aiConfig }
+  // —— 解析插件项目化数据 additions（对象则逐键过滤，值深拷贝；非对象 → {}） ——
+  const additions: Record<string, unknown> = {}
+  const rawAdd = raw.additions
+  if (rawAdd && typeof rawAdd === 'object' && !Array.isArray(rawAdd)) {
+    for (const [key, value] of Object.entries(rawAdd as Record<string, unknown>)) {
+      if (/^[^:]+:/.test(key)) {
+        additions[key] = deepClone(value)
+      }
+    }
+  }
+
+  return { projectName, nodes, tags, viewState, aiConfig, additions }
 }

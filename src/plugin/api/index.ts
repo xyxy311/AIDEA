@@ -9,8 +9,9 @@ import { createConnectionApi } from './connection'
 import { createTagApi } from './tag'
 import { createProjectApi } from './project'
 import { createViewApi } from './view'
+import { createAdditionsApi } from './additions'
 
-/** 构造分类好的应用 api（node / connection / tag / project / view） */
+/** 构造分类好的应用 api（node / connection / tag / project / view / additions）。additions 为共享只读域。 */
 export function createPluginApi() {
   return {
     node: createNodeApi(),
@@ -18,6 +19,7 @@ export function createPluginApi() {
     tag: createTagApi(),
     project: createProjectApi(),
     view: createViewApi(),
+    additions: createAdditionsApi(null),
   }
 }
 
@@ -28,8 +30,10 @@ export { createConnectionApi } from './connection'
 export { createTagApi } from './tag'
 export { createProjectApi } from './project'
 export { createViewApi } from './view'
+export { createAdditionsApi } from './additions'
 export type { NodeApi } from './node'
 export type { ConnectionApi } from './connection'
 export type { TagApi } from './tag'
 export type { ProjectApi } from './project'
 export type { ViewApi } from './view'
+export type { AdditionsApi } from './additions'

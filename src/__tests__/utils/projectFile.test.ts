@@ -64,7 +64,7 @@ describe('projectFile - aiConfig 序列化', () => {
       nodeConfigs: [{ nodeId: 'child1', config: validConfig({ localPrompt: '节点局部提示' }) }],
     }
 
-    const json = serializeProject(nodes, '项目', validViewState(), [], aiConfig)
+    const json = serializeProject(nodes, '项目', validViewState(), [], aiConfig, {})
     const data = JSON.parse(json)
 
     expect(data.aiConfig).toBeDefined()
@@ -77,7 +77,7 @@ describe('projectFile - aiConfig 序列化', () => {
 
   it('版本号恒为 1', () => {
     const nodes = [createNode({ id: ROOT_NODE_ID, parentId: null, text: '项目' })]
-    const json = serializeProject(nodes, '项目', validViewState(), [], defaultProjectAIConfig())
+    const json = serializeProject(nodes, '项目', validViewState(), [], defaultProjectAIConfig(), {})
     const data = JSON.parse(json)
     expect(data.version).toBe(1)
   })

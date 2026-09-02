@@ -18,20 +18,22 @@
 import { computed } from 'vue'
 import { NButton, NScrollbar } from 'naive-ui'
 import { CloseOutline } from '@vicons/ionicons5'
-import { PANEL_INDEX, type PanelId } from '@/constants/panels'
+import { type PanelKey } from '@/constants/panels'
+import { useMergedPanelIndex } from '@/plugin/uiMerge'
 import { t } from '@/composables/useT'
+import PluginErrorBoundary from '@/components/plugin/PluginErrorBoundary.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** 面板 id */
-    panelId: PanelId
+    /** 面板 id（内置面板 id 或插件面板 key） */
+    panelId: PanelKey
     /** 是否显示标题栏，默认 true */
     showHeader?: boolean
     /** 是否显示关闭按钮，默认 true */
     showClose?: boolean
     /** 是否显示拖拽手柄（可拖拽），默认 true */
     draggable?: boolean
-    /** 覆盖标题（默认从品类表 titleKey 读取） */
+    /** 覆盖标题（默认从品类表 titleKey / 插件 title 读取） */
     title?: string
   }>(),
   {
@@ -43,15 +45,21 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'dragStart', panelId: PanelId, ev: DragEvent): void
-  (e: 'close', panelId: PanelId): void
+  (e: 'dragStart', panelId: PanelKey, ev: DragEvent): void
+  (e: 'close', panelId: PanelKey): void
 }>()
 
-/** 面板品类定义（icon / 标题 / 内容组件单一来源） */
-const meta = computed(() => PANEL_INDEX[props.panelId])
+/** 合并面板目录（内置优先，插件兜底）——icon / 标题 / 内容组件单一来源 */
+const merged = useMergedPanelIndex()
+const meta = computed(() => merged.value.get(props.panelId))
 
-/** 解析标题：优先 prop 覆盖，否则品类表 titleKey */
-const title = computed(() => props.title ?? t(meta.value.titleKey))
+/** 解析标题：优先 prop 覆盖，否则插件 title 字符串，再否则内置 titleKey i18n */
+const title = computed(
+  () =>
+    props.title ??
+    meta.value?.title ??
+    (meta.value?.titleKey ? t(meta.value.titleKey) : ''),
+)
 
 /** 关闭按钮点击 → 触发 close 事件 */
 function onClose(): void {
@@ -72,7 +80,7 @@ function onClose(): void {
       >
         ⋮⋮
       </span>
-      <component :is="meta.icon" class="panel-icon" />
+      <component :is="meta?.icon" class="panel-icon" />
       <span class="dock-panel-title">{{ title }}</span>
       <NButton
         v-if="showClose !== false"
@@ -88,7 +96,15 @@ function onClose(): void {
     </div>
     <div class="dock-panel-body">
       <NScrollbar x-scrollable class="dock-panel-scroll">
-        <component :is="meta.component" />
+        <!-- 插件面板外包错误边界，渲染异常隔离到占位，不拖垮整体 -->
+        <PluginErrorBoundary
+          v-if="meta?.pluginId"
+          :plugin-id="meta.pluginId"
+          :name="meta?.title ?? (meta?.titleKey ? t(meta.titleKey) : '')"
+        >
+          <component :is="meta?.component" />
+        </PluginErrorBoundary>
+        <component v-else :is="meta?.component" />
       </NScrollbar>
     </div>
   </div>

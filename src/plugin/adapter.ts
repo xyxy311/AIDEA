@@ -13,6 +13,7 @@ import type { PluginManifest } from '@/types'
 import { SDK_VERSION } from '@/types/plugin'
 import { createPluginApi } from './api'
 import type { PluginApi } from './api'
+import type { PluginUiApi } from './ui'
 
 // ── 插件运行时契约（稳定）──
 
@@ -21,6 +22,8 @@ export interface PluginAdapter {
   readonly sdkVersion: string
   /** 分类应用 api：查询 + 执行 */
   api: PluginApi
+  /** 插件 UI 注册面（面板 / 顶栏按钮 / 设置栏目） */
+  readonly ui: PluginUiApi
 }
 
 /** 插件 setup 上下文（插件唯一能触碰应用能力的方式） */
@@ -42,16 +45,42 @@ export interface AideaPlugin {
   teardown?: () => void
 }
 
-/** 组装最终适配层（插件唯一入口）。无需传插件 id——api 不携带命名空间。 */
+/** 登记被拒的 UI 类型（用于共享实例的拒绝实现） */
+type RejectedUi = '面板' | '顶栏按钮' | '设置栏目'
+
+/**
+ * 组装最终适配层（插件唯一入口）。
+ * 共享实例的 api 不携带命名空间；ui 的注册面仅能在插件 setup(ctx) 内经
+ * ctx.adapter.ui 使用（共享实例上的 ui 是拒绝实现，防止绕过上下文注册）。
+ */
 export function createPluginAdapter(): PluginAdapter {
   return {
     sdkVersion: SDK_VERSION,
     api: createPluginApi(),
+    ui: createRejectedUi(),
+  }
+}
+
+/** 共享适配层上的拒绝实现：提示 UI 注册仅能在插件 setup(ctx) 内使用 */
+function createRejectedUi(): PluginUiApi {
+  const warn = (kind: RejectedUi) => (): void => {
+    console.warn(`[plugin] ${kind}注册仅可在插件 setup(ctx) 内经 ctx.adapter.ui 调用`)
+  }
+  return {
+    registerPanel: warn('面板'),
+    registerTopBarButton: warn('顶栏按钮'),
+    registerSettingsCategory: warn('设置栏目'),
   }
 }
 
 // ── 重新导出（插件从这里取类型 / 工厂 / 版本）──
 export { createPluginApi } from './api'
 export type { PluginApi, NodeApi, ConnectionApi, TagApi, ProjectApi, ViewApi } from './api'
+export type {
+  PluginUiApi,
+  PluginPanelRegistration,
+  PluginTopBarButtonRegistration,
+  PluginSettingsCategoryRegistration,
+} from './ui'
 export { SDK_VERSION } from '@/types/plugin'
 export type { PluginManifest } from '@/types'

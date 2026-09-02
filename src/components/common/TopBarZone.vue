@@ -13,8 +13,8 @@
  */
 import { computed, ref } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
-import { TOP_BAR_INDEX } from '@/constants/topbar'
-import type { TopBarId, TopBarZone } from '@/constants/topbar'
+import type { TopBarKey, TopBarZone } from '@/constants/topbar'
+import { useMergedTopBarIndex, type TopBarMeta } from '@/plugin/uiMerge'
 import { writeTopBarDrag, readTopBarDrag } from '@/utils/topbar'
 
 const props = defineProps<{
@@ -23,9 +23,17 @@ const props = defineProps<{
 
 const layout = useLayoutStore()
 
-/** 本侧已放置按钮 id（按 store 顺序，响应式） */
-const orderedIds = computed<TopBarId[]>(() =>
-  props.zone === 'left' ? layout.leftTop : layout.rightTop,
+/** 合并顶栏按钮目录（内置 + 插件包装逻辑组件）——渲染组件解析源 */
+const merged = useMergedTopBarIndex()
+
+/**
+ * 本侧已放置按钮（按 store 顺序），过滤掉解析不到的 id（禁用插件残留），
+ * 避免未知按钮空渲染。携带元信息供 <component :is> 解析。
+ */
+const orderedIds = computed<{ id: TopBarKey; meta: TopBarMeta | undefined }[]>(() =>
+  (props.zone === 'left' ? layout.leftTop : layout.rightTop)
+    .map((id) => ({ id, meta: merged.value.get(id) }))
+    .filter((b): b is { id: TopBarKey; meta: TopBarMeta } => !!b.meta),
 )
 
 /** 本侧是否为空（用于空态提示） */
@@ -39,7 +47,7 @@ const suppressClick = ref(false)
 /** 跨侧投放时，本容器整体高亮为可接收目标 */
 const isDropTarget = ref(false)
 
-function onDragStart(index: number, buttonId: TopBarId, e: DragEvent): void {
+function onDragStart(index: number, buttonId: TopBarKey, e: DragEvent): void {
   dragIndex.value = index
   suppressClick.value = true
   // 写入统一跨侧拖拽协议，供另一侧容器接收本按钮
@@ -111,7 +119,7 @@ function onContainerDragLeave(): void {
     @drop.prevent="onContainerDrop"
     @dragleave="onContainerDragLeave"
   >
-    <template v-for="(id, index) in orderedIds" :key="id">
+    <template v-for="(item, index) in orderedIds" :key="item.id">
       <div
         class="top-item"
         :class="{
@@ -120,14 +128,14 @@ function onContainerDragLeave(): void {
         }"
         :draggable="true"
         @click.capture="onItemClick"
-        @dragstart.stop="onDragStart(index, id, $event)"
+        @dragstart.stop="onDragStart(index, item.id, $event)"
         @dragenter.prevent="dropIndex = index"
         @dragover.prevent="onDragOver(index, $event)"
         @dragleave="dropIndex === index && (dropIndex = null)"
         @drop.prevent="onDrop(index, $event)"
         @dragend="onDragEnd"
       >
-        <component :is="TOP_BAR_INDEX[id].component" />
+        <component :is="item.meta?.component" />
       </div>
     </template>
   </div>

@@ -12,6 +12,8 @@
  */
 import type { PluginAdapter, AideaPlugin, PluginContext, PluginManifest } from './adapter'
 import { SDK_VERSION } from '@/types/plugin'
+import { createAdditionsApi } from './api/additions'
+import { createPluginUiApi, rollbackPluginUi } from './ui'
 
 /** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。这是内部/注入的装载项。 */
 export interface PluginEntry {
@@ -47,8 +49,15 @@ interface InternalPluginContext extends PluginContext {
 function createPluginContext(adapter: PluginAdapter, manifest: PluginManifest): InternalPluginContext {
   const disposers: Array<() => void> = []
 
+  // 按插件作用域组装适配层：扩增 api.additions（项目扩展数据域），并注入专属 UI 注册面
+  const scoped: PluginAdapter = {
+    ...adapter,
+    api: { ...adapter.api, additions: createAdditionsApi(manifest.id) },
+    ui: createPluginUiApi(manifest.id),
+  }
+
   return {
-    adapter,
+    adapter: scoped,
     manifest,
     onDispose(fn: () => void): void {
       disposers.push(fn)
@@ -213,6 +222,8 @@ export class PluginManager {
       record.error = undefined
     } catch (e) {
       context.dispose()
+      // 回滚 setup 半程已注册的 UI（防半激活插件残留面板/按钮/设置栏目）
+      rollbackPluginUi(record.id)
       record.status = 'error'
       record.error = `setup 抛错：${toMessage(e)}`
     }

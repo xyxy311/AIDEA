@@ -80,8 +80,11 @@
     "statusActive": "运行中",
     "statusError": "错误",
     "reloadHint": "启用 / 禁用插件后需重启应用生效。",
+    "restartRequired": "重启后生效",
     "enableHint": "启用此插件（重启应用生效）",
-    "disableHint": "禁用此插件（重启应用生效）"
+    "disableHint": "禁用此插件（重启应用生效）",
+    "componentError": "该插件组件渲染失败",
+    "retry": "重试"
   },
   "shortcuts": {
     "recording": "请按键…",

@@ -23,7 +23,9 @@ import AppearanceSection from '@/components/settings/AppearanceSection.vue'
 import LayoutSection from '@/components/settings/LayoutSection.vue'
 import AIDirectionsSection from '@/components/settings/AIDirectionsSection.vue'
 import ShortcutsSection from '@/components/settings/ShortcutsSection.vue'
-import PluginManagerSection from '@/components/plugin/PluginManagerSection.vue'
+import PluginsSection from '@/components/settings/PluginsSection.vue'
+import PluginErrorBoundary from '@/components/plugin/PluginErrorBoundary.vue'
+import { useMergedPluginSettingsCategories, type SettingsCategoryMeta } from '@/plugin/uiMerge'
 import { t } from '@/composables/useT'
 
 defineProps<{
@@ -48,23 +50,59 @@ interface CategoryDef {
   icon: Component
 }
 
+/**
+ * 当前选中分类 id；插件设置栏目 id 为 `${pluginId}:${id}` 字符串，
+ * 需放宽为 string 联合。
+ */
+type SettingTabKey = SettingsCategoryId | string
+
 /** 当前选中分类 id（默认「外观」） */
-const activeId = ref<SettingsCategoryId>('appearance')
+const activeId = ref<SettingTabKey>('appearance')
 
-/** 当前选中分类的分区描述 key */
-const activeDescKey = computed(() => `settings.${activeId.value}Desc` as const)
-
-/** 分类 id → 右侧 Section 组件映射 */
+/** 分类 id → 右侧 Section 组件映射（仅内置；插件组件由合并目录动态解析） */
 const sections: Record<SettingsCategoryId, Component> = {
   appearance: AppearanceSection,
   layout: LayoutSection,
   aiDirections: AIDirectionsSection,
   shortcuts: ShortcutsSection,
-  plugins: PluginManagerSection,
+  plugins: PluginsSection,
 }
 
-/** 当前选中分类右侧内容组件 */
-const activeSection = computed(() => sections[activeId.value])
+/** 插件设置栏目（仅插件，合并目录提供响应式列表） */
+const mergedPluginCats = useMergedPluginSettingsCategories()
+
+/** 是否为内置分类（命中 sections 即内置） */
+const isBuiltinTab = (id: SettingTabKey): boolean => id in sections
+
+/** 当前选中插件的栏目元信息（内置分类时为 undefined） */
+const activePluginMeta = computed<SettingsCategoryMeta | undefined>(() => {
+  const id = activeId.value
+  if (isBuiltinTab(id)) return undefined
+  return mergedPluginCats.value.find((c) => c.id === id)
+})
+
+/** 当前选中分类右侧内容组件（内置用 sections；插件用合并目录，未知 id 返回 null） */
+const activeSection = computed<Component | null>(() => {
+  const id = activeId.value
+  if (isBuiltinTab(id)) return sections[id as SettingsCategoryId]
+  return activePluginMeta.value?.component ?? null
+})
+
+/** 当前选中分类标题：内置用 i18n key；插件用纯字符串 title */
+const activeTitle = computed(() => {
+  const id = activeId.value
+  if (isBuiltinTab(id)) return t(`settings.${id}`)
+  return activePluginMeta.value?.title ?? id
+})
+
+/** 当前选中分类是否为内置（内置才有分区描述） */
+const showActiveDesc = computed(() => isBuiltinTab(activeId.value))
+
+/** 内置分区描述 key（仅内置 tab 使用） */
+const activeDesc = computed(() => t(`settings.${activeId.value}Desc`))
+
+/** 插件分类导航项（内置组 → 分隔线 → 插件组） */
+const pluginNavItems = computed(() => mergedPluginCats.value)
 
 /** 设置分类表：新增分类只需在数组追加一项并在 sections 补对应映射 */
 const categories: CategoryDef[] = [
@@ -93,6 +131,7 @@ const categories: CategoryDef[] = [
         <aside class="settings-sidebar">
           <NScrollbar class="settings-sidebar-scroll">
             <div class="settings-nav">
+              <!-- 内置分类组 -->
               <button
                 v-for="cat in categories"
                 :key="cat.id"
@@ -104,6 +143,21 @@ const categories: CategoryDef[] = [
                 <NIcon :component="cat.icon" class="settings-nav-icon" />
                 <span class="settings-nav-label">{{ t(cat.titleKey) }}</span>
               </button>
+
+              <!-- 分隔线 + 插件分类组（仅在存在插件设置栏目时显示） -->
+              <template v-if="pluginNavItems.length">
+                <div class="settings-nav-divider" />
+                <button
+                  v-for="cat in pluginNavItems"
+                  :key="cat.id"
+                  type="button"
+                  class="settings-nav-item"
+                  :class="{ active: activeId === cat.id }"
+                  @click="activeId = cat.id"
+                >
+                  <span class="settings-nav-label plugin-nav-label">{{ cat.title }}</span>
+                </button>
+              </template>
             </div>
           </NScrollbar>
         </aside>
@@ -112,10 +166,18 @@ const categories: CategoryDef[] = [
         <div class="settings-content">
           <NScrollbar class="settings-content-scroll">
             <div class="settings-section">
-              <h3 class="settings-section-title">{{ t(`settings.${activeId}`) }}</h3>
-              <p class="settings-section-desc">{{ t(activeDescKey) }}</p>
+              <h3 class="settings-section-title">{{ activeTitle }}</h3>
+              <p v-if="showActiveDesc" class="settings-section-desc">{{ activeDesc }}</p>
 
-              <component :is="activeSection" />
+              <!-- 插件设置栏目外包错误边界，渲染异常隔离到占位 -->
+              <PluginErrorBoundary
+                v-if="activePluginMeta?.pluginId"
+                :plugin-id="activePluginMeta.pluginId"
+                :name="activePluginMeta.title"
+              >
+                <component :is="activeSection" />
+              </PluginErrorBoundary>
+              <component v-else :is="activeSection" />
             </div>
           </NScrollbar>
         </div>
@@ -148,6 +210,18 @@ const categories: CategoryDef[] = [
 
 .settings-nav {
   padding: 8px;
+}
+
+/* 内置组与插件组之间的分隔线 */
+.settings-nav-divider {
+  height: 1px;
+  margin: 8px 6px;
+  background: var(--color-border);
+}
+
+/* 插件分类无图标，标签左padding补齐与带图标项的视觉对齐 */
+.plugin-nav-label {
+  margin-left: 26px;
 }
 
 .settings-nav-item {

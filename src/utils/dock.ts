@@ -1,4 +1,4 @@
-import type { PanelId } from '@/constants/panels'
+import type { PanelId, PanelKey } from '@/constants/panels'
 
 /**
  * Dock 布局纯函数
@@ -15,6 +15,10 @@ import type { PanelId } from '@/constants/panels'
  *
  * 默认布局（哪些面板默认放哪侧）由面板品类表 constants/panels.ts 的
  * defaultPlacement 派生，本文件不硬编码任何面板 id。
+ *
+ * 面板键：内置面板用 PanelId；插件面板用 `${pluginId}:${id}`（PanelKey 联合）。
+ * 归一化对插件 key 的合法性由 opts.isExtraValid 判定（pluginId 前缀 ∈ 已发现插件集合），
+ * 保证「禁用→启用」循环不丢布局记录，仅「彻底移除插件」才清除。
  */
 
 /** Dock 侧标识 */
@@ -22,8 +26,8 @@ export type DockId = 'left' | 'right'
 
 /** Dock 布局状态 */
 export interface DockState {
-  leftPanels: PanelId[]
-  rightPanels: PanelId[]
+  leftPanels: PanelKey[]
+  rightPanels: PanelKey[]
   rightSizes: Record<string, number>
 }
 
@@ -54,46 +58,60 @@ export function defaultRightSizes(rightPanels: PanelId[]): Record<string, number
 }
 
 /** 有效 id 集（用于过滤脏数据） */
-function validSet(registry: PanelId[]): Set<PanelId> {
+function validSet(registry: PanelKey[]): Set<PanelKey> {
   return new Set(registry)
 }
 
-/** 默认布局（用于补充新增面板） */
+/** 默认布局（用于补充新增面板；仅含内置面板，插件面板走 ensurePanel） */
 export interface DockDefaults {
   left: PanelId[]
   right: PanelId[]
 }
 
+/** 归一化额外选项 */
+export interface NormalizeDockOptions {
+  /**
+   * 额外合法性判定：返回 true 时该 id 视为有效（即使不在 registry 内）。
+   * 用于插件面板 key（`${pluginId}:${id}`）：只要其 pluginId 前缀仍在
+   * 「已发现插件」集合中即保留布局记录（禁用→启用循环不丢位置）。
+   */
+  isExtraValid?: (id: string) => boolean
+}
+
 /**
  * 清理并规整 dock 状态：
- * - 过滤无效 / 重复 id
+ * - 过滤无效 / 重复 id（插件 key 经 opts.isExtraValid 判定）
  * - 保证互斥：同一面板出现在两侧时，优先保留在右侧
  * - 补齐缺失的尺寸记录
  * - 补充「新增的默认面板」：defaults 中未出现在任一侧的面板，按默认侧追加到末尾。
  *   保证新增面板只需在品类表登记，即可对已有用户自动生效（旧 localStorage 不含新面板时）。
+ *   注意：defaults 仅含内置面板；插件面板的首次落位由 layout.ensurePanel 负责。
  */
 export function normalizeDockState(
   state: DockState,
-  registry: PanelId[],
+  registry: PanelKey[],
   defaults?: DockDefaults,
+  opts?: NormalizeDockOptions,
 ): DockState {
   const valid = validSet(registry)
+  const isValid = (id: PanelKey): boolean =>
+    valid.has(id) || (opts?.isExtraValid?.(id) === true)
 
   // 右侧优先：记录右侧出现的 id
-  const rightSeen = new Set<PanelId>()
-  const rightPanels: PanelId[] = []
+  const rightSeen = new Set<PanelKey>()
+  const rightPanels: PanelKey[] = []
   for (const id of state.rightPanels) {
-    if (valid.has(id) && !rightSeen.has(id)) {
+    if (isValid(id) && !rightSeen.has(id)) {
       rightSeen.add(id)
       rightPanels.push(id)
     }
   }
 
   // 左侧：排除无效与已在右侧重复的面板
-  const leftSeen = new Set<PanelId>()
-  const leftPanels: PanelId[] = []
+  const leftSeen = new Set<PanelKey>()
+  const leftPanels: PanelKey[] = []
   for (const id of state.leftPanels) {
-    if (valid.has(id) && !rightSeen.has(id) && !leftSeen.has(id)) {
+    if (isValid(id) && !rightSeen.has(id) && !leftSeen.has(id)) {
       leftSeen.add(id)
       leftPanels.push(id)
     }
@@ -106,9 +124,9 @@ export function normalizeDockState(
     rightSizes[id] = typeof v === 'number' && v > 0 ? v : DEFAULT_SIZE
   }
 
-  // 补充新增的默认面板（未出现在任一侧时，按默认侧追加）
+  // 补充新增的默认面板（未出现在任一侧时，按默认侧追加；仅内置 id 参与）
   if (defaults) {
-    const placed = new Set<PanelId>([...leftPanels, ...rightPanels])
+    const placed = new Set<PanelKey>([...leftPanels, ...rightPanels])
     for (const id of defaults.left) {
       if (valid.has(id) && !placed.has(id)) {
         leftPanels.push(id)
@@ -131,7 +149,7 @@ export function normalizeDockState(
  * 把面板移入左侧（右侧移除 + 加入左侧末尾）。
  * 若面板已在左侧，则不重复添加。
  */
-export function moveToLeftCore(state: DockState, panelId: PanelId): DockState {
+export function moveToLeftCore(state: DockState, panelId: PanelKey): DockState {
   const rightPanels = state.rightPanels.filter((id) => id !== panelId)
   const leftPanels = state.leftPanels.includes(panelId)
     ? state.leftPanels
@@ -146,7 +164,7 @@ export function moveToLeftCore(state: DockState, panelId: PanelId): DockState {
  */
 export function moveToRightCore(
   state: DockState,
-  panelId: PanelId,
+  panelId: PanelKey,
   toIndex: number,
 ): DockState {
   const leftPanels = state.leftPanels.filter((id) => id !== panelId)
@@ -168,7 +186,7 @@ export function reorderRightCore(state: DockState, from: number, to: number): Do
 }
 
 /** 从两侧移除面板（回到未放置状态） */
-export function removePanelCore(state: DockState, panelId: PanelId): DockState {
+export function removePanelCore(state: DockState, panelId: PanelKey): DockState {
   const leftPanels = state.leftPanels.filter((id) => id !== panelId)
   const rightPanels = state.rightPanels.filter((id) => id !== panelId)
   return { ...state, leftPanels, rightPanels, rightSizes: dropSize(state.rightSizes, panelId) }
@@ -177,7 +195,7 @@ export function removePanelCore(state: DockState, panelId: PanelId): DockState {
 /** 设置右侧某面板的高度比例 */
 export function setRightSizeCore(
   state: DockState,
-  panelId: PanelId,
+  panelId: PanelKey,
   flex: number,
 ): DockState {
   const size = Math.max(0.1, flex)
@@ -185,7 +203,7 @@ export function setRightSizeCore(
 }
 
 /** 删除尺寸记录（面板被移出右侧时） */
-function dropSize(sizes: Record<string, number>, panelId: PanelId): Record<string, number> {
+function dropSize(sizes: Record<string, number>, panelId: PanelKey): Record<string, number> {
   if (!(panelId in sizes)) return { ...sizes }
   const next = { ...sizes }
   delete next[panelId]
@@ -199,7 +217,7 @@ export const PANEL_DRAG_MIME = 'aidea-panel'
 
 /** 面板拖拽数据（跨容器移动时携带） */
 export interface PanelDragData {
-  panelId: PanelId
+  panelId: PanelKey
   from: 'left' | 'right'
 }
 

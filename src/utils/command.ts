@@ -27,10 +27,25 @@ export interface ConnectionChange {
   new?: Partial<Connection>
 }
 
-/** 统一命令：一组节点变更 + 一组连线变更 */
+/**
+ * 项目扩展数据（additions）变更：插件项目级键值的写 / 删。
+ * 键为归一化的完整键（`${pluginId}:${key}`）；undo/redo 直接按 old/new 恢复。
+ */
+export interface AdditionChange {
+  type: 'set' | 'remove'
+  key: string
+  /** 操作前的旧值（键原本不存在时为 undefined） */
+  old?: unknown
+  /** set 的新值（remove 不携带） */
+  new?: unknown
+}
+
+/** 统一命令：一组节点变更 + 一组连线变更（+ 可选的插件 additions 变更） */
 export interface DataPatch {
   nodeChanges: NodeChange[]
   connChanges: ConnectionChange[]
+  /** 插件项目级扩展数据变更（可选：多数命令不含） */
+  additionsChanges?: AdditionChange[]
 }
 
 /** 历史栈条目 */

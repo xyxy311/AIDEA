@@ -101,6 +101,52 @@ describe('dock 纯函数', () => {
     })
   })
 
+  describe('normalizeDockState isExtraValid（插件面板 key 合法性）', () => {
+    // 已发现插件面板 key = `${pluginId}:${id}`；demo 插件的 p 面板可视作仍在
+    const known = new Set<string>(['demo:p', 'demo:q'])
+    const isExtraValid = (id: string): boolean => known.has(id)
+
+    it('插件 key 在 isExtraValid 命中时保留（禁用→启用循环不丢布局记录）', () => {
+      const raw: DockState = {
+        leftPanels: ['nodeTree', 'demo:p' as PanelId],
+        rightPanels: ['property', 'demo:q' as PanelId],
+        rightSizes: { 'demo:q': 2 },
+      }
+      const s = normalizeDockState(raw, REGISTRY, undefined, { isExtraValid })
+      expect(s.leftPanels).toContain('demo:p')
+      expect(s.rightPanels).toContain('demo:q')
+      expect(s.rightSizes['demo:q']).toBe(2)
+    })
+
+    it('插件 key 未命中 isExtraValid 时剔除（彻底移除插件）', () => {
+      const raw: DockState = {
+        leftPanels: ['nodeTree', 'ghost:x' as PanelId],
+        rightPanels: ['property', 'ghost:y' as PanelId],
+        rightSizes: {},
+      }
+      const s = normalizeDockState(raw, REGISTRY, undefined, { isExtraValid })
+      expect(s.leftPanels).not.toContain('ghost:x')
+      expect(s.rightPanels).not.toContain('ghost:y')
+    })
+
+    it('内置默认面板补充行为不变（回归）：插件 key 不影响 defaults 补全', () => {
+      const raw: DockState = {
+        leftPanels: ['nodeTree', 'references', 'search', 'tags'],
+        rightPanels: ['property', 'presets', 'demo:q' as PanelId],
+        rightSizes: { 'demo:q': 1 },
+      }
+      const s = normalizeDockState(
+        raw,
+        REGISTRY,
+        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
+        { isExtraValid },
+      )
+      // ai 仍被补到左侧末尾；插件 key 保留
+      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
+      expect(s.rightPanels).toContain('demo:q')
+    })
+  })
+
   describe('右侧内换位 reorderRightCore', () => {
     it('把 from 移到 to', () => {
       const s: DockState = {

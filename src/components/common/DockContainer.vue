@@ -11,15 +11,19 @@
  * 每个面板由 DockPanel 统一外壳渲染（标题/图标/关闭/拖拽手柄），
  * 状态全部来自 layout store，本组件不持有布局数据。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { useLayoutStore } from '@/stores/layout'
-import type { PanelId } from '@/constants/panels'
+import type { PanelKey } from '@/constants/panels'
+import { useMergedPanelIndex } from '@/plugin/uiMerge'
 import { readPanelDrag, writePanelDrag, type PanelDragData } from '@/utils/dock'
 import { t } from '@/composables/useT'
 import DockPanel from './DockPanel.vue'
 
 const layout = useLayoutStore()
+
+/** 合并面板目录（用于过滤未注册的禁用插件残留） */
+const merged = useMergedPanelIndex()
 
 /** 容器根元素（用于测量高度换算 flex） */
 const containerEl = ref<HTMLElement | null>(null)
@@ -27,7 +31,7 @@ const containerEl = ref<HTMLElement | null>(null)
 // ── 拖拽换位状态 ──
 /** 当前拖拽源信息（仅同容器内拖拽时在本地维护；跨容器靠 dataTransfer） */
 const dragSource = ref<PanelDragData | null>(null)
-/** 当前 hover 的目标面板索引（用于指示条） */
+/** 当前 hover 的目标面板索引（真实索引，用于指示条） */
 const dragOverIndex = ref<number | null>(null)
 
 // ── resize 状态 ──
@@ -36,6 +40,30 @@ const resizeStartY = ref(0)
 const resizeStartB = ref(1)
 const resizeTotal = ref(2)
 const resizeScale = ref(1)
+/** resize 涉及的两块面板 id（用 id 定位，避免被隐藏面板隔断时索引错位） */
+const resizeAId = ref<PanelKey | null>(null)
+const resizeBId = ref<PanelKey | null>(null)
+
+/**
+ * 右侧可见面板：过滤掉未注册（禁用插件残留）的 id，
+ * 避免未知面板空渲染破坏 flex 布局。携带其在 layout 中的真实索引供逻辑用。
+ */
+const visibleRight = computed<{ id: PanelKey; realIndex: number }[]>(() =>
+  layout.rightPanels
+    .map((id, realIndex) => ({ id, realIndex }))
+    .filter((p) => merged.value.has(p.id)),
+)
+
+/** 给定真实索引，返回其后第一个可见面板的真实索引（含自身之后沿数组找）；无则 -1 */
+function nextVisibleIndex(fromRealIndex: number): number {
+  for (let i = fromRealIndex + 1; i < layout.rightPanels.length; i++) {
+    if (merged.value.has(layout.rightPanels[i])) return i
+  }
+  return -1
+}
+
+/** 右侧是否为空（按可见面板判断，全被隐藏则显示空态） */
+const rightEmpty = computed(() => visibleRight.value.length === 0)
 
 /** 重置本地拖拽指示状态 */
 function resetDrag(): void {
@@ -44,7 +72,7 @@ function resetDrag(): void {
 }
 
 /** DockPanel 拖拽起始（同容器内） */
-function onPanelDragStart(panelId: PanelId, ev: DragEvent): void {
+function onPanelDragStart(panelId: PanelKey, ev: DragEvent): void {
   dragSource.value = { panelId, from: 'right' }
   writePanelDrag(ev, { panelId, from: 'right' })
 }
@@ -101,18 +129,23 @@ useEventListener('dragend', resetDrag)
 const MIN_FLEX = 0.1
 
 function onResizeDown(index: number, e: PointerEvent): void {
-  const panels = layout.rightPanels
-  const a = panels[index]
-  const b = panels[index + 1]
+  const a = layout.rightPanels[index]
+  const nextIdx = nextVisibleIndex(index)
+  const b = nextIdx >= 0 ? layout.rightPanels[nextIdx] : undefined
   if (!a || !b) return
   const flexA = layout.rightSizes[a] ?? 1
   const flexB = layout.rightSizes[b] ?? 1
   resizeIndex.value = index
+  resizeAId.value = a
+  resizeBId.value = b
   resizeStartY.value = e.clientY
   resizeStartB.value = flexB
   resizeTotal.value = flexA + flexB
   // 像素 → flex 比例：flex 总量 / 容器像素高度
-  const totalFlex = panels.reduce((sum, id) => sum + (layout.rightSizes[id] ?? 1), 0)
+  const totalFlex = layout.rightPanels.reduce(
+    (sum, id) => sum + (layout.rightSizes[id] ?? 1),
+    0,
+  )
   const h = containerEl.value?.clientHeight ?? 0
   resizeScale.value = h > 0 ? totalFlex / h : 1
   ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
@@ -123,9 +156,8 @@ function onResizeDown(index: number, e: PointerEvent): void {
 useEventListener('pointermove', (e: PointerEvent) => {
   const i = resizeIndex.value
   if (i === null) return
-  const panels = layout.rightPanels
-  const a = panels[i]
-  const b = panels[i + 1]
+  const a = resizeAId.value
+  const b = resizeBId.value
   if (!a || !b) return
   const deltaPx = e.clientY - resizeStartY.value
   const flexDelta = deltaPx * resizeScale.value
@@ -140,10 +172,12 @@ useEventListener('pointermove', (e: PointerEvent) => {
 /** 松开结束 resize */
 useEventListener('pointerup', () => {
   resizeIndex.value = null
+  resizeAId.value = null
+  resizeBId.value = null
 })
 
 /** 面板关闭 → 从 dock 移除（回未放置状态） */
-function onPanelClose(panelId: PanelId): void {
+function onPanelClose(panelId: PanelKey): void {
   layout.removePanel(panelId)
 }
 </script>
@@ -155,34 +189,34 @@ function onPanelClose(panelId: PanelId): void {
     @dragover.prevent
     @drop="onContainerDrop"
   >
-    <template v-if="layout.rightPanels.length > 0">
-      <template v-for="(id, index) in layout.rightPanels" :key="id">
+    <template v-if="!rightEmpty">
+      <template v-for="(item, vi) in visibleRight" :key="item.id">
         <div
           class="dock-item"
           :class="{
-            'is-dragging': dragSource?.panelId === id,
+            'is-dragging': dragSource?.panelId === item.id,
             'is-drag-over':
-              dragOverIndex === index &&
+              dragOverIndex === item.realIndex &&
               dragSource !== null &&
-              dragSource.panelId !== id,
+              dragSource.panelId !== item.id,
           }"
-          :style="{ flex: layout.rightSizes[id] ?? 1, minHeight: 0 }"
-          @dragover="onPanelDragOver(index, $event)"
-          @drop="onPanelDrop(index, $event)"
-          @dragenter.prevent="dragOverIndex = index"
+          :style="{ flex: layout.rightSizes[item.id] ?? 1, minHeight: 0 }"
+          @dragover="onPanelDragOver(item.realIndex, $event)"
+          @drop="onPanelDrop(item.realIndex, $event)"
+          @dragenter.prevent="dragOverIndex = item.realIndex"
         >
           <DockPanel
-            :panel-id="id"
+            :panel-id="item.id"
             @drag-start="onPanelDragStart"
             @close="onPanelClose"
           />
         </div>
         <!-- 面板间 resize handle -->
         <div
-          v-if="index < layout.rightPanels.length - 1"
+          v-if="vi < visibleRight.length - 1"
           class="dock-resize"
-          :class="{ active: resizeIndex === index }"
-          @pointerdown="onResizeDown(index, $event)"
+          :class="{ active: resizeIndex === item.realIndex }"
+          @pointerdown="onResizeDown(item.realIndex, $event)"
         />
       </template>
     </template>

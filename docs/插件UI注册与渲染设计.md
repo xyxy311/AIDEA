@@ -2,7 +2,7 @@
 
 > 本文是 `docs/插件系统设计.md` 的细化，专讲**主程序如何加载插件注册的自定义 UI 组件并渲染**。
 > 覆盖三类：**新面板（panel）**、**顶栏功能按钮（topBarButton）**、**设置栏目（settingsCategory）**。
-> 前提：插件 `setup(ctx)` 经由**适配层 `ctx.adapter`** 注册这些 UI（Phase 2 增量）；加载方式（当前 Vite 编译期 `StaticPluginSource`，未来 Electron 运行时 `RuntimePluginSource`）对本文所述机制**不可见**。
+> 前提：插件 `setup(ctx)` 经由**适配层 `ctx.adapter`** 注册这些 UI（Phase 2 增量）；加载方式（当前 Vite 编译期 `collectPluginEntries`，未来 Electron 运行时动态载入）对本文所述机制**不可见**。
 
 ---
 
@@ -21,7 +21,7 @@
 
 - **持久化层**（`aidea-dock-*` / `aidea-top-*`、插件启停清单）**从不存组件引用**，只存归一化后的 `pluginId:key` 字符串 id。
 - **内存注册表**（reactive）存**运行时组件对象**：该对象由插件在 `setup` 时经 `ctx.adapter.ui.register*` 现场传入，来源是"加载的模块"（编译期 `import.meta.glob` 的打包模块，或未来运行时 `import()` 的模块）。内核不 `import` 插件代码，只**接收** setup 传入的对象。
-- 重启后：`localStorage` 里只躺 id → `PluginManager` 走 `PluginSource.list()` 重新发现 → `setup` 重新注册 → 注册表重建对象引用 → 合并层按 id 还原渲染。**同一份 id + 同一套机制对两种加载方式逐字成立。**
+- 重启后：`localStorage` 里只躺 id → `PluginManager` 经装载收集（`collectPluginEntries`）重新发现 → `setup` 重新注册 → 注册表重建对象引用 → 合并层按 id 还原渲染。**同一份 id + 同一套机制对两种加载方式逐字成立。**
 
 因此「不携带编译期模块引用」的准确含义是：**内核/持久化不得有硬编码的模块 import 或模块 id → 组件 的全局映射**；而 setup 时现场传递的运行时对象在这一语义下是合法的，也是 Vue 组件在运行时必然的存在形态。
 
@@ -99,7 +99,7 @@ state:
 
 actions:
   register*(…): void         // 归一 key → 冲突检查 → 写入（冲突拒注册返回 false）
-  unregisterByPlugin(pluginId: string): void       // teardown/挂起时按插件批量清除
+  unregisterByPlugin(pluginId: string): void       // setup 抛错回滚 / 错误恢复时按插件批量清除
   / / 由 PluginManager 统一调用，插件不直接碰本 store
 ```
 
@@ -196,7 +196,7 @@ function wrapTopBarButton(entry: PluginTopBarButtonEntry): Component {
 
 ### 8.2 设计：合法集合 = 内置 ∪ **已发现**插件 id（而非已注册）
 
-关键改动：归一化的合法 id 集合扩大到 `内置 id ∪ discoveredPluginPanelKeys`。`StaticPluginSource.list()` 在启动时**同步**可得全部插件（含未启用），故 discovery 集合在归一化前就绪。
+关键改动：归一化的合法 id 集合扩大到 `内置 id ∪ discoveredPluginPanelKeys`。`collectPluginEntries()` 在启动时**同步**可得全部插件（含未启用），故 discovery 集合在归一化前就绪。
 
 这一判断带来三个想要的边界行为：
 
@@ -235,7 +235,7 @@ function wrapTopBarButton(entry: PluginTopBarButtonEntry): Component {
 ```
 app mount
  ├─ PluginManager.init()
- │   ├─ source.list()  ──────────────► discovered ids（StaticPluginSource 同步）→ 供 layout 归一化 known ids
+ │   ├─ collectPluginEntries() ──► discovered ids（编译期 glob 同步）→ 供 layout 归一化 known ids
  │   ├─ 读 localStorage('aidea-plugins') → enabled 集合
  │   └─ 依次（manifest 顺序，确定性）：
  │        loader() → m.default → 校验 manifest(id/sdkVersion)
@@ -255,8 +255,8 @@ app mount
 
 ## 十一、生命周期与注册项清理
 
-- `active → deactivating`：`PluginManager.unregisterByPlugin(pluginId)` 批量删 reactive 表项（合并层自动收窄，UI 立即消失）→ 执行 `onDispose` 收集的副作用 → 调 `teardown()`。任一步抛错只置该插件 `error` 态。
-- **禁用/启用统一重启生效**（主文档 §4.4 / §8.1），运行时不做动态卸载注册；但 `unregisterByPlugin` 仍实现，服务于错误恢复与 re-activate。
+- **无运行期卸载**：禁用/启用统一重启生效（主文档 §4.4 / §8.1），不存在 `active → deactivating` 的动态卸载转移。
+- `unregisterByPlugin(pluginId)`：仅在 **setup 抛错回滚 / 错误恢复**时，按插件批量删除 reactive 表项（合并层自动收窄，UI 立即消失）。任一步抛错只置该插件 `error` 态。
 - **setup 半程抛错回滚**：注册时按顺序记录，抛错后逆序删，避免半激活插件残留 UI。
 
 ---
@@ -297,7 +297,7 @@ app mount
 
 | 阶段 | 内容 | 完成标志 |
 | --- | --- | --- |
-| **2a** | `src/stores/plugin.ts` 注册表 + `types/plugin.ts` UI 类型 + `adapter.ts` 组装 `ui` + Phase 1 的 `context/manager` 装载链路 + **registerPanel** + `uiMerge.ts` mergedPanel + 渲染点改造 + `ensurePanel` | 插件面板可注册、可拖拽、可持久化、错误隔离 |
+| **2a** | `src/stores/plugin.ts` 注册表 + `types/plugin.ts` UI 类型 + `adapter.ts` 组装 `ui` + Phase 1 的 manager 装载链路 + **registerPanel** + `uiMerge.ts` mergedPanel + 渲染点改造 + `ensurePanel` | 插件面板可注册、可拖拽、可持久化、错误隔离 |
 | **2b** | **registerTopBarButton** + `wrapTopBarButton` 工厂 + mergedTopBar + `ensureTop` + onClick 隔离 | 顶栏按钮可注册、可换位 |
 | **2c** | **registerSettingsCategory** + `useSettingsCategories`（分隔线分组） + 合并视图 + `PluginErrorBoundary` | 设置栏目可注册、分隔线隔离 |
 
@@ -309,6 +309,28 @@ app mount
 
 - §五.2 `PluginAdapter`：补 `ui`（本轮新发布面）。
 - §十一目录规划：`src/stores/plugin.ts`（已有规划）承接注册表；**新增** `src/plugin/uiMerge.ts`、`src/components/plugin/PluginErrorBoundary.vue`。
-- §四.2 `PluginSource.list()` 语义扩展：除"为 PluginManager 提供候选"，同时其返回的 discovered ids 兜底布局归一化合法集合（见 §八）。
+- §四.2 `collectPluginEntries()` 语义扩展：除"为 PluginManager 提供候选"，同时其产出的 discovered ids 兜底布局归一化合法集合（见 §八）。
 - §九存储方案：`aidea-dock-* / aidea-top-*` 中新增插件 id，由 §八归一化维护。
 - 勾住 §四.4 状态机：setup 抛错/半程注册回滚（§十一）与"单插件错误隔离"一致。
+
+---
+
+## 十七、实现落定记录（2026-08-30 已实现）
+
+> 本节记录"设计 → 实现"的落地区别，供维护者对照。设计为未定稿、可演进，此处以实际代码为准。
+
+### 17.1 已实现动作
+- **SDK 面**：`PluginContext.adapter.ui` 已实现（类型与工厂在 `src/plugin/ui.ts`，经 `adapter.ts` re-export 给插件）。注册项类型遵循「从实现派生」现状，定义于 `ui.ts` 而非 `types/plugin.ts`（后者只留无依赖快照/契约）。
+- **作用域**：`PluginManager.createPluginContext` 为每个插件组装 `api`（含 per-plugin `additions: createAdditionsApi(manifest.id)`）与 `ui: createPluginUiApi(manifest.id)`；共享 adapter 的 `ui` 为拒绝实现。
+- **注册表**：`stores/plugin.ts` 三个 reactive Map（uiPanels/uiTopBarButtons/uiSettingsCategories）+ 注册/回滚方法；**注册成功即调 `layout.ensurePanel/ensureTop` 落位**（`defaultPlacement` 缺失兜底 'right' / `zone` 兜底 'left'）。
+- **合并层**：`src/plugin/uiMerge.ts`（useMergedPanelIndex / useMergedTopBarIndex / useMergedPluginSettingsCategories / usePanelMeta）。**内置设置分类仍由 SettingsModal 自持**（避免反向耦合），merged 仅暴露插件设置栏目。
+- **布局归一化**：`utils/dock.ts`/`utils/topbar.ts` 新增 `opts.isExtraValid`；layout store 用 `collectPluginEntries()` 派生的 discovered 插件 id 判定插件 key 合法性——禁用→启用不丢位置，彻底移除才清除。
+- **渲染点**：DockPanel（PanelKey + merged meta + title 覆盖 + 插件面板包 ErrorBoundary）、ActivityBar（merged catalog + 「+」列表）、DockContainer（filter 未注册插件残留 + 真实索引 resize）、TopBarZone（merged topbar index）、SettingsModal（内置组 + 分隔线 + 插件组 + 新建内置 'plugins' 分类）。
+- **插件管理栏目**：`src/components/settings/PluginsSection.vue`（取代并删除旧 `plugin/PluginManagerSection.vue`；冒烟测试重指向）。
+- **additions 全链**：`stores/additions.ts` + `plugin/api/additions.ts`（scoped 前缀）+ `history.ts`（additionsChanges 应用/合并/batch）+ `projectFile.ts`（additions 序列化/解析，前缀过滤）+ `useProjectFile.ts` 调用点（打开 load / 保存 serialize / 新建 clear）。
+- **测试**：`ui-registry.test.ts`、`stores/additions.test.ts`、`utils/dock.test.ts`/`topbar.test.ts` 的 isExtraValid 用例；全量 `type-check` 零错误 + `test` 408 全绿。
+
+### 17.2 已确认的搁置项 / 偏差
+- **provide('aidea-plugin-adapter') 未实现（后续增量）**：插件面板/设置组件暂时拿不到 per-plugin 的 scoped adapter；示例插件经 `createAdditionsApi('hello')` 变通（同作用域手动构造，与 manager 内部同款机制）。真实插件如需在 UI 组件内写 additions，待补 provide 后统一经 `ctx.adapter` 能力，避免直调内部工厂。
+- **布局归一化的 discovered 插件 id 依赖编译期同步读取**：当前取 `collectPluginEntries()`。若未来迁运行时加载，`layout.store` 的 `isPluginKeyValid` 需改为异步注入来源。
+- **UI 注册 id 冲突仅为"拒注册 + console.warn"**，不置插件 error（不影响其余注册项）。

@@ -15,17 +15,21 @@ import { computed, ref } from 'vue'
 import { NTooltip, NDropdown } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 import { useLayoutStore } from '@/stores/layout'
-import { PANEL_CATALOG, type PanelId, type PanelDef } from '@/constants/panels'
+import type { PanelId, PanelKey } from '@/constants/panels'
+import { useMergedPanelIndex, type PanelMeta } from '@/plugin/uiMerge'
 import { readPanelDrag, writePanelDrag } from '@/utils/dock'
 import { t } from '@/composables/useT'
 
 const layout = useLayoutStore()
 
-/** 按 layout store 的面板顺序，解析每个面板的元信息（品类表单一来源） */
-const orderedPanels = computed<PanelDef[]>(() =>
+/** 合并面板目录（内置优先，插件兜底）——活动栏图标/标题单一来源 */
+const merged = useMergedPanelIndex()
+
+/** 按 layout store 的面板顺序，解析每个面板的元信息（内置或插件） */
+const orderedPanels = computed<PanelMeta[]>(() =>
   layout.panels
-    .map((id) => PANEL_CATALOG.find((p) => p.id === id))
-    .filter((p): p is PanelDef => !!p),
+    .map((id) => merged.value.get(id))
+    .filter((p): p is PanelMeta => !!p),
 )
 
 // ── HTML5 拖拽排序状态 ──
@@ -35,7 +39,7 @@ const dropIndex = ref<number | null>(null)
 /** 拖拽刚结束时抑制紧随其后的 click，避免误切换面板 */
 const suppressClick = ref(false)
 
-function onDragStart(index: number, panel: PanelDef, e: DragEvent): void {
+function onDragStart(index: number, panel: PanelMeta, e: DragEvent): void {
   dragIndex.value = index
   suppressClick.value = true
   // 写入统一跨容器拖拽协议，供右侧 dock 接收本面板
@@ -66,20 +70,23 @@ function onContainerDragLeave(): void {
 
 // ── 底部「添加面板」─ 浮层列出未放置面板 ──
 
-/** 未放置的面板：既不在左侧也不在右侧的品类型面板 */
-const unplacedPanels = computed<PanelDef[]>(() =>
-  PANEL_CATALOG.filter(
+/** 未放置的面板：既不在左侧也不在右侧的全部可放置面板（内置 + 插件） */
+const unplacedPanels = computed<PanelMeta[]>(() =>
+  [...merged.value.values()].filter(
     (p) => !layout.panels.includes(p.id) && !layout.rightPanels.includes(p.id),
   ),
 )
 
-/** 添加面板下拉选项 */
+/** 添加面板下拉选项（优先插件 title 字符串，否则内置 titleKey i18n） */
 const addMenuOptions = computed(() =>
-  unplacedPanels.value.map((p) => ({ label: t(p.titleKey), key: p.id })),
+  unplacedPanels.value.map((p) => ({
+    label: p.title ?? t(p.titleKey ?? p.id),
+    key: p.id,
+  })),
 )
 
 function handleAddSelect(key: string): void {
-  layout.moveToLeft(key as PanelId)
+  layout.moveToLeft(key as PanelKey)
 }
 
 function onDragOver(index: number, e: DragEvent): void {
@@ -110,13 +117,14 @@ function endDrag(): void {
   }, 0)
 }
 
-/** 点击切换面板（拖拽刚结束时忽略该次 click） */
-function handleClick(id: PanelId): void {
+/** 点击切换面板（拖拽刚结束时忽略该次 click）。layout.togglePanel 参数为内置类型，
+ *  插件面板 key 经 as 收窄传入（运行时只存字符串，语义不变）。 */
+function handleClick(id: PanelKey): void {
   if (suppressClick.value) {
     suppressClick.value = false
     return
   }
-  layout.togglePanel(id)
+  layout.togglePanel(id as PanelId)
 }
 </script>
 
@@ -154,7 +162,7 @@ function handleClick(id: PanelId): void {
           <component :is="panel.icon" class="activity-icon" />
         </button>
       </template>
-      {{ t(panel.titleKey) }}
+      {{ panel.title ?? t(panel.titleKey ?? panel.id) }}
     </NTooltip>
 
     <!-- 底部「添加面板」按钮：弹出未放置面板浮层 -->

@@ -72,6 +72,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **面板纯化**：`panels/` 下面板为纯内容组件，**不携带 header/hideHeader/title**；标题、图标、关闭、拖拽全由外层 `DockPanel` 提供。
 - **左右互通**：面板可在左侧（活动栏/单面板区）与右侧（dock）之间拖拽移动。统一 HTML5 drag 协议由 `utils/dock.ts` 的 `PANEL_DRAG_MIME`/`writePanelDrag`/`readPanelDrag` 提供（dataTransfer 携带 `{panelId, from:'left'|'right'}`，MIME `aidea-panel`）：右侧面板拖到活动栏 → `moveToLeft`；活动栏图标/左侧面板拖到右侧 dock → `moveToRight`。活动栏底部「+」可把未放置面板加回左侧。
 - **layout store**：`rightPanels`（右侧顺序）/`rightSizes`（各面板 flex 比例）/`moveToLeft`/`moveToRight`/`reorderRight`/`setRightSize`/`removePanel`/`resetDock`。纯状态转换在 `utils/dock.ts`（可单测）。默认左右面板由品类表 `defaultPlacement` 派生（不硬编码）。归属/顺序/高度持久化到 localStorage，设置「恢复默认布局」一键重置。
+- **delta 排布模型**：localStorage 只存「用户显式改动」（顺序覆盖 / 跨侧移动 / 关闭 = `removed` / 尺寸），渲染目录 = `deriveDockLayout(uiRegistry 登记表, delta)` 实时派生（`layout.leftPanels`/`rightPanels`/`unplacedPanels`）；新增内置面板 / 插件注册自动按默认侧出现，恢复默认 = 清空 delta。
 - 详见 `docs/可拖拽面板与左右侧边栏.md`。
 
 ### 顶部图标条（LeftTopBar + RightTopBar）
@@ -80,7 +81,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **按钮注册机制（模仿侧边栏品类表）**：全量品类表 `constants/topbar.ts`（`TOP_BAR_CATALOG`，含 `id/titleKey/defaultZone/component`），按钮逻辑组件位于 `components/topbar/`。新增顶部按钮只需登记品类表 + 提供对应按钮组件，左/右顶部条、拖拽排序、跨区放置、默认布局自动生效。
 - **通用按钮模板 `TopBarButton`**（`common/TopBarButton.vue`）：唯一按钮外壳，统一 tooltip / active（底部主色条）/ primary（主色填充）/ disabled / split-button 下拉菜单；各按钮只提供 `icon/title/disabled/active/variant/menu` 与 `@click`。
 - **通用容器 `TopBarZone`**（`common/TopBarZone.vue`）：按 `layout` store 某侧顺序（`leftTop`/`rightTop`）渲染已注册按钮 + 同侧拖拽排序（`layout.reorderTop`）/ 跨区放置（`layout.moveTopZone`，写入 `utils/topbar.ts` 的 `TOP_DRAG_MIME` 数据）；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位。`LeftTopBar`/`RightTopBar` 是固定 zone 的薄封装。
-- 顺序与归属持久化到 `localStorage`（`aidea-top-left` / `aidea-top-right`），加载时 `normalizeTopBarState` 清理脏数据并补新增默认按钮；设置「恢复默认布局」调用 `layout.resetDock()`（内含 `resetTopBar`）。
+- 顺序与归属持久化到 `localStorage`（`aidea-top-left` / `aidea-top-right`），只存用户显式顺序覆盖（delta），渲染目录 = `deriveTopLayout(uiRegistry 登记表, delta)` 实时派生（`layout.topLeft`/`topRight`），新增按钮自动出现；设置「恢复默认布局」调用 `layout.resetDock()`（内含 `resetTopBar`）。
 - 文件操作经 `inject('projectFile')`（AppShell 注入单实例）；设置按钮经 `inject('openSettings')`；撤销/重做经 `commands.undo()/redo()` 按 `canUndo/canRedo` 禁用。
 - 详见 `docs/顶部栏按钮注册与拖拽.md`。
 

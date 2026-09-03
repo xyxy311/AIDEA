@@ -1,13 +1,18 @@
 /**
  * ui.ts —— 插件 UI 注册子系统（面板 / 顶栏按钮 / 设置栏目）
  *
- * 插件 setup(ctx) 经 ctx.adapter.ui 现场注册**运行时组件对象**；
+ * 插件 setup(ctx) 经 ctx.adapter.ui 现场注册**运行时组件对象**。
+ * 注册去向统一为 **uiRegistry 登记总表**（stores/uiRegistry.ts）：
+ * 内置目录（PANEL_CATALOG / TOP_BAR_CATALOG / SETTINGS_CATALOG）已在 store 初始化时
+ * seed 进同一张表；插件条目（origin='plugin'，key = `${pluginId}:${id}`）经本模块
+ * 转发写入 uiRegistry，排布（顺序 / 归类 / 持久化）由 layout store 纯派生，无需任何落位调用。
+ *
  * 本模块负责：
- * - 定义插件 UI 注册项类型（Registration）与注册表条目（Entry，含归因）。
+ * - 定义插件 UI 注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
  * - 按插件作用域组装 PluginUiApi（createPluginUiApi）：校验短 id，冲突/非法时
  *   console.warn 并跳过（不抛错，其余注册项继续生效）。
- * - setup 抛错时的批量回滚（rollbackPluginUi）。
- * - 顶栏按钮描述符 → 等价逻辑组件（wrapTopBarButton），供 TopBarZone 经合并层零改动渲染。
+ * - 顶栏按钮描述符 → 等价逻辑组件（wrapTopBarButton），供 uiRegistry 存储，TopBarZone 零改动渲染。
+ * - setup 抛错时的批量回滚（rollbackPluginUi → registry.removePlugin）。
  *
  * 命名空间约束：pluginId 与各注册短 id 不得含 ':'（归一用 ':' 连接）。
  * 本模块只接收插件 setup 现场传入的运行对象，不持有任何编译期模块引用。
@@ -16,7 +21,7 @@ import { defineComponent, h } from 'vue'
 import type { Component } from 'vue'
 import type { TopBarZone } from '@/constants/topbar'
 import TopBarButton from '@/components/common/TopBarButton.vue'
-import { usePluginStore } from '@/stores/plugin'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 
 /**
  * 下拉菜单单项（结构上与 TopBarButton 的 TopBarMenuOption 兼容）。
@@ -80,30 +85,9 @@ export interface PluginSettingsCategoryRegistration {
   component: Component
 }
 
-// ── 注册表条目（注册项 + 归因）──
-
-/** 插件面板注册条目：注册项 + 归一 key + 来源插件归因 */
-export interface PluginPanelEntry extends PluginPanelRegistration {
-  /** 归一化完整键：`${pluginId}:${id}` */
-  key: string
-  pluginId: string
-}
-
-/** 插件顶栏按钮注册条目：注册项 + 归一 key + 来源插件归因 */
-export interface PluginTopBarButtonEntry extends PluginTopBarButtonRegistration {
-  key: string
-  pluginId: string
-}
-
-/** 插件设置栏目注册条目：注册项 + 归一 key + 来源插件归因 */
-export interface PluginSettingsCategoryEntry extends PluginSettingsCategoryRegistration {
-  key: string
-  pluginId: string
-}
-
 // ── 插件可获得的能力面（adapter.ui）──
 
-/** 插件 UI 注册 API（只增不改，稳定层） */
+/** 插件 UI 注册 API（只增不改，稳定层）。注册方法均返回 void；冲突检测交由 registry（warn + 拒绝） */
 export interface PluginUiApi {
   registerPanel(entry: PluginPanelRegistration): void
   registerTopBarButton(entry: PluginTopBarButtonRegistration): void
@@ -120,9 +104,10 @@ function isValidShortId(id: string): boolean {
 /**
  * 按插件作用域组装 PluginUiApi。
  * 非法短 id / key 冲突：console.warn 并跳过（不抛错，其余注册项继续生效）。
+ * 注册最终落位到 uiRegistry 登记总表（origin='plugin'，key = `${pluginId}:${id}`）。
  */
 export function createPluginUiApi(pluginId: string): PluginUiApi {
-  const store = usePluginStore
+  const registry = useUiRegistryStore
 
   /** 校验某注册项的短 id；非法时 warn 并返回 false */
   function requireValidId(kind: string, id: string): boolean {
@@ -138,21 +123,29 @@ export function createPluginUiApi(pluginId: string): PluginUiApi {
   return {
     registerPanel(entry) {
       if (!requireValidId('面板', entry.id)) return
-      if (!store().registerUiPanel(pluginId, entry)) {
+      if (!registry().registerPluginPanel(pluginId, entry)) {
         console.warn(`[plugin] ${pluginId} 面板「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
     },
 
     registerTopBarButton(entry) {
       if (!requireValidId('顶栏按钮', entry.id)) return
-      if (!store().registerUiTopBarButton(pluginId, entry)) {
+      const wrapped = wrapTopBarButton(entry)
+      if (
+        !registry().registerPluginTopBarButton(pluginId, {
+          id: entry.id,
+          title: entry.title,
+          component: wrapped,
+          defaultZone: entry.zone ?? 'left',
+        })
+      ) {
         console.warn(`[plugin] ${pluginId} 顶栏按钮「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
     },
 
     registerSettingsCategory(entry) {
       if (!requireValidId('设置栏目', entry.id)) return
-      if (!store().registerUiSettingsCategory(pluginId, entry)) {
+      if (!registry().registerPluginSettingsCategory(pluginId, entry)) {
         console.warn(`[plugin] ${pluginId} 设置栏目「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
     },
@@ -161,11 +154,12 @@ export function createPluginUiApi(pluginId: string): PluginUiApi {
 
 /**
  * 回滚某插件的全部 UI 注册（setup 半程抛错时调用）。
- * 任一步抛错仅 console.warn，不向外抛。
+ * 经 uiRegistry.removePlugin 清理 origin='plugin' 且 pluginId 匹配的条目；
+ * 布局派生自动收缩，无需额外落位操作。任一步抛错仅 console.warn，不向外抛。
  */
 export function rollbackPluginUi(pluginId: string): void {
   try {
-    usePluginStore().unregisterPluginUi(pluginId)
+    useUiRegistryStore().removePlugin(pluginId)
   } catch (e) {
     console.warn('[plugin] 回滚插件 UI 注册失败', e)
   }
@@ -177,12 +171,12 @@ function legalizeComponentName(key: string): string {
 }
 
 /**
- * 把插件顶栏按钮描述符包装为等价逻辑组件（供 TopBarZone 经合并层零改动渲染）。
+ * 把插件顶栏按钮描述符包装为等价逻辑组件（供 uiRegistry 存储，TopBarZone 零改动渲染）。
  * onClick 统一 try/catch 隔离；disabled 为惰性取值，渲染期实时求值。
  */
-export function wrapTopBarButton(entry: PluginTopBarButtonEntry): Component {
+export function wrapTopBarButton(entry: PluginTopBarButtonRegistration): Component {
   return defineComponent({
-    name: legalizeComponentName(`PluginTopButton_${entry.key}`),
+    name: legalizeComponentName(`PluginTopButton_${entry.id}`),
     setup() {
       return () =>
         h(TopBarButton, {
@@ -196,7 +190,7 @@ export function wrapTopBarButton(entry: PluginTopBarButtonEntry): Component {
             try {
               entry.onClick()
             } catch (e) {
-              console.error(`[plugin] ${entry.pluginId} 顶栏按钮点击抛错`, e)
+              console.error(`[plugin] 顶栏按钮「${entry.id}」点击抛错`, e)
             }
           },
         })

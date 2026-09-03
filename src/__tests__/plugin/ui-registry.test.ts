@@ -1,24 +1,28 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, h } from 'vue'
-import { createPluginUiApi, type PluginPanelRegistration } from '@/plugin/ui'
-import { usePluginStore } from '@/stores/plugin'
-import { useLayoutStore } from '@/stores/layout'
+import { mount } from '@vue/test-utils'
+import {
+  createPluginUiApi,
+  rollbackPluginUi,
+  wrapTopBarButton,
+  type PluginPanelRegistration,
+  type PluginTopBarButtonRegistration,
+} from '@/plugin/ui'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 
 /**
  * 插件 UI 注册契约测试（ui-registry）：
- * 覆盖 registerPanel / registerTopBarButton / registerSettingsCategory 在
- * `stores/plugin.ts` 注册表与 `layout` 落位的实际行为。
+ * 针对 createPluginUiApi + uiRegistry 登记总表（stores/uiRegistry.ts）的实际行为。
  *
  * 关键事实（以实代码为准，勿臆测）：
- * - `registerUiPanel` / `registerUiTopBarButton` / `registerUiSettingsCategory`
- *   （stores/plugin.ts）**只写** uiPanels / uiTopBarButtons / uiSettingsCategories 三个 reactive Map，
- *   归一 key 为 `${pluginId}:${id}`，冲突拒绝覆盖。
- * - store 层**不**对 defaultPlacement / zone 做存储时兜底（省略时存 undefined）；`'right'` / `'left'`
- *   缺省发生在 `registerUiPanel` 调 `layout.ensurePanel(key, entry.defaultPlacement ?? 'right')` 与
- *   `registerUiTopBarButton` 调 `layout.ensureTop(key, entry.zone ?? 'left')` 的落位参数处。
- * - `layout.ensurePanel / ensureTop`（stores/layout.ts）**已**接入注册路径：注册面板 / 顶栏按钮
- *   后，插件 key 会按缺省放置侧被追加到 `rightPanels / leftTop` 末尾（幂等，不重复追加）。
+ * - createPluginUiApi 的方法**返回 void**；冲突 / 非法 id 由 uiRegistry 内建校验
+ *   （registerPlugin* 返回 false + console.warn），api 层据此 warn 并跳过，不抛错。
+ * - 注册去向为 uiRegistry：key = `${pluginId}:${id}`，origin='plugin'，含 pluginId 归因；
+ *   defaultPlacement 缺省 'right'、顶栏 defaultZone 缺省 'left' 在 registry 写入时兜底。
+ * - 顶栏按钮：api 层先 wrapTopBarButton 包装为逻辑组件，再连同 { id, title, defaultZone } 传入 registry。
+ * - 回滚：rollbackPluginUi → registry.removePlugin(pluginId)，三表 demo:* 全部清除。
+ * - 排布（layout）由 uiRegistry 派生，注册后自动生效，本测试不涉及 layout，只验 uiRegistry 契约。
  */
 const Icon = defineComponent(() => () => h('div'))
 
@@ -32,151 +36,171 @@ function dummyPanel(over: Partial<PluginPanelRegistration> = {}): PluginPanelReg
   }
 }
 
-describe('插件 UI 注册契约', () => {
+function dummyButton(over: Partial<PluginTopBarButtonRegistration> = {}): PluginTopBarButtonRegistration {
+  return {
+    id: 'btn',
+    title: '示例动作',
+    icon: Icon,
+    onClick: () => undefined,
+    ...over,
+  }
+}
+
+describe('插件 UI 注册契约（uiRegistry）', () => {
   beforeEach(() => {
     localStorage.clear()
     setActivePinia(createPinia())
   })
 
-  it('registerPanel：key 归并为 demo:p，pluginId=demo', () => {
+  it('registerPanel：登记进 uiRegistry，key=demo:p，origin=plugin，pluginId=demo', () => {
     const ui = createPluginUiApi('demo')
-    ui.registerPanel(dummyPanel({ defaultPlacement: 'right' }))
+    ui.registerPanel(dummyPanel())
 
-    const store = usePluginStore()
-    const entry = store.uiPanels.get('demo:p')
+    const registry = useUiRegistryStore()
+    const entry = registry.panels.get('demo:p')
     expect(entry).toBeDefined()
     expect(entry!.key).toBe('demo:p')
+    expect(entry!.origin).toBe('plugin')
     expect(entry!.pluginId).toBe('demo')
     expect(entry!.title).toBe('统计助手')
-    expect(entry!.defaultPlacement).toBe('right')
+    // reactive Map 深响应式会代理组件对象；断言存在性而非同一引用
+    expect(entry!.icon).toBeTruthy()
+    expect(entry!.component).toBeTruthy()
   })
 
-  it('registerPanel：defaultPlacement 省略时 store 层存 undefined（缺省在渲染合并层做）', () => {
+  it('registerPanel：defaultPlacement 缺省 → registry 兜底为 right', () => {
     const ui = createPluginUiApi('demo')
     ui.registerPanel(dummyPanel({})) // 不传 defaultPlacement
 
-    const store = usePluginStore()
-    const entry = store.uiPanels.get('demo:p')
+    const entry = useUiRegistryStore().panels.get('demo:p')
     expect(entry).toBeDefined()
-    // 实代码：store 不兜底，缺省 'right' 由 uiMerge 渲染层 entry.defaultPlacement ?? 'right' 承担
-    expect(entry!.defaultPlacement).toBeUndefined()
+    expect(entry!.defaultPlacement).toBe('right')
+
+    // 显式传入 left → 按传入值存储
+    const ui2 = createPluginUiApi('demo2')
+    ui2.registerPanel(dummyPanel({ id: 'p2', defaultPlacement: 'left' }))
+    expect(useUiRegistryStore().panels.get('demo2:p2')!.defaultPlacement).toBe('left')
   })
 
-  it('重复注册同 id 不同 title → 不覆盖（原 title 保留）', () => {
-    const store = usePluginStore()
-    const first = store.registerUiPanel('demo', dummyPanel({ title: '原始标题' }))
-    const second = store.registerUiPanel('demo', dummyPanel({ title: '新标题' }))
+  it('registerTopBarButton：登记进 uiRegistry，component 为 wrapTopBarButton 产物，defaultZone 缺省 left', () => {
+    const ui = createPluginUiApi('demo')
+    ui.registerTopBarButton(dummyButton({})) // zone 省略
 
-    expect(first).toBe(true)
-    expect(second).toBe(false) // 冲突拒绝覆盖
-    expect(store.uiPanels.get('demo:p')!.title).toBe('原始标题')
+    const registry = useUiRegistryStore()
+    const entry = registry.topBarButtons.get('demo:btn')
+    expect(entry).toBeDefined()
+    expect(entry!.origin).toBe('plugin')
+    expect(entry!.pluginId).toBe('demo')
+    expect(entry!.title).toBe('示例动作')
+    // component 必须是逻辑组件对象（wrapTopBarButton 的 defineComponent 产物）
+    expect(typeof entry!.component).toBe('object')
+    expect(entry!.defaultZone).toBe('left')
+
+    // zone 显式 right → 按传入值存储
+    const ui2 = createPluginUiApi('demo2')
+    ui2.registerTopBarButton(dummyButton({ id: 'btn2', zone: 'right' }))
+    expect(useUiRegistryStore().topBarButtons.get('demo2:btn2')!.defaultZone).toBe('right')
   })
 
-  it('短 id 含冒号或空白 → 拒绝（表中无该 key）', () => {
+  it('registerSettingsCategory：登记进 uiRegistry 设置栏目表', () => {
+    const ui = createPluginUiApi('demo')
+    ui.registerSettingsCategory({ id: 'cfg', title: '配置', component: Icon })
+
+    const entry = useUiRegistryStore().settingsCategories.get('demo:cfg')
+    expect(entry).toBeDefined()
+    expect(entry!.origin).toBe('plugin')
+    expect(entry!.pluginId).toBe('demo')
+    expect(entry!.title).toBe('配置')
+    expect(entry!.component).toBeTruthy()
+  })
+
+  it('短 id 非法（含 : / 空白 / 空）→ console.warn 且不入表', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const ui = createPluginUiApi('demo')
     ui.registerPanel(dummyPanel({ id: 'a:b' }))
     ui.registerPanel(dummyPanel({ id: 'a b' }))
-    ui.registerTopBarButton({
-      id: 'x:y',
-      title: '按钮',
-      icon: Icon,
-      onClick: () => undefined,
-    })
+    ui.registerPanel(dummyPanel({ id: '' }))
+    ui.registerTopBarButton(dummyButton({ id: 'x:y' }))
+    ui.registerTopBarButton(dummyButton({ id: '' }))
     ui.registerSettingsCategory({ id: 'x y', title: '配置', component: Icon })
 
-    const store = usePluginStore()
-    expect(store.uiPanels.has('demo:a:b')).toBe(false)
-    expect(store.uiPanels.has('demo:a b')).toBe(false)
-    expect(store.uiTopBarButtons.has('demo:x:y')).toBe(false)
-    expect(store.uiSettingsCategories.has('demo:x y')).toBe(false)
+    const registry = useUiRegistryStore()
+    expect(registry.panels.has('demo:a:b')).toBe(false)
+    expect(registry.panels.has('demo:a b')).toBe(false)
+    expect(registry.panels.has('demo:')).toBe(false)
+    expect(registry.topBarButtons.has('demo:x:y')).toBe(false)
+    expect(registry.topBarButtons.has('demo:')).toBe(false)
+    expect(registry.settingsCategories.has('demo:x y')).toBe(false)
+    // api 层至少对每类非法 id 各 warn 一次
+    expect(warn.mock.calls.length).toBeGreaterThanOrEqual(6)
+    warn.mockRestore()
   })
 
-  it('registerTopBarButton / registerSettingsCategory 正常注册并归并 pluginId', () => {
+  it('冲突：同 key 二次注册（返回 void）→ warn + 表内容不被覆盖', () => {
     const ui = createPluginUiApi('demo')
-    ui.registerTopBarButton({
-      id: 'btn',
-      title: '示例动作',
-      icon: Icon,
-      zone: 'left',
-      onClick: () => undefined,
-    })
-    ui.registerSettingsCategory({ id: 'cfg', title: '配置', component: Icon })
+    ui.registerPanel(dummyPanel({ title: '原始标题' }))
 
-    const store = usePluginStore()
-    const btn = store.uiTopBarButtons.get('demo:btn')
-    expect(btn?.pluginId).toBe('demo')
-    expect(btn?.zone).toBe('left')
-    expect(store.uiSettingsCategories.has('demo:cfg')).toBe(true)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // api 层返回 void，冲突由 registry 拒绝（warn），不覆盖
+    const ret = ui.registerPanel(dummyPanel({ title: '新标题' }))
+    expect(ret).toBeUndefined()
+
+    const entry = useUiRegistryStore().panels.get('demo:p')
+    expect(entry!.title).toBe('原始标题') // 未被覆盖
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
-  it('unregisterPluginUi：三表清空该插件全部项', () => {
+  it('rollbackPluginUi：三表 demo:* 全部清除，不影响其它插件', () => {
     const ui = createPluginUiApi('demo')
     ui.registerPanel(dummyPanel())
-    ui.registerTopBarButton({ id: 'btn', title: '动作', icon: Icon, onClick: () => undefined })
+    ui.registerTopBarButton(dummyButton())
     ui.registerSettingsCategory({ id: 'cfg', title: '配置', component: Icon })
 
-    const store = usePluginStore()
-    expect(store.uiPanels.size).toBe(1)
-    expect(store.uiTopBarButtons.size).toBe(1)
-    expect(store.uiSettingsCategories.size).toBe(1)
+    // 另一个插件共享同一张表，回滚 demo 不应误伤
+    const ui2 = createPluginUiApi('other')
+    ui2.registerPanel({ ...dummyPanel({ id: 'p2', title: '其他面板' }) })
 
-    store.unregisterPluginUi('demo')
-    expect(store.uiPanels.has('demo:p')).toBe(false)
-    expect(store.uiTopBarButtons.has('demo:btn')).toBe(false)
-    expect(store.uiSettingsCategories.has('demo:cfg')).toBe(false)
-    // 不影响其它插件
-    expect(store.uiPanels.size).toBe(0)
+    const registry = useUiRegistryStore()
+    expect(registry.panels.has('demo:p')).toBe(true)
+    expect(registry.topBarButtons.has('demo:btn')).toBe(true)
+    expect(registry.settingsCategories.has('demo:cfg')).toBe(true)
+
+    rollbackPluginUi('demo')
+    expect(registry.panels.has('demo:p')).toBe(false)
+    expect(registry.topBarButtons.has('demo:btn')).toBe(false)
+    expect(registry.settingsCategories.has('demo:cfg')).toBe(false)
+    expect(registry.panels.has('other:p2')).toBe(true) // 其它插件保留
   })
+})
 
-  it('registerPanel 已接入 ensurePanel：注册后按缺省右侧重落位，重复注册幂等不重复追加', () => {
-    const ui = createPluginUiApi('demo')
-    ui.registerPanel(dummyPanel({ defaultPlacement: 'right' }))
-    // 重复注册（同 key）→ registerUiPanel 冲突返回 false，不再触发 ensurePanel
-    ui.registerPanel(dummyPanel({ defaultPlacement: 'right', title: '新标题' }))
+describe('wrapTopBarButton（可选挂载冒烟）', () => {
+  it('onClick 抛错被隔离：console.error 记录，不向外抛', async () => {
+    setActivePinia(createPinia())
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    expect(usePluginStore().uiPanels.has('demo:p')).toBe(true)
-    const layout = useLayoutStore()
-    // ensurePanel 已接线：demo:p 被追加到右侧末尾
-    expect(layout.rightPanels).toContain('demo:p')
-    expect(layout.rightSizes['demo:p']).toBe(1)
-    // 幂等：即使再注册一次也不重复追加
-    expect(layout.rightPanels.filter((id) => id === 'demo:p')).toHaveLength(1)
-  })
-
-  it('registerPanel 缺省 defaultPlacement → ensurePanel 按 right 落位（存储层仍存 undefined）', () => {
-    const ui = createPluginUiApi('demo')
-    ui.registerPanel(dummyPanel({})) // 不传 defaultPlacement
-
-    expect(usePluginStore().uiPanels.get('demo:p')!.defaultPlacement).toBeUndefined()
-    const layout = useLayoutStore()
-    // 缺省 'right' 用于 ensurePanel 落位参数，落在右侧
-    expect(layout.rightPanels).toContain('demo:p')
-  })
-
-  it('registerTopBarButton 已接入 ensureTop：注册后按缺省左 zone 落位，重复注册幂等', () => {
-    const ui = createPluginUiApi('demo')
-    ui.registerTopBarButton({
-      id: 'btn',
-      title: '示例动作',
+    const Component = wrapTopBarButton({
+      id: 'boom',
+      title: '会抛错的按钮',
       icon: Icon,
-      zone: 'left',
-      onClick: () => undefined,
+      onClick: () => {
+        throw new Error('boom-click')
+      },
     })
+    expect(typeof Component).toBe('object')
 
-    expect(usePluginStore().uiTopBarButtons.has('demo:btn')).toBe(true)
-    const layout = useLayoutStore()
-    // ensureTop 已接线：demo:btn 落位到左顶部条
-    expect(layout.leftTop).toContain('demo:btn')
-    expect(layout.leftTop.filter((id) => id === 'demo:btn')).toHaveLength(1)
-  })
+    const wrapper = mount(Component)
+    await wrapper.vm.$nextTick()
 
-  it('layout.ensurePanel 幂等：主动再调用不重复追加', () => {
-    const ui = createPluginUiApi('demo')
-    ui.registerPanel(dummyPanel({ defaultPlacement: 'right' }))
-    const layout = useLayoutStore()
-    expect(layout.rightPanels.filter((id) => id === 'demo:p')).toHaveLength(1)
-    // 手动再 ensurePanel：已放置 → 不动
-    layout.ensurePanel('demo:p' as never, 'right')
-    expect(layout.rightPanels.filter((id) => id === 'demo:p')).toHaveLength(1)
+    // 按钮本体点击 → onClick 抛错被 try/catch 隔离，测试不向外抛
+    const btn = wrapper.find('button.top-btn')
+    expect(btn.exists()).toBe(true)
+    // 若无主按钮（渲染受限）则跳过点击；异常路径已由 spy 兜底
+    if (btn.exists()) {
+      btn.trigger('click')
+    }
+    await wrapper.vm.$nextTick()
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
   })
 })

@@ -3,26 +3,16 @@
  *
  * 持有 PluginManager 实例与记录快照；负责 localStorage('aidea-plugins') 启停持久化。
  * 启动装载在 main.ts 的 `init()` 完成；运行时间表（setup 是否执行）由启动时的 enabled 快照决定。
+ *
+ * 注意：插件 UI 注册（面板 / 顶栏按钮 / 设置栏目）已不再经本 store——
+ * 注册去向往 **uiRegistry 登记总表**（stores/uiRegistry.ts），layout 纯派生自动生效。
+ * 本 store 从 plugin→layout→uiMerge→plugin 的环中解脱，只管「启停 + 生命周期记录」。
  */
-import { ref, reactive } from 'vue'
+import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { PluginManager, collectPluginEntries } from '@/plugin/manager'
 import type { PluginRecord } from '@/plugin/manager'
 import { createPluginAdapter } from '@/plugin/adapter'
-import type {
-  PluginPanelEntry,
-  PluginTopBarButtonEntry,
-  PluginSettingsCategoryEntry,
-  PluginPanelRegistration,
-  PluginTopBarButtonRegistration,
-  PluginSettingsCategoryRegistration,
-} from '@/plugin/ui'
-import { useLayoutStore } from '@/stores/layout'
-import type { PanelKey } from '@/constants/panels'
-import type { TopBarKey } from '@/constants/topbar'
-// 依赖说明：layout store 经 uiMerge 反向 import 本 store，形成 plugin→layout→uiMerge→plugin
-// 的环。但 useLayoutStore 仅在注册方法被**运行时**调用（插件 setup 期间）才求值，
-// 模块顶层不执行，故静态 import 安全（不触发「初始化前访问」）。保持惰性级联即可。
 
 const STORAGE_KEY = 'aidea-plugins'
 
@@ -42,72 +32,6 @@ export const usePluginStore = defineStore('plugin', () => {
   const manager = ref<PluginManager | null>(null)
   const records = ref<PluginRecord[]>([])
   const ready = ref(false)
-
-  // ── 插件 UI 注册表（reactive Map，深度响应式）──
-  /** 插件面板注册表：key = `${pluginId}:${id}`，含 pluginId 回溯归因 */
-  const uiPanels = reactive(new Map<string, PluginPanelEntry>())
-  /** 插件顶栏按钮注册表：key = `${pluginId}:${id}` */
-  const uiTopBarButtons = reactive(new Map<string, PluginTopBarButtonEntry>())
-  /** 插件设置栏目注册表：key = `${pluginId}:${id}` */
-  const uiSettingsCategories = reactive(new Map<string, PluginSettingsCategoryEntry>())
-
-  /** 归一并注册插件面板；key 已存在 → warn 返回 false，不覆盖 */
-  function registerUiPanel(pluginId: string, entry: PluginPanelRegistration): boolean {
-    const key = `${pluginId}:${entry.id}`
-    if (uiPanels.has(key)) {
-      console.warn(`[plugin] 面板注册冲突：${key} 已存在，拒绝覆盖`)
-      return false
-    }
-    uiPanels.set(key, { ...entry, key, pluginId })
-    // 首次落位：把插件面板按默认放置侧加入布局（ensurePanel 幂等，已放置则不动）。
-    // useLayoutStore 运行时求值，规避上方模块级循环依赖。
-    useLayoutStore().ensurePanel(key as PanelKey, entry.defaultPlacement ?? 'right')
-    return true
-  }
-
-  /** 归一并注册插件顶栏按钮；key 已存在 → warn 返回 false，不覆盖 */
-  function registerUiTopBarButton(
-    pluginId: string,
-    entry: PluginTopBarButtonRegistration,
-  ): boolean {
-    const key = `${pluginId}:${entry.id}`
-    if (uiTopBarButtons.has(key)) {
-      console.warn(`[plugin] 顶栏按钮注册冲突：${key} 已存在，拒绝覆盖`)
-      return false
-    }
-    // menu 的自引用 DropdownOption 类型会在任何结构性验算上触发「过深实例化」。
-    // 采用逃生仓：先把 entry 收窄为 object 再组装，避免 TS 对递归类型做结构性展开。
-    uiTopBarButtons.set(
-      key,
-      { key, pluginId, ...(entry as object) } as unknown as PluginTopBarButtonEntry,
-    )
-    // 首次落位：按默认放置区把插件按钮加入布局（ensureTop 幂等）。
-    useLayoutStore().ensureTop(key as TopBarKey, entry.zone ?? 'left')
-    return true
-  }
-
-  /** 归一并注册插件设置栏目；key 已存在 → warn 返回 false，不覆盖 */
-  function registerUiSettingsCategory(
-    pluginId: string,
-    entry: PluginSettingsCategoryRegistration,
-  ): boolean {
-    const key = `${pluginId}:${entry.id}`
-    if (uiSettingsCategories.has(key)) {
-      console.warn(`[plugin] 设置栏目注册冲突：${key} 已存在，拒绝覆盖`)
-      return false
-    }
-    uiSettingsCategories.set(key, { ...entry, key, pluginId })
-    return true
-  }
-
-  /** 按插件批量清除其全部 UI 注册（setup 抛错回滚 / 错误恢复时调用） */
-  function unregisterPluginUi(pluginId: string): void {
-    for (const [key, e] of uiPanels) if (e.pluginId === pluginId) uiPanels.delete(key)
-    for (const [key, e] of uiTopBarButtons) if (e.pluginId === pluginId) uiTopBarButtons.delete(key)
-    for (const [key, e] of uiSettingsCategories) {
-      if (e.pluginId === pluginId) uiSettingsCategories.delete(key)
-    }
-  }
 
   /** 引导装载插件（应用启动后调用一次） */
   async function init(): Promise<void> {
@@ -141,12 +65,5 @@ export const usePluginStore = defineStore('plugin', () => {
     ready,
     init,
     setEnabled,
-    uiPanels,
-    uiTopBarButtons,
-    uiSettingsCategories,
-    registerUiPanel,
-    registerUiTopBarButton,
-    registerUiSettingsCategory,
-    unregisterPluginUi,
   }
 })

@@ -9,24 +9,25 @@
  * - 空态提示
  *
  * 每个面板由 DockPanel 统一外壳渲染（标题/图标/关闭/拖拽手柄），
- * 状态全部来自 layout store，本组件不持有布局数据。
+ * 状态全部来自 layout store（派生实时目录 rightPanels / rightSizes），
+ * 本组件不持有布局数据、不用再过滤残留（派生目录已是干净条目数组）。
  */
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useEventListener } from '@vueuse/core'
 import { useLayoutStore } from '@/stores/layout'
 import type { PanelKey } from '@/constants/panels'
-import { useMergedPanelIndex } from '@/plugin/uiMerge'
 import { readPanelDrag, writePanelDrag, type PanelDragData } from '@/utils/dock'
 import { t } from '@/composables/useT'
 import DockPanel from './DockPanel.vue'
 
 const layout = useLayoutStore()
 
-/** 合并面板目录（用于过滤未注册的禁用插件残留） */
-const merged = useMergedPanelIndex()
-
 /** 容器根元素（用于测量高度换算 flex） */
 const containerEl = ref<HTMLElement | null>(null)
+
+/** 右侧可见面板与空态：storeToRefs 取响应式 ref（layout 为 setup store，成员默认已解包） */
+const { rightPanels: visible, rightEmpty } = storeToRefs(layout)
 
 // ── 拖拽换位状态 ──
 /** 当前拖拽源信息（仅同容器内拖拽时在本地维护；跨容器靠 dataTransfer） */
@@ -44,26 +45,7 @@ const resizeScale = ref(1)
 const resizeAId = ref<PanelKey | null>(null)
 const resizeBId = ref<PanelKey | null>(null)
 
-/**
- * 右侧可见面板：过滤掉未注册（禁用插件残留）的 id，
- * 避免未知面板空渲染破坏 flex 布局。携带其在 layout 中的真实索引供逻辑用。
- */
-const visibleRight = computed<{ id: PanelKey; realIndex: number }[]>(() =>
-  layout.rightPanels
-    .map((id, realIndex) => ({ id, realIndex }))
-    .filter((p) => merged.value.has(p.id)),
-)
-
-/** 给定真实索引，返回其后第一个可见面板的真实索引（含自身之后沿数组找）；无则 -1 */
-function nextVisibleIndex(fromRealIndex: number): number {
-  for (let i = fromRealIndex + 1; i < layout.rightPanels.length; i++) {
-    if (merged.value.has(layout.rightPanels[i])) return i
-  }
-  return -1
-}
-
-/** 右侧是否为空（按可见面板判断，全被隐藏则显示空态） */
-const rightEmpty = computed(() => visibleRight.value.length === 0)
+/** 右侧是否为空（派生目录空则显示空态）——见上方 storeToRefs 解构的 rightEmpty */
 
 /** 重置本地拖拽指示状态 */
 function resetDrag(): void {
@@ -80,7 +62,7 @@ function onPanelDragStart(panelId: PanelKey, ev: DragEvent): void {
 /** 面板条目 dragover：允许 drop 并记录 hover 索引 */
 function onPanelDragOver(index: number, e: DragEvent): void {
   e.preventDefault()
-  if (dragSource.value && dragSource.value.panelId !== layout.rightPanels[index]) {
+  if (dragSource.value && dragSource.value.panelId !== visible.value[index].key) {
     dragOverIndex.value = index
   }
 }
@@ -94,7 +76,7 @@ function onPanelDrop(index: number, e: DragEvent): void {
     return
   }
   if (payload.from === 'right') {
-    const fromIndex = layout.rightPanels.indexOf(payload.panelId)
+    const fromIndex = visible.value.findIndex((e2) => e2.key === payload.panelId)
     if (fromIndex >= 0 && fromIndex !== index) layout.reorderRight(fromIndex, index)
   } else {
     layout.moveToRight(payload.panelId, index)
@@ -110,9 +92,9 @@ function onContainerDrop(e: DragEvent): void {
     resetDrag()
     return
   }
-  const toIndex = layout.rightPanels.length
+  const toIndex = visible.value.length
   if (payload.from === 'right') {
-    const fromIndex = layout.rightPanels.indexOf(payload.panelId)
+    const fromIndex = visible.value.findIndex((e2) => e2.key === payload.panelId)
     if (fromIndex >= 0) layout.reorderRight(fromIndex, toIndex)
   } else {
     layout.moveToRight(payload.panelId, toIndex)
@@ -129,21 +111,20 @@ useEventListener('dragend', resetDrag)
 const MIN_FLEX = 0.1
 
 function onResizeDown(index: number, e: PointerEvent): void {
-  const a = layout.rightPanels[index]
-  const nextIdx = nextVisibleIndex(index)
-  const b = nextIdx >= 0 ? layout.rightPanels[nextIdx] : undefined
+  const a = visible.value[index]
+  const b = visible.value[index + 1]
   if (!a || !b) return
-  const flexA = layout.rightSizes[a] ?? 1
-  const flexB = layout.rightSizes[b] ?? 1
+  const flexA = layout.rightSizes[a.key] ?? 1
+  const flexB = layout.rightSizes[b.key] ?? 1
   resizeIndex.value = index
-  resizeAId.value = a
-  resizeBId.value = b
+  resizeAId.value = a.key
+  resizeBId.value = b.key
   resizeStartY.value = e.clientY
   resizeStartB.value = flexB
   resizeTotal.value = flexA + flexB
   // 像素 → flex 比例：flex 总量 / 容器像素高度
-  const totalFlex = layout.rightPanels.reduce(
-    (sum, id) => sum + (layout.rightSizes[id] ?? 1),
+  const totalFlex = visible.value.reduce(
+    (sum, e2) => sum + (layout.rightSizes[e2.key] ?? 1),
     0,
   )
   const h = containerEl.value?.clientHeight ?? 0
@@ -190,33 +171,33 @@ function onPanelClose(panelId: PanelKey): void {
     @drop="onContainerDrop"
   >
     <template v-if="!rightEmpty">
-      <template v-for="(item, vi) in visibleRight" :key="item.id">
+      <template v-for="(entry, vi) in visible" :key="entry.key">
         <div
           class="dock-item"
           :class="{
-            'is-dragging': dragSource?.panelId === item.id,
+            'is-dragging': dragSource?.panelId === entry.key,
             'is-drag-over':
-              dragOverIndex === item.realIndex &&
+              dragOverIndex === vi &&
               dragSource !== null &&
-              dragSource.panelId !== item.id,
+              dragSource.panelId !== entry.key,
           }"
-          :style="{ flex: layout.rightSizes[item.id] ?? 1, minHeight: 0 }"
-          @dragover="onPanelDragOver(item.realIndex, $event)"
-          @drop="onPanelDrop(item.realIndex, $event)"
-          @dragenter.prevent="dragOverIndex = item.realIndex"
+          :style="{ flex: layout.rightSizes[entry.key] ?? 1, minHeight: 0 }"
+          @dragover="onPanelDragOver(vi, $event)"
+          @drop="onPanelDrop(vi, $event)"
+          @dragenter.prevent="dragOverIndex = vi"
         >
           <DockPanel
-            :panel-id="item.id"
+            :panel-id="entry.key"
             @drag-start="onPanelDragStart"
             @close="onPanelClose"
           />
         </div>
         <!-- 面板间 resize handle -->
         <div
-          v-if="vi < visibleRight.length - 1"
+          v-if="vi < visible.length - 1"
           class="dock-resize"
-          :class="{ active: resizeIndex === item.realIndex }"
-          @pointerdown="onResizeDown(item.realIndex, $event)"
+          :class="{ active: resizeIndex === vi }"
+          @pointerdown="onResizeDown(vi, $event)"
         />
       </template>
     </template>

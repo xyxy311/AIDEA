@@ -334,3 +334,55 @@ app mount
 - **provide('aidea-plugin-adapter') 未实现（后续增量）**：插件面板/设置组件暂时拿不到 per-plugin 的 scoped adapter；示例插件经 `createAdditionsApi('hello')` 变通（同作用域手动构造，与 manager 内部同款机制）。真实插件如需在 UI 组件内写 additions，待补 provide 后统一经 `ctx.adapter` 能力，避免直调内部工厂。
 - **布局归一化的 discovered 插件 id 依赖编译期同步读取**：当前取 `collectPluginEntries()`。若未来迁运行时加载，`layout.store` 的 `isPluginKeyValid` 需改为异步注入来源。
 - **UI 注册 id 冲突仅为"拒注册 + console.warn"**，不置插件 error（不影响其余注册项）。
+
+---
+
+## 十八、V2 重构落定（2026-08-30 已实现）：uiRegistry 登记总表 + delta 排布
+
+> 上一版（§五 合并层 / §八.3 ensure 落位 / §十七 已实现）**已被取代**。经评审收敛为更简的
+> 「登记总表 + delta 派生」三层链路，删除了 `uiMerge.ts`。设计为演进文档，以本节（V2）为当前实现。
+
+## 十八.1 V2 目标架构（当前）
+
+```
+constants 品类表（纯数据）                     [constants/panels.ts, topbar.ts, settings.ts(新)]
+      │  seed
+      ▼
+uiRegistry 登记总表（Origin/pluginId 归因）     [stores/uiRegistry.ts(新)]  ← 插件经 ctx.adapter.ui 注册进同一张表
+      ▼ 读取
+layout  delta 排布 + 派生实时目录               [stores/layout.ts 重写, utils/dock.ts, topbar.ts 重写]
+      ▼ 渲染参考
+渲染组件  ActivityBar / DockContainer / DockPanel / TopBarZone / SettingsModal
+```
+
+- **uiRegistry = 唯一登记表**：内置目录 init 时 seed（`origin:'builtin'`），插件注册进同一张表
+  （`origin:'plugin'` + `pluginId` 归因，key = `${pluginId}:${id}`）。提供面板 / 顶栏按钮 / 设置栏目三张
+  reactive Map 与 `registerPlugin*` / `removePlugin`。**不排布、不持久化**。
+- **layout = 排布层**：只存用户排布 delta（顺序覆盖 / 跨侧移动 / 关闭 = `removed` / 尺寸），
+  经 `deriveDockLayout` / `deriveTopLayout`（`utils/dock.ts` / `utils/topbar.ts`）实时派生
+  `leftPanels` / `rightPanels` / `unplacedPanels` / `topLeft` / `topRight`，供渲染组件直读。
+- **设置面板直读 uiRegistry**（`SettingsModal`），内置目录来自 `constants/settings.ts` seed 的登记表。
+- **插件链**：`plugin/ui.ts` 三注册方法直写 uiRegistry（顶栏按钮先 `wrapTopBarButton` 再入表）；
+  `stores/plugin.ts` 瘦身为仅启停 / 生命周期；`rollbackPluginUi` → `registry.removePlugin`。
+
+## 十八.2 与 V1 的主要差异（全部为简化 / 移除）
+
+| 主题 | V1（已被取代） | V2（当前） |
+| --- | --- | --- |
+| 合并层 | `uiMerge.ts`（内置目录 ∪ 插件注册表 派生） | **删除**——登记表唯一，渲染点直读派生目录 |
+| 布局合法集 | `normalizeDockState` + `isExtraValid`（已发现插件前缀） | `parseDockDelta`（合法 = 登记表 ∪ 已发现插件前缀）；仅初始化清洗一次 |
+| 插件首次落位 | `layout.ensurePanel / ensureTop`（注册即调） | **删除**——delta 派生自动按默认侧出现 |
+| 补新增默认 | normalize 补齐 / `defaults` 兜底 | derive 自动追加（新增面板/按钮登记即现） |
+| layout 类型 | `togglePanel/setActive(id: PanelId)` + 组件 `as` 强转 | 收宽 `PanelKey`，组件强转消失 |
+| 设置内置目录 | SettingsModal 自持 | **constants/settings.ts** + uiRegistry seed |
+| 持久化 key | 沿用旧 key，写完整列表 + normalize 清洗 | **沿用旧 key**（旧完整列表按 delta 读取语义等价，无迁移）；新增 `aidea-dock-removed` 存关闭面板 |
+| 副作用 | removePanel 对插件面板重启后会被 ensure 重新加回 | **修复**：关闭语义持久化为 `removed`，重启不回弹 |
+
+## 十八.3 仍保留 / 未触碰
+
+- 插件 SDK 面 `ctx.adapter.ui` 三注册签名**零变化**（V1→V2 插件无感）。
+- `wrapTopBarButton`（onClick 隔离 / menu 惰性 / disabled 惰性）、`PluginErrorBoundary` 渲染错误隔离不变。
+- 冲突注册「拒注册 + warn 不覆盖」语义不变（迁至 uiRegistry 处理）。
+- `provide('aidea-plugin-adapter')` 仍未实现（与 V1 相同的搁置项，见 §17.2）；delta 清洗对
+  discovered 插件 id 仍依赖编译期 `collectPluginEntries()`（未来迁运行时加载需改注入来源）。
+- Key 命名空间 `${pluginId}:${id}`、additions 全链（§17.1）不受影响。

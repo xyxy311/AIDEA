@@ -3,8 +3,8 @@
  * TopBarZone - 顶部栏通用容器（左 / 右共用）
  *
  * 模仿左侧活动栏 ActivityBar 的图标渲染 + 拖拽排序：
- * - 按 layout store 的某侧按钮顺序（leftTop / rightTop）渲染已注册按钮，
- *   按钮逻辑与图标由品类表 constants/topbar.ts 的 component 提供（外壳为 TopBarButton 模板）
+ * - 按 layout store 的某侧实时目录（topLeft / topRight）渲染已放置按钮，
+ *   条目直接含 component（按钮逻辑组件，外壳为 TopBarButton 模板）
  * - 同侧拖拽排序：HTML5 drag，drop 后调 layout.reorderTop
  * - 跨侧放置：从另一侧拖入本容器 → layout.moveTopZone（追加到末尾）；
  *   dragstart 置 suppressClick、dragend 用 setTimeout(0) 复位，抑制拖拽后误触点击
@@ -14,7 +14,6 @@
 import { computed, ref } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
 import type { TopBarKey, TopBarZone } from '@/constants/topbar'
-import { useMergedTopBarIndex, type TopBarMeta } from '@/plugin/uiMerge'
 import { writeTopBarDrag, readTopBarDrag } from '@/utils/topbar'
 
 const props = defineProps<{
@@ -23,21 +22,15 @@ const props = defineProps<{
 
 const layout = useLayoutStore()
 
-/** 合并顶栏按钮目录（内置 + 插件包装逻辑组件）——渲染组件解析源 */
-const merged = useMergedTopBarIndex()
-
 /**
- * 本侧已放置按钮（按 store 顺序），过滤掉解析不到的 id（禁用插件残留），
- * 避免未知按钮空渲染。携带元信息供 <component :is> 解析。
+ * 本侧已放置按钮实时目录（layout 派生，条目已含 component，无需 map+filter），
+ * 派生目录已过滤未登记 id，不会空渲染未知按钮。
+ * 注：layout 为 pinia setup store，成员已解包（无 .value），computed 内直引即响应式。
  */
-const orderedIds = computed<{ id: TopBarKey; meta: TopBarMeta | undefined }[]>(() =>
-  (props.zone === 'left' ? layout.leftTop : layout.rightTop)
-    .map((id) => ({ id, meta: merged.value.get(id) }))
-    .filter((b): b is { id: TopBarKey; meta: TopBarMeta } => !!b.meta),
-)
+const ordered = computed(() => (props.zone === 'left' ? layout.topLeft : layout.topRight))
 
 /** 本侧是否为空（用于空态提示） */
-const empty = computed(() => orderedIds.value.length === 0)
+const empty = computed(() => ordered.value.length === 0)
 
 // ── 同侧拖拽排序状态 ──
 const dragIndex = ref<number | null>(null)
@@ -119,7 +112,7 @@ function onContainerDragLeave(): void {
     @drop.prevent="onContainerDrop"
     @dragleave="onContainerDragLeave"
   >
-    <template v-for="(item, index) in orderedIds" :key="item.id">
+    <template v-for="(item, index) in ordered" :key="item.key">
       <div
         class="top-item"
         :class="{
@@ -128,14 +121,14 @@ function onContainerDragLeave(): void {
         }"
         :draggable="true"
         @click.capture="onItemClick"
-        @dragstart.stop="onDragStart(index, item.id, $event)"
+        @dragstart.stop="onDragStart(index, item.key, $event)"
         @dragenter.prevent="dropIndex = index"
         @dragover.prevent="onDragOver(index, $event)"
         @dragleave="dropIndex === index && (dropIndex = null)"
         @drop.prevent="onDrop(index, $event)"
         @dragend="onDragEnd"
       >
-        <component :is="item.meta?.component" />
+        <component :is="item.component" />
       </div>
     </template>
   </div>

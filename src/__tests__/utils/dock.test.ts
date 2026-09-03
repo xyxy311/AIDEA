@@ -1,254 +1,137 @@
 import { describe, it, expect } from 'vitest'
-import type { PanelId } from '@/constants/panels'
-import { DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS } from '@/constants/panels'
 import {
-  defaultRightSizes,
-  defaultDockState,
-  normalizeDockState,
-  moveToLeftCore,
-  moveToRightCore,
-  reorderRightCore,
-  removePanelCore,
-  setRightSizeCore,
-  DEFAULT_SIZE,
-  type DockState,
+  parseDockDelta,
+  deriveDockLayout,
+  reorderSeq,
+  dropSize,
+  type PlacementDef,
+  type DockPlacement,
+  type DockDelta,
 } from '@/utils/dock'
 
-const REGISTRY: PanelId[] = ['nodeTree', 'references', 'search', 'presets', 'tags', 'property', 'ai']
+/** 测试登记表（含一个插件 key，覆盖模板字面量键形态） */
+const DEFS: PlacementDef[] = [
+  { key: 'a', defaultPlacement: 'left' },
+  { key: 'b', defaultPlacement: 'left' },
+  { key: 'c', defaultPlacement: 'right' },
+  { key: 'd', defaultPlacement: 'right' },
+  { key: 'demo:p', defaultPlacement: 'right' },
+]
 
-function baseState(): DockState {
-  return defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
-}
+const ALL_KEYS = DEFS.map((d) => d.key)
+const isKnown = (k: string): boolean => ALL_KEYS.includes(k)
 
-describe('dock 纯函数', () => {
-  describe('默认布局', () => {
-    it('DEFAULT_LEFT_PANELS 排除右侧默认面板（property / presets）', () => {
-      expect(DEFAULT_LEFT_PANELS).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
-    })
+/** 派生结果按 string[] 比较（键在运行时即普通字符串） */
+const str = (p: DockPlacement): { left: string[]; right: string[] } => ({
+  left: p.left as string[],
+  right: p.right as string[],
+})
 
-    it('defaultDockState：左侧默认面板-右侧默认[property,presets]，尺寸默认 1', () => {
-      const s = defaultDockState(DEFAULT_LEFT_PANELS, DEFAULT_RIGHT_PANELS)
-      expect(s.leftPanels).toEqual(DEFAULT_LEFT_PANELS)
-      expect(s.rightPanels).toEqual(DEFAULT_RIGHT_PANELS)
-      expect(s.rightSizes).toEqual({ property: DEFAULT_SIZE, presets: DEFAULT_SIZE })
-    })
+/** 测试用 delta 构造（键为任意字符串，绕开 PanelKey 字面量类型检查） */
+const delta = (d: {
+  leftOrder?: string[]
+  rightOrder?: string[]
+  removed?: string[]
+  rightSizes?: Record<string, number>
+}): DockDelta => d as unknown as DockDelta
+
+describe('parseDockDelta', () => {
+  it('非对象 / undefined → 空 delta', () => {
+    expect(parseDockDelta(undefined, isKnown)).toEqual({})
+    expect(parseDockDelta('x', isKnown)).toEqual({})
+    expect(parseDockDelta(null, isKnown)).toEqual({})
   })
 
-  describe('normalizeDockState', () => {
-    it('过滤无效 id 与重复 id', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'search', 'search', 'nope' as PanelId],
-        rightPanels: ['property', 'property', 'bad' as PanelId],
-        rightSizes: {},
-      }
-      const s = normalizeDockState(raw, REGISTRY)
-      expect(s.leftPanels).toEqual(['nodeTree', 'search'])
-      expect(s.rightPanels).toEqual(['property'])
-      expect(s.rightSizes).toEqual({ property: DEFAULT_SIZE })
-    })
-
-    it('同一面板出现在两侧时优先保留在右侧', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'property'],
-        rightPanels: ['property'],
-        rightSizes: { property: 3 },
-      }
-      const s = normalizeDockState(raw, REGISTRY)
-      expect(s.leftPanels).toEqual(['nodeTree'])
-      expect(s.rightPanels).toEqual(['property'])
-      expect(s.rightSizes).toEqual({ property: 3 })
-    })
-
-    it('非法尺寸回退默认，合法尺寸保留', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property'],
-        rightSizes: { property: -5 },
-      }
-      const s = normalizeDockState(raw, REGISTRY)
-      expect(s.rightSizes.property).toBe(DEFAULT_SIZE)
-    })
-
-    it('补充新增的默认面板（旧 localStorage 不含新面板时自动补入）', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'references', 'search', 'tags'],
-        rightPanels: ['property', 'presets'],
-        rightSizes: { property: 1, presets: 1 },
-      }
-      const s = normalizeDockState(
-        raw,
-        REGISTRY,
-        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
-      )
-      // 旧 saved 布局不含 ai，应补到左侧末尾
-      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
-      expect(s.rightPanels).toEqual(['property', 'presets'])
-    })
-
-    it('已放置的面板不会被重复补充', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property'],
-        rightSizes: { property: 1 },
-      }
-      const s = normalizeDockState(
-        raw,
-        REGISTRY,
-        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
-      )
-      // ai 只出现一次（左侧）
-      expect(s.leftPanels.filter((id) => id === 'ai')).toHaveLength(1)
-    })
+  it('过滤未知键与重复项；保留合法顺序', () => {
+    const delta = parseDockDelta(
+      { leftOrder: ['a', 'zzz', 'b', 'a', 42, null], rightOrder: ['c', 'c', 'd'] },
+      isKnown,
+    )
+    expect(delta.leftOrder).toEqual(['a', 'b'])
+    expect(delta.rightOrder).toEqual(['c', 'd'])
   })
 
-  describe('normalizeDockState isExtraValid（插件面板 key 合法性）', () => {
-    // 已发现插件面板 key = `${pluginId}:${id}`；demo 插件的 p 面板可视作仍在
-    const known = new Set<string>(['demo:p', 'demo:q'])
-    const isExtraValid = (id: string): boolean => known.has(id)
-
-    it('插件 key 在 isExtraValid 命中时保留（禁用→启用循环不丢布局记录）', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'demo:p' as PanelId],
-        rightPanels: ['property', 'demo:q' as PanelId],
-        rightSizes: { 'demo:q': 2 },
-      }
-      const s = normalizeDockState(raw, REGISTRY, undefined, { isExtraValid })
-      expect(s.leftPanels).toContain('demo:p')
-      expect(s.rightPanels).toContain('demo:q')
-      expect(s.rightSizes['demo:q']).toBe(2)
-    })
-
-    it('插件 key 未命中 isExtraValid 时剔除（彻底移除插件）', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'ghost:x' as PanelId],
-        rightPanels: ['property', 'ghost:y' as PanelId],
-        rightSizes: {},
-      }
-      const s = normalizeDockState(raw, REGISTRY, undefined, { isExtraValid })
-      expect(s.leftPanels).not.toContain('ghost:x')
-      expect(s.rightPanels).not.toContain('ghost:y')
-    })
-
-    it('内置默认面板补充行为不变（回归）：插件 key 不影响 defaults 补全', () => {
-      const raw: DockState = {
-        leftPanels: ['nodeTree', 'references', 'search', 'tags'],
-        rightPanels: ['property', 'presets', 'demo:q' as PanelId],
-        rightSizes: { 'demo:q': 1 },
-      }
-      const s = normalizeDockState(
-        raw,
-        REGISTRY,
-        { left: DEFAULT_LEFT_PANELS, right: DEFAULT_RIGHT_PANELS },
-        { isExtraValid },
-      )
-      // ai 仍被补到左侧末尾；插件 key 保留
-      expect(s.leftPanels).toEqual(['nodeTree', 'references', 'search', 'tags', 'ai'])
-      expect(s.rightPanels).toContain('demo:q')
-    })
+  it('removed 字段同样过滤；rightSizes 仅保留已知键的正数', () => {
+    const delta = parseDockDelta(
+      { removed: ['b', 'nope'], rightSizes: { c: 2.5, a: -1, d: 'x', nope: 3 } },
+      isKnown,
+    )
+    expect(delta.removed).toEqual(['b'])
+    expect(delta.rightSizes).toEqual({ c: 2.5 })
   })
 
-  describe('右侧内换位 reorderRightCore', () => {
-    it('把 from 移到 to', () => {
-      const s: DockState = {
-        leftPanels: [],
-        rightPanels: ['a' as PanelId, 'b' as PanelId, 'c' as PanelId],
-        rightSizes: {},
-      }
-      const next = reorderRightCore(s, 0, 2)
-      expect(next.rightPanels).toEqual(['b' as PanelId, 'c' as PanelId, 'a' as PanelId])
-    })
+  it('空数组字段保留为空覆盖；空尺寸丢弃', () => {
+    const delta = parseDockDelta({ leftOrder: [], rightSizes: {} }, isKnown)
+    expect(delta.leftOrder).toEqual([])
+    expect(delta.rightSizes).toBeUndefined()
+  })
+})
 
-    it('from === to 返回原对象', () => {
-      const s: DockState = {
-        leftPanels: [],
-        rightPanels: ['a' as PanelId, 'b' as PanelId],
-        rightSizes: {},
-      }
-      expect(reorderRightCore(s, 1, 1)).toBe(s)
-    })
+describe('deriveDockLayout', () => {
+  it('无 delta → 按登记 defaultPlacement 与登记顺序派生', () => {
+    const p = str(deriveDockLayout(DEFS, {}))
+    expect(p.left).toEqual(['a', 'b'])
+    expect(p.right).toEqual(['c', 'd', 'demo:p'])
   })
 
-  describe('moveToLeftCore', () => {
-    it('从右侧移除并加入左侧末尾', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property', 'search'],
-        rightSizes: { property: 2, search: 1 },
-      }
-      const next = moveToLeftCore(s, 'search')
-      expect(next.leftPanels).toEqual(['nodeTree', 'search'])
-      expect(next.rightPanels).toEqual(['property'])
-      expect(next.rightSizes).toEqual({ property: 2 })
-    })
-
-    it('已在左侧则不重复添加', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property'],
-        rightSizes: { property: 1 },
-      }
-      const next = moveToLeftCore(s, 'nodeTree')
-      expect(next.leftPanels).toEqual(['nodeTree'])
-      expect(next.rightPanels).toEqual(['property'])
-    })
+  it('removed 面板被排除（未放置）', () => {
+    const p = str(deriveDockLayout(DEFS, delta({ removed: ['b', 'c'] })))
+    expect(p.left).toEqual(['a'])
+    expect(p.right).toEqual(['d', 'demo:p'])
   })
 
-  describe('moveToRightCore', () => {
-    it('从左侧移除并加入右侧指定位置', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree', 'search'],
-        rightPanels: ['property'],
-        rightSizes: { property: 1 },
-      }
-      const next = moveToRightCore(s, 'search', 0)
-      expect(next.leftPanels).toEqual(['nodeTree'])
-      expect(next.rightPanels).toEqual(['search', 'property'])
-      expect(next.rightSizes.search).toBe(DEFAULT_SIZE)
-    })
-
-    it('已在右侧则视为 reorder', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property', 'search'],
-        rightSizes: { property: 1, search: 1 },
-      }
-      const next = moveToRightCore(s, 'search', 0)
-      expect(next.leftPanels).toEqual(['nodeTree'])
-      expect(next.rightPanels).toEqual(['search', 'property'])
-    })
-
-    it('越界 toIndex 追加到末尾', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree'],
-        rightPanels: ['property'],
-        rightSizes: { property: 1 },
-      }
-      const next = moveToRightCore(s, 'nodeTree', 99)
-      expect(next.rightPanels).toEqual(['property', 'nodeTree'])
-    })
+  it('leftOrder 覆盖默认归属与顺序（默认右侧的面板移入左侧）', () => {
+    const p = str(deriveDockLayout(DEFS, delta({ leftOrder: ['c', 'a', 'b'] })))
+    expect(p.left).toEqual(['c', 'a', 'b'])
+    expect(p.right).toEqual(['d', 'demo:p'])
   })
 
-  describe('removePanelCore', () => {
-    it('从两侧移除并清理尺寸', () => {
-      const s: DockState = {
-        leftPanels: ['nodeTree', 'search'],
-        rightPanels: ['property'],
-        rightSizes: { property: 2 },
-      }
-      const next = removePanelCore(s, 'property')
-      expect(next.leftPanels).toEqual(['nodeTree', 'search'])
-      expect(next.rightPanels).toEqual([])
-      expect(next.rightSizes).toEqual({})
-    })
+  it('同现两侧时右优先（与旧归一化语义一致）', () => {
+    const p = str(deriveDockLayout(DEFS, delta({ leftOrder: ['c'], rightOrder: ['c', 'd'] })))
+    expect(p.left).toEqual(['a', 'b'])
+    expect(p.right).toEqual(['c', 'd', 'demo:p'])
   })
 
-  describe('setRightSizeCore', () => {
-    it('设置高度比例，下限 0.1', () => {
-      const s = baseState()
-      const next = setRightSizeCore(s, 'property', 4)
-      expect(next.rightSizes.property).toBe(4)
-      const low = setRightSizeCore(s, 'property', 0)
-      expect(low.rightSizes.property).toBe(0.1)
-    })
+  it('有序并集：用户顺序优先，未覆盖项按登记顺序追加', () => {
+    const p = str(
+      deriveDockLayout(DEFS, delta({ leftOrder: ['b', 'a'], rightOrder: ['demo:p'] })),
+    )
+    expect(p.left).toEqual(['b', 'a'])
+    expect(p.right).toEqual(['demo:p', 'c', 'd'])
+  })
+
+  it('跨侧移动后语义：leftOrder 覆盖默认归属，归属稳定', () => {
+    const p = str(
+      deriveDockLayout(
+        DEFS,
+        delta({
+          leftOrder: ['a', 'b', 'demo:p'],
+          rightOrder: ['c', 'd'],
+        }),
+      ),
+    )
+    expect(p.left).toEqual(['a', 'b', 'demo:p'])
+    expect(p.right).toEqual(['c', 'd'])
+  })
+})
+
+describe('reorderSeq / dropSize', () => {
+  it('reorderSeq：把 from 位移动到 to 位', () => {
+    expect(reorderSeq(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
+    expect(reorderSeq(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('reorderSeq：from === to 原样；to 越界钳制；from 越界原样返回', () => {
+    const seq = ['a', 'b']
+    expect(reorderSeq(seq, 1, 1)).toBe(seq)
+    expect(reorderSeq(['a', 'b', 'c'], 0, 99)).toEqual(['b', 'c', 'a'])
+    expect(reorderSeq(['a', 'b', 'c'], -5, 1)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('dropSize：删除目标键；不存在时返回等价副本', () => {
+    expect(dropSize({ a: 1, b: 2 }, 'a')).toEqual({ b: 2 })
+    const sizes = { a: 1 }
+    expect(dropSize(sizes, 'x')).toEqual({ a: 1 })
+    expect(dropSize(sizes, 'x')).not.toBe(sizes)
   })
 })

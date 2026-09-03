@@ -1,138 +1,112 @@
-import type { TopBarId, TopBarKey, TopBarZone } from '@/constants/topbar'
+import type { TopBarKey } from '@/constants/topbar'
+import { reorderSeq } from './dock'
 
 /**
- * 顶部栏布局纯函数（模仿 utils/dock.ts）
+ * 顶部栏布局纯函数（delta 模型，模仿 utils/dock.ts）
  *
  * 统一管理「左顶部条 LeftTopBar」与「右顶部条 RightTopBar」的按钮归属与顺序。
- * 所有状态转换均为纯函数（返回新对象），便于单测与 store 复用。
  *
- * 数据模型：
- * - leftTop：左顶部条按钮顺序
- * - rightTop：右顶部条按钮顺序
+ * 数据模型（与 dock 一致：存在性与排布分离）：
+ * - 登记表（uiRegistry store）回答「有哪些按钮、默认放哪侧」（defaultZone）；
+ * - 用户排布（TopDelta）只存用户显式改动：顺序覆盖、跨侧移动；
+ * - 渲染目录 = deriveTopLayout(登记表, delta) 实时派生，永不包含未登记 id。
  *
- * 约束：一个按钮同一时刻只能归属一侧（left ∪ right = 已放置按钮）。
- *
- * 默认布局（哪些按钮默认放哪侧）由按钮品类表 constants/topbar.ts 的
- * defaultZone 派生，本文件不硬编码任何按钮 id。
- *
- * 按钮键：内置按钮用 TopBarId；插件按钮用 `${pluginId}:${id}`（TopBarKey 联合）。
- * 归一化对插件 key 的合法性由 opts.isExtraValid 判定（pluginId 前缀 ∈ 已发现插件集合），
- * 保证「禁用→启用」循环不丢布局记录，仅「彻底移除插件」才清除。
+ * 收益：新增内置按钮 / 插件按钮注册后自动按默认侧出现；恢复默认 = 清空 delta。
+ * 兼容性：持久化沿用旧 key（aidea-top-left / right）——旧完整列表按 delta 读取语义等价。
  */
 
-/** 顶部栏布局状态 */
-export interface TopBarState {
-  leftTop: TopBarKey[]
-  rightTop: TopBarKey[]
+/** 顶栏用户排布增量（layout store 持久化的全部内容） */
+export interface TopDelta {
+  /** 左顶部条用户排布顺序；缺省 = 登记默认顺序 */
+  leftOrder?: TopBarKey[]
+  /** 右顶部条用户排布顺序；缺省 = 登记默认顺序 */
+  rightOrder?: TopBarKey[]
 }
 
-/** 创建默认布局状态 */
-export function defaultTopBarState(
-  left: TopBarId[],
-  right: TopBarId[],
-): TopBarState {
-  return { leftTop: [...left], rightTop: [...right] }
+/** 排布派生输入的最小登记形状（uiRegistry 条目的结构子集） */
+export interface ZoneDef {
+  key: string
+  defaultZone: 'left' | 'right'
 }
 
-/** 归一化额外选项 */
-export interface NormalizeTopBarOptions {
-  /**
-   * 额外合法性判定：返回 true 时该 id 视为有效（即使不在 registry 内）。
-   * 用于插件按钮 key（`${pluginId}:${id}`）：只要其 pluginId 前缀仍在
-   * 「已发现插件」集合中即保留布局记录。
-   */
-  isExtraValid?: (id: string) => boolean
+/** 派生结果：两侧的按钮键顺序 */
+export interface TopPlacement {
+  left: TopBarKey[]
+  right: TopBarKey[]
 }
 
-/**
- * 清理并规整顶部栏状态：
- * - 过滤无效 / 重复 id（左右独立去重；插件 key 经 opts.isExtraValid 判定）
- * - 补充「新增的默认按钮」：defaults 中未出现在任一侧的按钮，按默认侧追加到末尾，
- *   保证新增按钮只需在品类表登记，即可对已有用户自动生效（旧 localStorage 不含新按钮时）。
- *   注意：defaults 仅含内置按钮；插件按钮的首次落位由 layout.ensureTop 负责。
- */
-export function normalizeTopBarState(
-  state: TopBarState,
-  registry: TopBarKey[],
-  defaults?: { left: TopBarId[]; right: TopBarId[] },
-  opts?: NormalizeTopBarOptions,
-): TopBarState {
-  const valid = new Set<TopBarKey>(registry)
-  const isValid = (id: TopBarKey): boolean =>
-    valid.has(id) || (opts?.isExtraValid?.(id) === true)
+// ── delta 解析（localStorage → TopDelta，容错脏数据）──
 
-  const seenLeft = new Set<TopBarKey>()
-  const leftTop: TopBarKey[] = []
-  for (const id of state.leftTop) {
-    if (isValid(id) && !seenLeft.has(id)) {
-      seenLeft.add(id)
-      leftTop.push(id)
-    }
+/** 解析字符串数组字段：过滤非字符串 / isKnown 为 false / 重复项 */
+function parseSeq(raw: unknown, isKnown: (key: string) => boolean): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string' || !isKnown(item) || seen.has(item)) continue
+    seen.add(item)
+    out.push(item)
   }
+  return out
+}
 
-  const seenRight = new Set<TopBarKey>()
-  const rightTop: TopBarKey[] = []
-  for (const id of state.rightTop) {
-    if (isValid(id) && !seenRight.has(id)) {
-      seenRight.add(id)
-      rightTop.push(id)
-    }
-  }
+/** 解析并清洗顶栏 delta（读取 localStorage 后调用一次） */
+export function parseTopDelta(raw: unknown, isKnown: (key: string) => boolean): TopDelta {
+  if (typeof raw !== 'object' || raw === null) return {}
+  const src = raw as Record<string, unknown>
+  const delta: TopDelta = {}
+  const left = parseSeq(src.leftOrder, isKnown)
+  if (left) delta.leftOrder = left as TopBarKey[]
+  const right = parseSeq(src.rightOrder, isKnown)
+  if (right) delta.rightOrder = right as TopBarKey[]
+  return delta
+}
 
-  if (defaults) {
-    const placed = new Set<TopBarKey>([...leftTop, ...rightTop])
-    for (const id of defaults.left) {
-      if (valid.has(id) && !placed.has(id)) {
-        leftTop.push(id)
-        placed.add(id)
-      }
-    }
-    for (const id of defaults.right) {
-      if (valid.has(id) && !placed.has(id)) {
-        rightTop.push(id)
-        placed.add(id)
+// ── 排布派生（delta + 登记表 → 实时目录）──
+
+/** 有序并集：base 中属于 pool 的项按 base 序在前，pool 其余项按 pool 序追加在后 */
+function orderedUnion(base: string[] | undefined, pool: string[]): string[] {
+  const poolSet = new Set(pool)
+  const seq: string[] = []
+  const seen = new Set<string>()
+  if (base) {
+    for (const key of base) {
+      if (poolSet.has(key) && !seen.has(key)) {
+        seen.add(key)
+        seq.push(key)
       }
     }
   }
-
-  return { leftTop, rightTop }
+  for (const key of pool) {
+    if (!seen.has(key)) seq.push(key)
+  }
+  return seq
 }
 
 /**
- * 同一侧内换位：把 from 位的按钮移动到 to 位。
- * from === to 时返回原对象。
+ * 派生两侧实时目录：
+ * - 每个登记按钮的归属：rightOrder 命中 → 右；leftOrder 命中 → 左；否则 defaultZone
+ *   （同现两侧时右优先，与旧归一化语义一致）；
+ * - 顺序：该侧用户顺序优先，未覆盖的按登记顺序追加。
  */
-export function reorderTopCore(
-  state: TopBarState,
-  zone: TopBarZone,
-  from: number,
-  to: number,
-): TopBarState {
-  if (from === to) return state
-  const key = zone === 'left' ? 'leftTop' : 'rightTop'
-  const list = [...state[key]]
-  const [moved] = list.splice(from, 1)
-  list.splice(to, 0, moved)
-  return { ...state, [key]: list }
+export function deriveTopLayout(defs: ZoneDef[], delta: TopDelta): TopPlacement {
+  const leftPool: string[] = []
+  const rightPool: string[] = []
+  for (const def of defs) {
+    const inRight = delta.rightOrder?.includes(def.key as TopBarKey) ?? false
+    const inLeft = delta.leftOrder?.includes(def.key as TopBarKey) ?? false
+    const zone = inRight ? 'right' : inLeft ? 'left' : def.defaultZone
+    if (zone === 'right') rightPool.push(def.key)
+    else leftPool.push(def.key)
+  }
+
+  return {
+    left: orderedUnion(delta.leftOrder, leftPool) as TopBarKey[],
+    right: orderedUnion(delta.rightOrder, rightPool) as TopBarKey[],
+  }
 }
 
-/**
- * 把按钮移入目标侧（另一侧移除 + 加入目标侧末尾）。
- * 若按钮已在目标侧则不重复添加。
- */
-export function moveTopZoneCore(
-  state: TopBarState,
-  buttonId: TopBarKey,
-  toZone: TopBarZone,
-): TopBarState {
-  const removeOther = toZone === 'left' ? state.rightTop : state.leftTop
-  const keep = toZone === 'left' ? state.leftTop : state.rightTop
-  const otherZone = removeOther.filter((id) => id !== buttonId)
-  const target = keep.includes(buttonId) ? keep : [...keep, buttonId]
-  return toZone === 'left'
-    ? { leftTop: target, rightTop: otherZone }
-    : { leftTop: otherZone, rightTop: target }
-}
+// reorderSeq 复用 utils/dock.ts 的通用实现（面板与按钮同一换位语义）
 
 // ── 统一拖拽协议（全项目一致） ──
 
@@ -142,7 +116,7 @@ export const TOP_DRAG_MIME = 'aidea-topbar'
 /** 顶部栏按钮拖拽数据（跨容器移动时携带） */
 export interface TopBarDragData {
   buttonId: TopBarKey
-  zone: TopBarZone
+  zone: 'left' | 'right'
 }
 
 /** 写入顶部栏按钮拖拽数据到 dataTransfer（容错缺少 dataTransfer） */

@@ -10,8 +10,16 @@ import { createTagApi } from './tag'
 import { createProjectApi } from './project'
 import { createViewApi } from './view'
 import { createAdditionsApi } from './additions'
+import { createPresetsApi } from './presets'
+import { createThemeApi } from './theme'
+import { createFileApi } from './file'
+import { createShortcutsApi } from './shortcuts'
 
-/** 构造分类好的应用 api（node / connection / tag / project / view / additions）。additions 为共享只读域。 */
+/**
+ * 构造分类好的应用 api。已有域：node / connection / tag / project / view /
+ * additions（共享只读域）；新增域：presets / theme / file / shortcuts。
+ * （AI 功能已移除，未来迁移为内置插件，不再占用独立 api 域。）
+ */
 export function createPluginApi() {
   return {
     node: createNodeApi(),
@@ -20,6 +28,10 @@ export function createPluginApi() {
     project: createProjectApi(),
     view: createViewApi(),
     additions: createAdditionsApi(null),
+    presets: createPresetsApi(),
+    theme: createThemeApi(),
+    file: createFileApi(),
+    shortcuts: createShortcutsApi(),
   }
 }
 
@@ -31,9 +43,17 @@ export { createTagApi } from './tag'
 export { createProjectApi } from './project'
 export { createViewApi } from './view'
 export { createAdditionsApi } from './additions'
+export { createPresetsApi } from './presets'
+export { createThemeApi } from './theme'
+export { createFileApi } from './file'
+export { createShortcutsApi } from './shortcuts'
 export type { NodeApi } from './node'
 export type { ConnectionApi } from './connection'
 export type { TagApi } from './tag'
 export type { ProjectApi } from './project'
 export type { ViewApi } from './view'
 export type { AdditionsApi } from './additions'
+export type { PresetsApi } from './presets'
+export type { ThemeApi } from './theme'
+export type { FileApi } from './file'
+export type { ShortcutsApi } from './shortcuts'

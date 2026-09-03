@@ -16,12 +16,74 @@ describe('createPluginAdapter 分类 api', () => {
     setActivePinia(createPinia())
   })
 
-  it('exposes the adapter + five categorized api groups', () => {
+  it('exposes the adapter + all categorized api groups', () => {
     const adapter = createPluginAdapter()
     expect(adapter.sdkVersion).toBe(SDK_VERSION)
-    for (const key of ['node', 'connection', 'tag', 'project', 'view']) {
+    const domains = [
+      'node',
+      'connection',
+      'tag',
+      'project',
+      'view',
+      'presets',
+      'theme',
+      'file',
+      'shortcuts',
+    ]
+    for (const key of domains) {
       expect(adapter.api).toHaveProperty(key)
     }
+  })
+
+  it('presets: lists builtin node/connection presets (first-run defaults)', () => {
+    const api = makeApi()
+    // 首次加载 initDefaults 会用默认预设初始化，故至少有一条
+    expect(api.presets.nodePresets().length).toBeGreaterThan(0)
+    expect(api.presets.connectionPresets().length).toBeGreaterThan(0)
+    // 预设 ID 与可见列表一致
+    const first = api.presets.nodePresets()[0]
+    expect(api.presets.visibleNodePresets().map((p) => p.id)).toContain(first.id)
+  })
+
+  it('node: applyPresetById writes a style and is undoable', () => {
+    const api = makeApi()
+    const id = api.node.create(ROOT_NODE_ID, 0, 0, 'n')
+    const preset = api.presets.nodePresets()[0]
+    expect(api.node.applyPresetById(id, preset.id, 'plugin-test')).toBe(true)
+    expect(api.node.get(id)?.borderColor).toBe(preset.borderColor)
+    api.project.undo()
+    expect(api.node.get(id)?.borderColor).not.toBe(preset.borderColor)
+  })
+
+  it('theme: initial light mode with a scheme snapshot; setMode round-trip', () => {
+    const api = makeApi()
+    expect(api.theme.mode()).toBe('light')
+    expect(api.theme.isDark()).toBe(false)
+    expect(typeof api.theme.schemeId()).toBe('string')
+    expect(api.theme.scheme().id).toBe(api.theme.schemeId())
+    api.theme.setMode('dark')
+    expect(api.theme.mode()).toBe('dark')
+    expect(api.theme.isDark()).toBe(true)
+    api.theme.setMode('light')
+  })
+
+  it('file: serializeCurrent emits JSON; parse round-trips', () => {
+    const api = makeApi()
+    const json = api.file.serializeCurrent()
+    expect(typeof json).toBe('string')
+    expect(json.startsWith('{')).toBe(true)
+    expect(api.file.dirty()).toBe(false)
+    const parsed = api.file.parse(json)
+    expect(parsed.nodes.length).toBeGreaterThan(0)
+  })
+
+  it('shortcuts: queries effective bindings and action list', () => {
+    const api = makeApi()
+    expect(api.shortcuts.getBinding('save')).toBe('mod+s')
+    expect(api.shortcuts.seqModKey()).toBe('t')
+    expect(api.shortcuts.isReserved('delete')).toEqual({ reserved: true })
+    expect(api.shortcuts.listActions().length).toBeGreaterThan(0)
+    expect(api.shortcuts.findActionByChord('mod+s')).toBe('save')
   })
 
   it('node query: root exists, empty initially', () => {

@@ -1,0 +1,49 @@
+/**
+ * api/theme.ts —— 主题域：亮 / 暗模式与配色方案的读写
+ * 接口类型由实现派生（`ThemeApi = ReturnType<typeof createThemeApi>`）。
+ *
+ * - 主题为纯 UI 状态（不落 undo 历史、不标注 dirty），故切换方法不带 user。
+ * - `scheme()` 返回组合后的完整配色方案（Naive theme / CSS 变量 / 画布 chrome 色），只读。
+ */
+import type { ColorScheme, AccentSchemeId } from '@/config/colorSchemes'
+import { useThemeStore } from '@/stores/theme'
+
+export function createThemeApi() {
+  const api = {
+    /** 当前主题模式：'light' | 'dark' */
+    mode(): 'light' | 'dark' {
+      return useThemeStore().mode as 'light' | 'dark'
+    },
+    /** 是否暗色模式 */
+    isDark(): boolean {
+      return useThemeStore().isDark
+    },
+    /** 当前主色调 id */
+    accentId(): AccentSchemeId {
+      return useThemeStore().accentId
+    },
+    /** 当前配色方案 id（mode + accent 组合） */
+    schemeId(): string {
+      return useThemeStore().schemeId
+    },
+    /** 完整配色方案（只读快照） */
+    scheme(): ColorScheme {
+      return useThemeStore().scheme
+    },
+    /** 切换亮 / 暗 */
+    toggle(): void {
+      useThemeStore().toggle()
+    },
+    /** 显式设置主题模式 */
+    setMode(target: 'light' | 'dark'): void {
+      useThemeStore().setMode(target)
+    },
+    /** 设置主色调 */
+    setAccent(id: AccentSchemeId): void {
+      useThemeStore().setAccent(id)
+    },
+  }
+  return api
+}
+
+export type ThemeApi = ReturnType<typeof createThemeApi>

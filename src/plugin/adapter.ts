@@ -75,7 +75,19 @@ function createRejectedUi(): PluginUiApi {
 
 // ── 重新导出（插件从这里取类型 / 工厂 / 版本）──
 export { createPluginApi } from './api'
-export type { PluginApi, NodeApi, ConnectionApi, TagApi, ProjectApi, ViewApi } from './api'
+export type {
+  PluginApi,
+  NodeApi,
+  ConnectionApi,
+  TagApi,
+  ProjectApi,
+  ViewApi,
+  AdditionsApi,
+  PresetsApi,
+  ThemeApi,
+  FileApi,
+  ShortcutsApi,
+} from './api'
 export type {
   PluginUiApi,
   PluginPanelRegistration,

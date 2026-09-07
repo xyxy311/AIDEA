@@ -16,9 +16,21 @@
  *   3. setSeqModKey：序号修饰键与锁定键单键或自定义动作裸单键冲突 → 拒绝
  *
  * 插件动作合并：uiRegistry.shortcutActions 中的插件动作（key = `${pluginId}:${id}`）
- * 并入有效绑定表（有 defaultChord 的作默认，overrides 覆盖优先）；assign 的冲突校验
- * 范围同样覆盖插件动作。validate 对含 ':' 的插件命名空间覆盖**跳过清理**（插件禁用
- * 重启期间动作不在表，保留覆盖以便重装后恢复）。
+ * 并入有效绑定表（有 defaultChord 的作默认，覆盖优先）；assign 的冲突校验范围同样
+ * 覆盖插件动作。
+ *
+ * 插件覆盖存储路由（本 store 只路由不托管）：含 ':' 的覆盖条目由 pluginConfig 独立
+ * 存储（`aidea-plugin-config.<pluginId>.shortcuts`，key = 动作短 id），不混存本 store
+ * 的内置覆盖持久化（aidea-shortcuts）——插件禁用/重启期间覆盖随插件文件保留，重装
+ * 自动恢复：
+ *   - setup 顶部先跑 migrateShortcutOverrides()（须先于 overrides 的 useStorage 读取，
+ *     否则旧混存条目会先被读入内存、经 validate/写回污染回归）；
+ *   - validate 丢弃 overrides 中含 ':' 的残留条目（本 key 只承载内置覆盖，插件覆盖
+ *     独立存储且不受本 validate 影响）；
+ *   - bindings 合并各插件文件的 shortcuts 段（`${pluginId}:${actionId}` 归属，与默认
+ *     表未知 key 同规则过滤）；
+ *   - assign / reset / resetAll 按首个 ':' 路由：插件动作写 pluginConfig，内置动作写
+ *     本 overrides；resetAll 同时清两源（含未启用插件）。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
@@ -32,6 +44,8 @@ import {
 } from '@/constants/shortcuts'
 import { isValidChord, parseChord } from '@/utils/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
+import { usePluginConfigStore } from '@/stores/pluginConfig'
+import { migrateShortcutOverrides } from '@/utils/pluginConfig'
 
 /** 用户覆盖绑定持久化 key */
 const STORAGE_BINDINGS = 'aidea-shortcuts'
@@ -70,7 +84,15 @@ function findLockedKeyConflict(key: string): boolean {
 }
 
 export const useShortcutsStore = defineStore('shortcuts', () => {
-  /** 用户覆盖绑定（仅存被改动的动作） */
+  // ── 存量迁移先行：必须在 overrides 的 useStorage 读取之前 ──
+  // 把旧混存在 aidea-shortcuts 中的插件覆盖条目搬入各插件配置文件；晚于此读取会让旧
+  // 条目先进入内存，再经 validate 丢弃/写回造成回归。纯 localStorage 层，同步执行。
+  migrateShortcutOverrides()
+
+  /** 插件配置（插件覆盖独立存储的写入方；含 ':' 路由目标） */
+  const pluginConfigs = usePluginConfigStore()
+
+  /** 用户覆盖绑定（仅存被改动的动作；只承载内置覆盖，插件覆盖走 pluginConfig 独立存储） */
   const overrides = useStorage<Record<string, string>>(STORAGE_BINDINGS, {})
 
   /** 序号修饰键：按住它再按 1-9 表示打标签（默认 t） */
@@ -80,11 +102,9 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
   function validate(): void {
     const next: Record<string, string> = {}
     const used = new Set(RESERVED_CHORDS)
-    // 插件命名空间（key 含 ':'）的覆盖跳过清理：插件禁用 / 重启期间动作可能不在登记表，
-    // 原样保留以便插件重装后恢复绑定（未注册 key 在 bindings 的归属判断中被忽略）
-    for (const [key, chord] of Object.entries(overrides.value)) {
-      if (key.includes(':')) next[key] = chord
-    }
+    // 含 ':' 的条目为本 key 的历史残留（插件覆盖已迁入 pluginConfig 独立存储）——
+    // 一律丢弃避免写回污染（下面按 CUSTOM_SHORTCUT_IDS 白名单重建天然排除它们；
+    // 插件覆盖不受本 validate 影响，随插件文件保留）
     for (const id of CUSTOM_SHORTCUT_IDS) {
       const chord = overrides.value[id]
       if (chord === undefined) continue
@@ -109,8 +129,19 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
     for (const [key, entry] of registry.shortcutActions) {
       if (entry.def.defaultChord) out[key] = entry.def.defaultChord
     }
-    // 覆盖优先（内置 id 与插件完整 key 统一处理；不在 out 中的未知 key 忽略）
-    for (const [id, over] of Object.entries(overrides.value)) {
+    // 插件覆盖并入：pluginConfig 各插件文件的 shortcuts 段（key = 动作短 id），
+    // 须拼为完整登记 key（`${pluginId}:${actionId}`）再合并——直接 Object.assign 会因
+    // 短 id 撞名跨插件互覆，且匹配不上 out 的完整 key（会被未知 key 规则忽略）。
+    // configs 为深度响应式 Map，此处迭代 + 读键可被追踪（改覆盖即改 bindings）。
+    const pluginOverrides: Record<string, string> = {}
+    for (const [pluginId, cfg] of pluginConfigs.configs) {
+      for (const [actionId, chord] of Object.entries(cfg.shortcuts)) {
+        pluginOverrides[`${pluginId}:${actionId}`] = chord
+      }
+    }
+    // 覆盖优先（内置 id 与插件完整 key 统一处理；不在 out 中的未知 key 忽略；
+    // 两源 key 空间不相交——含 ':' 为插件、不含为内置）
+    for (const [id, over] of Object.entries({ ...pluginOverrides, ...overrides.value })) {
       if (id in out && over !== undefined && isValidChord(over)) out[id] = over
     }
     return out
@@ -166,19 +197,37 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
         return { ok: false, conflict: { id: otherKey, labelKey: entry.def.label } }
       }
     }
-    overrides.value = { ...overrides.value, [id]: chord }
+    // 存储路由：插件动作（完整 key 含 ':'）写 pluginConfig 独立存储；内置动作写本覆盖
+    if (id.includes(':')) {
+      const idx = id.indexOf(':')
+      pluginConfigs.setShortcutOverride(id.slice(0, idx), id.slice(idx + 1), chord)
+    } else {
+      overrides.value = { ...overrides.value, [id]: chord }
+    }
     return { ok: true }
   }
 
-  /** 恢复某动作到默认绑定 */
+  /**
+   * 恢复某动作到默认绑定。
+   * 存储路由：插件动作删 pluginConfig 单条（key 拆为 pluginId/actionId）；内置动作删本覆盖。
+   */
   function reset(id: string): void {
+    if (id.includes(':')) {
+      const idx = id.indexOf(':')
+      pluginConfigs.removeShortcutOverride(id.slice(0, idx), id.slice(idx + 1))
+      return
+    }
     const { [id]: _removed, ...rest } = overrides.value
     overrides.value = rest
   }
 
-  /** 恢复全部为默认（含序号修饰键） */
+  /**
+   * 恢复全部为默认（含序号修饰键）。
+   * 全量重置语义：同时清内置覆盖与全部插件覆盖（含未启用插件的覆盖）。
+   */
   function resetAll(): void {
     overrides.value = {}
+    pluginConfigs.clearShortcutOverrides()
   }
 
   /**

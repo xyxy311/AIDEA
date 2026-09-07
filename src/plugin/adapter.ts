@@ -4,16 +4,18 @@
  * 组装并导出全局唯一 `adapter` 单例：
  * - 分类好的应用 api 在 `./api/`（node / connection / tag / project / view /
  *   presets / theme / file / shortcuts），类型由实现派生；本文件只装配并在下方 re-export。
- *   api 不含 additions（插件命名空间数据仅经 `for(id)` 的 PluginScope 提供）；
+ *   api 不含 additions 与 config（插件命名空间能力仅经 `for(id)` 的 PluginScope 提供）；
  *   shortcuts 仅只读查询（动作注册在 ctx.register.registerShortcutAction）。
  * - 插件命名空间能力经 `adapter.for(pluginId)` 获取：模块级 Map 缓存，同 id
- *   重复调用返回同一实例；AdditionsApi 闭包内才 useStore，模块加载期不触碰 pinia。
+ *   重复调用返回同一实例；AdditionsApi / ConfigApi 闭包内才 useStore，模块加载期
+ *   不触碰 pinia。
  * - 插件运行时契约类型（PluginAdapter / PluginContext / AideaPlugin）也定在这里，
  *   与实现型 api 类型聚于同一入口，插件统一从本文件导入。
  *
- * 数据操作：插件直接 `import { adapter }` 使用 `adapter.api`（共享，无命名空间）与
- * `adapter.for(id).additions`（插件专属前缀桶）；UI 注册不在 adapter 上——
- * setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
+ * 数据操作：插件直接 `import { adapter }` 使用 `adapter.api`（共享，无命名空间）、
+ * `adapter.for(id).additions`（插件命名空间的项目级数据桶）与
+ * `adapter.for(id).config`（插件自身偏好的应用级独立存储，不入项目历史）；UI 注册
+ * 不在 adapter 上——setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
  *
  * SDK 通用 UI 组件：本文件同时 re-export 少量可复用 UI 组件（当前为
  * ShortcutActionRow——快捷键动作改键行），供插件设置栏目等场景直接使用。
@@ -24,14 +26,18 @@ import { createPluginApi } from './api'
 import type { PluginApi } from './api'
 import { createAdditionsApi } from './api/additions'
 import type { AdditionsApi } from './api/additions'
+import { createPluginConfigApi } from './api/config'
+import type { PluginConfigApi } from './api/config'
 import type { PluginRegisterApi } from './ui'
 
 // ── 插件运行时契约（稳定）──
 
-/** adapter.for(pluginId) 返回的插件命名空间能力（additions 内部自动拼 `${pluginId}:` 前缀） */
+/** adapter.for(pluginId) 返回的插件命名空间能力（additions 内部自动拼 `${pluginId}:` 前缀；config 绑定插件独立配置文件） */
 export interface PluginScope {
   /** 插件命名空间的 additions（内部自动拼 `${pluginId}:` 前缀，key 本身不得含冒号） */
   additions: AdditionsApi
+  /** 插件自身配置（`aidea-plugin-config.<pluginId>` 的 data 段，get/set/remove，即时持久化） */
+  config: PluginConfigApi
 }
 
 /** 插件的完整适配层（全局唯一实例 `adapter`，插件直接 import 使用） */
@@ -84,8 +90,11 @@ export function createPluginAdapter(): PluginAdapter {
       requireValidPluginId(pluginId)
       const cached = scopeCache.get(pluginId)
       if (cached) return cached
-      // 惰性：AdditionsApi 只创建闭包，方法体内才 useStore，此处不触碰任何 pinia store
-      const scope: PluginScope = { additions: createAdditionsApi(pluginId) }
+      // 惰性：AdditionsApi / ConfigApi 只创建闭包，方法体内才 useStore，此处不触碰任何 pinia store
+      const scope: PluginScope = {
+        additions: createAdditionsApi(pluginId),
+        config: createPluginConfigApi(pluginId),
+      }
       scopeCache.set(pluginId, scope)
       return scope
     },
@@ -110,6 +119,7 @@ export type {
   FileApi,
   ShortcutsApi,
 } from './api'
+export type { PluginConfigApi } from './api/config'
 export type {
   PluginRegisterApi,
   PluginPanelRegistration,

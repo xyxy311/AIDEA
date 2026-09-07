@@ -5,7 +5,9 @@
  * 要点：
  * 1. 数据操作经全局单例：`import { adapter } from '@/plugin/adapter'`——
  *    `adapter.api.*` 查询 / 执行命令；`scope.additions.*` 读写本插件命名空间数据
- *    （scope = adapter.for(manifest.id)，additions 自动加 `hello:` 前缀）。
+ *    （scope = adapter.for(manifest.id)，additions 自动加 `hello:` 前缀）；
+ *    `scope.config.*` 读写插件自身配置（`aidea-plugin-config.hello` 独立存储，
+ *    应用级持久化、不入项目历史，如 greet 的问候语前缀）。
  * 2. UI / 动作注册经 setup(ctx) 的 ctx.register.*（registerShortcutAction /
  *    registerContextMenuItem 可探测注册结果，ok=false 时打印被拒原因）。
  * 3. 插件自己需要"多步命令"时写成普通函数（本插件内部私有），仅供自身使用，
@@ -125,7 +127,9 @@ const plugin: AideaPlugin = {
       scope: 'canvas',
       defaultChord: 'mod+shift+g',
       run: () => {
-        console.info('[hello] 快捷键触发')
+        // 问候语前缀经插件自身配置（scope.config，get 未配置回退 '你好'）；设置面板改前缀即时生效
+        const prefix = scope.config.get('greetingPrefix', '你好')
+        console.info(`[hello] ${prefix}，快捷键触发`)
       },
     })
     if (!shortcutRes.ok) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { createShortcutsApi } from '@/plugin/api/shortcuts'
 import { createPluginRegister } from '@/plugin/ui'
@@ -221,32 +222,37 @@ describe('shortcuts store：注册插件动作后的只读查询', () => {
     expect(shortcuts.getBinding('demo:act')).toBe('mod+shift+g')
   })
 
-  it('validate 保留含 ":" 的插件命名空间覆盖（动作不在表也不清），清理未知非命名空间 key', () => {
+  it('validate 丢弃含 ":" 残留（插件覆盖已迁 pluginConfig 独立存储），清理未知非命名空间 key', async () => {
     localStorage.setItem(
       'aidea-shortcuts',
       JSON.stringify({ 'demo:act': 'j', not_exist: 'x', enterChild: 'mod' }),
     )
     const shortcuts = useShortcutsStore()
-    // 插件命名空间覆盖保留（即便 demo:act 尚未注册）
-    expect(shortcuts.overrides['demo:act']).toBe('j')
-    // 未知非命名空间 key 与非法值仍被清理
+    // store 创建时迁移先行：demo:act 搬入插件配置文件（未被误删）
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({ act: 'j' })
+    // 含 ':' 残留不再保留于本覆盖（validate 丢弃）；未知非命名空间 key 与非法值仍被清理
+    expect(shortcuts.overrides['demo:act']).toBeUndefined()
     expect(shortcuts.overrides.not_exist).toBeUndefined()
     expect(shortcuts.overrides.enterChild).toBeUndefined()
+    await nextTick() // validate 写回（useStorage pre flush）
+    expect(JSON.parse(localStorage.getItem('aidea-shortcuts')!)).toEqual({})
   })
 
-  it('插件卸载（removePlugin）后 bindings 不再含其默认键，但覆盖保留', () => {
+  it('插件卸载（removePlugin）后 bindings 不再含其默认键，但覆盖保留在 pluginConfig 独立存储', async () => {
     const registry = useUiRegistryStore()
     const shortcuts = useShortcutsStore()
     registry.registerPluginShortcutAction('demo', dummyAction())
     shortcuts.assign('demo:act', 'j')
     expect(shortcuts.getBinding('demo:act')).toBe('j')
+    await nextTick()
 
     registry.removePlugin('demo')
     // 动作不在表 → bindings 不含（getBinding 回退空串）
     expect(shortcuts.bindings['demo:act']).toBeUndefined()
     expect(shortcuts.getBinding('demo:act')).toBe('')
-    // validate 后覆盖仍保留（含 ':' 跳过清理）
+    // validate 不触碰独立存储：覆盖仍在插件配置文件（重装后恢复）
     shortcuts.validate()
-    expect(shortcuts.overrides['demo:act']).toBe('j')
+    await nextTick()
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({ act: 'j' })
   })
 })

@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
+import { usePluginConfigStore } from '@/stores/pluginConfig'
 import { CUSTOM_SHORTCUTS, RESERVED_CHORDS } from '@/constants/shortcuts'
+
+/** 清理插件配置独立存储（插件快捷键覆盖自本轮起存于 `aidea-plugin-config.<pluginId>`） */
+function clearPluginConfigStorage(): void {
+  const keys: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (k && k.startsWith('aidea-plugin-config.')) keys.push(k)
+  }
+  for (const k of keys) localStorage.removeItem(k)
+}
 
 function freshStore() {
   return useShortcutsStore()
@@ -14,6 +26,7 @@ describe('shortcuts store', () => {
     // 清理测试环境中的持久化
     localStorage.removeItem('aidea-shortcuts')
     localStorage.removeItem('aidea-shortcuts-seqmod')
+    clearPluginConfigStorage()
   })
 
   it('默认绑定来自注册表', () => {
@@ -124,6 +137,7 @@ describe('shortcuts store：插件注册动作（经 uiRegistry 登记）', () =
     setActivePinia(createPinia())
     localStorage.removeItem('aidea-shortcuts')
     localStorage.removeItem('aidea-shortcuts-seqmod')
+    clearPluginConfigStorage()
   })
 
   /** 经 uiRegistry 登记一个带默认键的插件动作 */
@@ -182,15 +196,95 @@ describe('shortcuts store：插件注册动作（经 uiRegistry 登记）', () =
     expect(s.getBinding('demo:act')).toBe('mod+shift+g')
   })
 
-  it('validate 不清含 ":" 的插件命名空间覆盖（动作不在表也保留）', () => {
+  it('迁移先行：旧混存含 ":" 条目搬入插件配置文件，validate 丢弃残留而非保留', async () => {
     localStorage.setItem('aidea-shortcuts', JSON.stringify({ 'demo:act': 'j', not_exist: 'x' }))
-    const s = freshStore() // store 创建时自动 validate
-    expect(s.overrides['demo:act']).toBe('j') // 插件命名空间保留
-    expect(s.overrides.not_exist).toBeUndefined() // 非命名空间未知 id 仍清理
+    const s = freshStore() // store 创建时先迁移（同步写各插件文件）后 validate
+    // 迁移先行：demo:act 搬入插件配置（未被 validate 误删）
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({ act: 'j' })
+    // validate 丢弃含 ':' 残留 + 非命名空间未知 id 仍清理（内存即时）
+    expect(s.overrides['demo:act']).toBeUndefined()
+    expect(s.overrides.not_exist).toBeUndefined()
+    await nextTick() // validate 的清理写回（useStorage pre flush）
+    expect(JSON.parse(localStorage.getItem('aidea-shortcuts')!)).toEqual({})
+    // 合并后 bindings 生效（registry 未登记 demo:act → 未知 key 忽略，bindings 不含）
+    expect(s.bindings['demo:act']).toBeUndefined()
+  })
 
-    // 卸载动作后手动 validate，覆盖依旧保留
-    useUiRegistryStore().removePlugin('demo')
+  it('迁移后内置覆盖条目留在原处：aidea-shortcuts 裁剪版原样保留、无插件条目则不建插件文件', () => {
+    localStorage.setItem('aidea-shortcuts', JSON.stringify({ save: 'mod+shift+s' }))
+    const s = freshStore()
+    // 无含 ':' 条目 → 不建任何插件文件，内置覆盖原样保留
+    expect(localStorage.getItem('aidea-plugin-config.demo')).toBeNull()
+    expect(JSON.parse(localStorage.getItem('aidea-shortcuts')!)).toEqual({ save: 'mod+shift+s' })
+    expect(s.overrides).toEqual({ save: 'mod+shift+s' })
+    // validate 不触碰内置覆盖
     s.validate()
-    expect(s.overrides['demo:act']).toBe('j')
+    expect(s.overrides).toEqual({ save: 'mod+shift+s' })
+  })
+
+  it('assign 插件完整 key：覆盖落 pluginConfig 独立存储，aidea-shortcuts 无 ":" 条目', async () => {
+    registerDemoAction()
+    const s = freshStore()
+    expect(s.assign('demo:act', 'j')).toEqual({ ok: true })
+    // 内存即时生效（reactive，无需等待落盘）
+    expect(s.getBinding('demo:act')).toBe('j')
+    await nextTick() // pluginConfig 深度 watch 落盘（默认 pre flush）
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({ act: 'j' })
+    // 内置覆盖持久化文件不含任何 ':' 条目
+    const legacy = JSON.parse(localStorage.getItem('aidea-shortcuts') ?? '{}') as Record<string, string>
+    expect(Object.keys(legacy).some((k) => k.includes(':'))).toBe(false)
+  })
+
+  it('reset 完整 key：删 pluginConfig 单条覆盖（actionId 不含前缀），回 defaultChord', async () => {
+    registerDemoAction()
+    const s = freshStore()
+    s.assign('demo:act', 'j')
+    s.reset('demo:act')
+    expect(s.getBinding('demo:act')).toBe('mod+shift+g') // 内存立即回默认
+    await nextTick()
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({})
+  })
+
+  it('resetAll 清两源：内置覆盖 + 全部插件覆盖（含未注册动作的插件）', async () => {
+    registerDemoAction()
+    const s = freshStore()
+    s.assign('enterChild', 'x')
+    s.assign('demo:act', 'j')
+    // 未注册动作的插件覆盖也在清空范围（全量重置语义）
+    usePluginConfigStore().setShortcutOverride('ghost', 'greet', 'k')
+    s.resetAll()
+    expect(s.overrides).toEqual({})
+    expect(s.getBinding('demo:act')).toBe('mod+shift+g')
+    await nextTick()
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({})
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.ghost')!).shortcuts).toEqual({})
+  })
+
+  it('bindings 合并插件覆盖；未注册动作的覆盖条目被忽略（未知 key 规则不变）', () => {
+    registerDemoAction()
+    const s = freshStore()
+    // 直接写入 pluginConfig 的覆盖（模拟迁移产物）
+    usePluginConfigStore().setShortcutOverride('demo', 'act', 'j')
+    usePluginConfigStore().setShortcutOverride('demo', 'ghost', 'k') // 未注册动作
+    expect(s.getBinding('demo:act')).toBe('j')
+    expect(s.bindings['demo:ghost']).toBeUndefined()
+    // 内置覆盖与插件覆盖互不影响
+    s.assign('enterChild', 'x')
+    expect(s.getBinding('enterChild')).toBe('x')
+    expect(s.getBinding('demo:act')).toBe('j')
+  })
+
+  it('插件卸载后 bindings 不再含其默认键，但覆盖保留在独立存储（重装恢复）', async () => {
+    registerDemoAction()
+    const s = freshStore()
+    s.assign('demo:act', 'j')
+    await nextTick()
+    // 卸载动作 → bindings 不含（默认与覆盖均被未知 key 规则忽略）
+    useUiRegistryStore().removePlugin('demo')
+    expect(s.bindings['demo:act']).toBeUndefined()
+    // shortcuts store 的 validate 不触碰独立存储：覆盖仍在插件配置文件
+    s.validate()
+    await nextTick()
+    expect(JSON.parse(localStorage.getItem('aidea-plugin-config.demo')!).shortcuts).toEqual({ act: 'j' })
   })
 })

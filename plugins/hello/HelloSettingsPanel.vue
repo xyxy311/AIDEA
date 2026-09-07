@@ -3,19 +3,25 @@
  * HelloSettingsPanel —— 示例插件「示例插件配置」设置栏目内容组件（无自带 header）。
  *
  * 演示：
+ * - 快捷键动作改键 UI：经 `adapter.api.shortcuts.pluginActions('hello')`（computed 包裹
+ *   保持响应，注册 / 回滚联动）动态渲染 SDK 导出的 ShortcutActionRow——
+ *   录制改键 / 恢复默认 / 冲突提示在组件内闭环，插件动作的改键入口独占在插件自身设置栏目。
  * - additions 项目化数据：展示当前 demo 值，并提供「清除示例数据」按钮（additions.remove，可撤销）。
  * - 布局沿用内置 Settings Section 的 .settings-controls/.setting-row 结构
  *   （import 相对路径的 settings-shared.css，与现有 Section 对齐）。
- * 注意：additions 作用域 api 经 `adapter.for('hello').additions` 获取（for 有模块级缓存，
- * 与入口 setup 拿到同一实例）；组件不得 import 插件入口（构成循环依赖），直接 for('hello')。
+ * 注意：组件不得 import 插件入口（会被入口 import，构成循环依赖）；additions 作用域 api
+ * 经 `adapter.for('hello').additions` 获取（for 有模块级缓存，与入口 setup 拿到同一实例）。
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { NButton } from 'naive-ui'
-import { adapter } from '@/plugin/adapter'
+import { adapter, ShortcutActionRow } from '@/plugin/adapter'
 import '../../src/components/settings/settings-shared.css'
 
 const additions = adapter.for('hello').additions
 const DEMO_KEY = 'demo'
+
+/** 本插件登记的快捷键动作（key=完整登记 key，label=成品字符串）；computed 保持 uiRegistry 联动 */
+const pluginActions = computed(() => adapter.api.shortcuts.pluginActions('hello'))
 
 const demoValue = ref<string | null>(null)
 
@@ -54,5 +60,19 @@ onMounted(refreshDemo)
       </div>
       <NButton size="small" @click="handleClear">清除示例数据</NButton>
     </div>
+
+    <!-- 本插件注册的快捷键动作：点击键帽录制改键（主应用快捷键栏目不显示插件动作） -->
+    <div class="setting-row row-stack">
+      <div class="setting-cell">
+        <div class="setting-label">快捷键动作</div>
+        <div class="setting-desc">本插件注册的快捷键动作（点击键帽录制改键）。</div>
+      </div>
+    </div>
+    <ShortcutActionRow
+      v-for="row in pluginActions"
+      :key="row.key"
+      :action-key="row.key"
+      :label="row.label"
+    />
   </div>
 </template>

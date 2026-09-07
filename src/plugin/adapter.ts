@@ -14,6 +14,9 @@
  * 数据操作：插件直接 `import { adapter }` 使用 `adapter.api`（共享，无命名空间）与
  * `adapter.for(id).additions`（插件专属前缀桶）；UI 注册不在 adapter 上——
  * setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
+ *
+ * SDK 通用 UI 组件：本文件同时 re-export 少量可复用 UI 组件（当前为
+ * ShortcutActionRow——快捷键动作改键行），供插件设置栏目等场景直接使用。
  */
 import type { PluginManifest } from '@/types'
 import { SDK_VERSION } from '@/types/plugin'
@@ -117,3 +120,6 @@ export type {
 } from './ui'
 export { SDK_VERSION } from '@/types/plugin'
 export type { PluginManifest } from '@/types'
+
+// ── SDK 通用 UI 组件（供插件复用；首个：快捷键动作改键行）──
+export { default as ShortcutActionRow } from '@/components/common/ShortcutActionRow.vue'

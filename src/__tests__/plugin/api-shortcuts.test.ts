@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createShortcutsApi } from '@/plugin/api/shortcuts'
 import { createPluginRegister } from '@/plugin/ui'
+import { adapter } from '@/plugin/adapter'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { RESERVED_CHORDS } from '@/constants/shortcuts'
@@ -129,6 +130,50 @@ describe('注册面 registerShortcutAction（per-plugin）', () => {
     register.registerShortcutAction(dummyAction())
     expect(api.findActionByChord('mod+shift+g')).toBe('demo:act')
     expect(api.findActionByChord('no+such+chord')).toBeNull()
+  })
+})
+
+describe('api.shortcuts.pluginActions（只读查询）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
+
+  it('登记后按 `${pluginId}:` 前缀过滤：返回完整 key 与成品 label，跨插件隔离', () => {
+    createPluginRegister('demo').registerShortcutAction(dummyAction({ id: 'act1', label: '动作一' }))
+    // other 动作不带 defaultChord：避免与 demo:act1 的默认键冲突被注册面拒绝
+    createPluginRegister('other').registerShortcutAction(
+      dummyAction({ id: 'act2', label: '动作二', defaultChord: undefined }),
+    )
+
+    const api = createShortcutsApi()
+    expect(api.pluginActions('demo')).toEqual([{ key: 'demo:act1', label: '动作一' }])
+    expect(api.pluginActions('other')).toEqual([{ key: 'other:act2', label: '动作二' }])
+  })
+
+  it('无命中返回空数组；查询只读、不改变登记状态（幂等）', () => {
+    const api = createShortcutsApi()
+    const registry = useUiRegistryStore()
+    // 未注册任何动作：空数组
+    expect(api.pluginActions('none')).toEqual([])
+
+    const register = createPluginRegister('demo')
+    register.registerShortcutAction(dummyAction({ id: 'act', label: '演示动作' }))
+    // 两次查询结果一致（幂等），registry 状态不变
+    expect(api.pluginActions('demo')).toEqual([{ key: 'demo:act', label: '演示动作' }])
+    expect(api.pluginActions('demo')).toEqual(api.pluginActions('demo'))
+    expect(registry.shortcutActions.size).toBe(1)
+    // 前缀不匹配（'dem' 不是完整 `${pluginId}:` 前缀）：空数组
+    expect(api.pluginActions('dem')).toEqual([])
+    // 查询不产生 / 清理任何登记
+    expect(registry.shortcutActions.has('demo:act')).toBe(true)
+  })
+
+  it('经 adapter.api.shortcuts 亦可查询（共享 api 暴露 pluginActions）', () => {
+    createPluginRegister('demo').registerShortcutAction(dummyAction())
+    expect(adapter.api.shortcuts.pluginActions('demo')).toEqual([
+      { key: 'demo:act', label: '演示动作' },
+    ])
   })
 })
 

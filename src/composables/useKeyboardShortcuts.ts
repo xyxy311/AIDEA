@@ -11,6 +11,7 @@ import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { toChordString, normalizeKey } from '@/utils/shortcuts'
 import type { ShortcutScope } from '@/types/shortcuts'
 
@@ -225,6 +226,15 @@ export function useKeyboardShortcuts(
         if (chord) {
           map.set(chord, { id: def.id, scope: def.scope, run: customRuns[def.id] })
         }
+      }
+
+      // ── 插件注册动作（key = `${pluginId}:${id}`；绑定来自 store，run 由插件提供）──
+      const registry = useUiRegistryStore()
+      for (const [key, entry] of registry.shortcutActions) {
+        const chord = shortcuts.getBinding(key)
+        if (!chord) continue
+        const run = entry.def.run
+        map.set(chord, { id: key, scope: entry.def.scope, run: () => run() })
       }
 
       return map

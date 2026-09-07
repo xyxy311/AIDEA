@@ -10,10 +10,9 @@
  * 本模块不感知 pinia：记录快照经 onChange 订阅暴露，启停意愿经注入的 getEnabled 读取——
  * 便于在 vitest 中仅构造源码即测试（不依赖 localStorage / Vite glob）。
  */
-import type { PluginAdapter, AideaPlugin, PluginContext, PluginManifest } from './adapter'
+import type { AideaPlugin, PluginContext, PluginManifest } from './adapter'
 import { SDK_VERSION } from '@/types/plugin'
-import { createAdditionsApi } from './api/additions'
-import { createPluginUiApi, rollbackPluginUi } from './ui'
+import { createPluginRegister, rollbackPluginUi } from './ui'
 
 /** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。这是内部/注入的装载项。 */
 export interface PluginEntry {
@@ -45,23 +44,16 @@ interface InternalPluginContext extends PluginContext {
   dispose(): void
 }
 
-/** 组装 PluginContext：注入共享适配层 + manifest，收集 onDispose 清理函数 */
-function createPluginContext(adapter: PluginAdapter, manifest: PluginManifest): InternalPluginContext {
+/** 组装 PluginContext：注入注册面（plugin/ui.ts）+ manifest，收集 onDispose 清理函数 */
+function createPluginContext(manifest: PluginManifest): InternalPluginContext {
   const disposers: Array<() => void> = []
 
-  // 按插件作用域组装适配层：扩增 api.additions（项目扩展数据域），并注入专属 UI 注册面
-  const scoped: PluginAdapter = {
-    ...adapter,
-    api: { ...adapter.api, additions: createAdditionsApi(manifest.id) },
-    ui: createPluginUiApi(manifest.id),
-  }
-
   return {
-    adapter: scoped,
     manifest,
     onDispose(fn: () => void): void {
       disposers.push(fn)
     },
+    register: createPluginRegister(manifest.id),
     dispose(): void {
       for (const fn of disposers.splice(0)) {
         try {
@@ -101,22 +93,18 @@ export interface PluginRecord {
 export interface PluginManagerOptions {
   /** 装载候选集合（测试可注入假 entries） */
   entries: PluginEntry[]
-  /** 单一适配层实例，所有插件共享（无命名空间） */
-  adapter: PluginAdapter
   /** 只读的"已启用集合"（id → enabled），持久化写入是 store 专属职责 */
   getEnabled: () => Record<string, boolean>
 }
 
 export class PluginManager {
   private readonly entries: PluginEntry[]
-  private readonly adapter: PluginAdapter
   private readonly getEnabled: () => Record<string, boolean>
   private readonly records = new Map<string, PluginRecord>()
   private readonly listeners = new Set<(records: PluginRecord[]) => void>()
 
   constructor(options: PluginManagerOptions) {
     this.entries = options.entries
-    this.adapter = options.adapter
     this.getEnabled = options.getEnabled
   }
 
@@ -215,7 +203,7 @@ export class PluginManager {
       return
     }
 
-    const context = createPluginContext(this.adapter, plugin.manifest)
+    const context = createPluginContext(plugin.manifest)
     try {
       plugin.setup(context)
       record.status = 'active'

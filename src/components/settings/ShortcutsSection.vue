@@ -2,24 +2,44 @@
 /**
  * ShortcutsSection — 设置面板「快捷键」分区
  *
- * 罗列所有可自定义动作，每个动作一行：显示当前绑定键（点击进入「按键录制」——
- * 下一次按键即设置为新绑定），并提供「恢复默认」。
- * 底部提供「恢复全部默认」。
+ * 罗列所有可自定义动作（内置在前、插件注册动作按登记序排后，行样式一致不分组），
+ * 每个动作一行：显示当前绑定键（点击进入「按键录制」——下一次按键即设置为新绑定），
+ * 并提供「恢复默认」。底部提供「恢复全部默认」。
+ * 内置动作 label 经 t(labelKey)；插件动作 label 为插件提供的成品字符串。
+ * 插件动作可能无绑定（无 defaultChord 且无覆盖）：kbd 显示为空串（保留键帽框不破坏布局）。
  *
  * 录制采用 window 捕获阶段的 keydown 监听，并 stopImmediatePropagation，
- * 避免录制期间按键误触全局快捷键。
+ * 避免录制期间按键误触全局快捷键。录制 / 恢复逻辑对完整登记 key（含插件
+ * `${pluginId}:${id}`）直接工作，与内置动作共用同一条流程。
  */
 import { NButton, NIcon, useDialog } from 'naive-ui'
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { RefreshOutline } from '@vicons/ionicons5'
 import { useShortcutsStore } from '@/stores/shortcuts'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
 import { formatChord, toChordString, isModifierOnly } from '@/utils/shortcuts'
 import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 
 const shortcuts = useShortcutsStore()
+const uiRegistry = useUiRegistryStore()
 const dialog = useDialog()
+
+/** 动作行统一模型：key 为绑定 id（内置 = 短 id；插件 = 完整登记 key） */
+interface ActionRow {
+  key: string
+  label: string
+}
+
+/** 动作行列表：内置 CUSTOM_SHORTCUTS 在前 + 插件动作按登记序排后（不加分组标题） */
+const actionRows = computed<ActionRow[]>(() => {
+  const rows: ActionRow[] = CUSTOM_SHORTCUTS.map((def) => ({ key: def.id, label: t(def.labelKey) }))
+  for (const entry of uiRegistry.shortcutActions.values()) {
+    rows.push({ key: entry.key, label: entry.def.label })
+  }
+  return rows
+})
 
 /** 正在录制哪个动作 / 序号修饰键；null 表示不在录制 */
 const recording = ref<'action' | string | null>(null)
@@ -138,28 +158,28 @@ onUnmounted(() => {
 <template>
   <div class="settings-controls settings-shortcuts">
     <div
-      v-for="def in CUSTOM_SHORTCUTS"
-      :key="def.id"
+      v-for="row in actionRows"
+      :key="row.key"
       class="setting-row"
-      :class="{ 'is-recording': isActionRecording && recordingActionId === def.id }"
+      :class="{ 'is-recording': isActionRecording && recordingActionId === row.key }"
     >
       <div class="setting-cell">
-        <div class="setting-label">{{ t(def.labelKey) }}</div>
-        <div v-if="errors[def.id]" class="setting-error">
-          {{ errors[def.id] }}
+        <div class="setting-label">{{ row.label }}</div>
+        <div v-if="errors[row.key]" class="setting-error">
+          {{ errors[row.key] }}
         </div>
       </div>
       <div class="setting-actions">
-        <span class="shortcut-kbd" @click="startRecordAction(def.id)">
-          {{ isActionRecording && recordingActionId === def.id
-             ? t('shortcuts.recording') : formatChord(shortcuts.getBinding(def.id)) }}
+        <span class="shortcut-kbd" @click="startRecordAction(row.key)">
+          {{ isActionRecording && recordingActionId === row.key
+             ? t('shortcuts.recording') : formatChord(shortcuts.getBinding(row.key)) }}
         </span>
         <NButton
           size="tiny"
           quaternary
           class="reset-btn"
           :title="t('shortcuts.reset')"
-          @click.stop="handleReset(def.id)"
+          @click.stop="handleReset(row.key)"
         >
           <NIcon><RefreshOutline /></NIcon>
         </NButton>

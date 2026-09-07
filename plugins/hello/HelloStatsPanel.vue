@@ -3,20 +3,18 @@
  * HelloStatsPanel —— 示例插件「统计助手」面板（纯内容组件，无自带 header，由外层 DockPanel 提供壳）。
  *
  * 演示：
- * - 只读查询：`createPluginApi()` 的 view/project stats（当前视图子级数 / 连线数 / 字数、总节点 / 引用）。
- * - additions 项目化数据：adapter 共享 api 的 additions 为只读域（写方法抛错），
- *   因此这里用 `createAdditionsApi('hello')` 构造插件作用域的 additions api，演示 set/get/undo。
- *   普通意图下插件应经 setup 的 `ctx.adapter.api.additions` 获得作用域 api；此处面板独立于 setup
- *   运行，故手动构造同作用域实例。
+ * - 只读查询：全局 adapter 的 view/project stats（当前视图子级数 / 连线数 / 字数、总节点 / 引用）。
+ * - additions 项目化数据：经 `adapter.for('hello').additions` 获取本插件命名空间作用域
+ *   （for 有模块级缓存，与入口 setup 拿到同一实例），演示 set/get/undo。
+ *   注意组件不得 import 插件入口（会被入口 import，构成循环依赖），直接 for('hello') 即可。
  * 文本朴素，样式用项目通用 token（var(--color-*)）。
  */
 import { ref, onMounted } from 'vue'
 import { NButton, NText } from 'naive-ui'
-import { createPluginApi } from '@/plugin/adapter'
-import { createAdditionsApi } from '@/plugin/api'
+import { adapter } from '@/plugin/adapter'
 
-const api = createPluginApi()
-const additions = createAdditionsApi('hello')
+const api = adapter.api
+const additions = adapter.for('hello').additions
 
 /** 演示键（插件作用域内短键，api 内部自动加 `hello:` 前缀） */
 const DEMO_KEY = 'demo'

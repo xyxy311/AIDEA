@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { PluginManager } from '@/plugin/manager'
 import type { PluginEntry } from '@/plugin/manager'
-import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
+import { SDK_VERSION } from '@/plugin/adapter'
 import type { AideaPlugin, PluginContext } from '@/plugin/adapter'
 
 /** 构造单个插件装载项，可注入各类异常 */
@@ -30,7 +30,6 @@ function makeEntry(
 function makeManager(entries: PluginEntry[], enabled: Record<string, boolean>) {
   const mgr = new PluginManager({
     entries,
-    adapter: createPluginAdapter(),
     getEnabled: () => ({ ...enabled }),
   })
   return { mgr, enabled }
@@ -69,6 +68,38 @@ describe('PluginManager', () => {
     expect(mgr.getRecords().map((r) => `${r.id}:${r.status}`)).toContain('b:installed')
   })
 
+  it('上下文形状：register / manifest / onDispose（不再携带 adapter）', async () => {
+    let keys: string[] = []
+    let registerShapeOk = false
+    let manifestId = ''
+    const entry: PluginEntry = {
+      id: 'shape',
+      loader: async () => ({
+        default: {
+          manifest: { id: 'shape', name: 'shape', version: '0.1.0', sdkVersion: SDK_VERSION },
+          setup(ctx: PluginContext): void {
+            keys = Object.keys(ctx).sort()
+            registerShapeOk =
+              typeof ctx.register?.registerPanel === 'function' &&
+              typeof ctx.register?.registerTopBarButton === 'function' &&
+              typeof ctx.register?.registerSettingsCategory === 'function' &&
+              typeof ctx.register?.registerContextMenuItem === 'function' &&
+              typeof ctx.register?.registerShortcutAction === 'function'
+            manifestId = ctx.manifest.id
+          },
+        },
+      }),
+    }
+
+    const { mgr } = makeManager([entry], { shape: true })
+    await mgr.installAll()
+
+    // 内部形态额外带 dispose()；不再有 adapter
+    expect(keys).toEqual(['dispose', 'manifest', 'onDispose', 'register'])
+    expect(registerShapeOk).toBe(true)
+    expect(manifestId).toBe('shape')
+  })
+
   it('启停切换仅更新启用意愿 → 重启（新实例装载）才生效，不动态调 setup', async () => {
     const { mgr, enabled } = makeManager(
       [makeEntry('a'), makeEntry('b')],
@@ -87,7 +118,6 @@ describe('PluginManager', () => {
     enabled.b = true
     const restarted = new PluginManager({
       entries: [makeEntry('a'), makeEntry('b')],
-      adapter: createPluginAdapter(),
       getEnabled: () => ({ ...enabled }),
     })
     await restarted.installAll()

@@ -7,6 +7,7 @@ import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
 import { useShortcutsStore } from '@/stores/shortcuts'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useTagsStore } from '@/stores/tags'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 
@@ -226,5 +227,77 @@ describe('useKeyboardShortcuts', () => {
     expect(nodeStore.getNode(id2)).toBeDefined() // d 不再删除
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }))
     expect(nodeStore.getNode(id2)).toBeUndefined()
+  })
+
+  it('插件快捷键动作：注册 + 默认绑定生效后，派发 keydown 触发插件 run', () => {
+    const run = vi.fn()
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'act',
+      label: '演示动作',
+      scope: 'canvas',
+      defaultChord: 'mod+shift+g',
+      run,
+    })
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    // mod+shift+g（默认键）触发插件 run（canvas scope，非编辑态可用）
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true, shiftKey: true }))
+    expect(run).toHaveBeenCalledTimes(1)
+
+    // 用户经 assign 改键后，新键触发、旧键失效
+    useShortcutsStore().assign('demo:act', 'mod+shift+h')
+    run.mockClear()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h', ctrlKey: true, shiftKey: true }))
+    expect(run).toHaveBeenCalledTimes(1)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true, shiftKey: true }))
+    expect(run).toHaveBeenCalledTimes(1) // 旧键不再触发
+
+    // 清理登记与覆盖，避免污染其它用例
+    useUiRegistryStore().removePlugin('demo')
+    useShortcutsStore().resetAll()
+  })
+
+  it('插件快捷键动作（canvas scope）：isEditing 时不触发（与内置守卫一致）', () => {
+    const run = vi.fn()
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'act',
+      label: '演示动作',
+      scope: 'canvas',
+      defaultChord: 'mod+shift+g',
+      run,
+    })
+
+    const isEditing = ref(true)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true, shiftKey: true }))
+    expect(run).not.toHaveBeenCalled()
+
+    // 清理登记，避免污染其它用例
+    useUiRegistryStore().removePlugin('demo')
+    useShortcutsStore().resetAll()
+  })
+
+  it('插件快捷键动作（scope=always）：编辑态也触发', () => {
+    const run = vi.fn()
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'global',
+      label: '全局演示动作',
+      scope: 'always',
+      defaultChord: 'mod+shift+k',
+      run,
+    })
+
+    const isEditing = ref(true)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
+    expect(run).toHaveBeenCalledTimes(1)
+
+    // 清理登记，避免污染其它用例
+    useUiRegistryStore().removePlugin('demo')
+    useShortcutsStore().resetAll()
   })
 })

@@ -386,3 +386,12 @@ layout  delta 排布 + 派生实时目录               [stores/layout.ts 重写
 - `provide('aidea-plugin-adapter')` 仍未实现（与 V1 相同的搁置项，见 §17.2）；delta 清洗对
   discovered 插件 id 仍依赖编译期 `collectPluginEntries()`（未来迁运行时加载需改注入来源）。
 - Key 命名空间 `${pluginId}:${id}`、additions 全链（§17.1）不受影响。
+
+---
+
+## 十九、落定记录（2026-09-07 已实现）：右键菜单项注册 + 插件快捷键动作
+
+- **第四类 UI 注册**：`ctx.adapter.ui.registerContextMenuItem({ id, scope: 'canvas'|'selection', label, icon?, danger?, when?, run })` → `{ ok, conflict? }`，登记进 uiRegistry 新表 `contextMenuItems`（key=`${pluginId}:${id}`，冲突拒注册）；`removePlugin` 回滚覆盖。渲染在 `useCanvasEvents.handleStageContextMenu` 构建处追加：无选中 = canvas 项、有选中 = selection 项（「发散」之后），`when({selectedNodeIds})` 过滤、`run` 收到展开拷贝；**不加分隔线**，`ContextMenu.vue` 渲染组件零改动。
+- **插件快捷键动作**：`api.shortcuts.registerAction({ id, label, scope, defaultChord?, run })` → `{ ok, conflict? }`，登记进 uiRegistry 新表 `shortcutActions`。shortcuts 域 per-plugin 化：`createShortcutsApi(pluginId | null)`——共享实例传 `null`（`registerAction` 抛错拒绝），scoped 实例由 manager `createPluginContext` 注入 `manifest.id`（与 additions ownerId 同模式）。进自定义快捷键全链：shortcuts store `bindings`/`assign`/`validate`（插件命名空间覆盖不清理）、`useKeyboardShortcuts.runtimeMap` 合并、`ShortcutsSection` 列表合并可录制改键。详见 `docs/自定义快捷键.md`「插件注册的动作」。
+- **冲突返回值规范化（部分）**：新两类注册定义可探测返回值 `{ ok, conflict: 'id' | 'chord' }`（uiRegistry 现有三类 `registerPlugin*` 仍返回 boolean）；面板/顶栏/设置栏目 api 层注册仍为「拒注册 + warn」。
+- **测试**：新增 `__tests__/plugin/api-shortcuts.test.ts`（15 用例）、`__tests__/composables/useCanvasEvents.pluginMenu.test.ts`（6 用例），ui-registry / shortcuts store / useKeyboardShortcuts 扩展共 24 用例；hello 插件演示两组注册。

@@ -12,7 +12,6 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { PluginManager, collectPluginEntries } from '@/plugin/manager'
 import type { PluginRecord } from '@/plugin/manager'
-import { createPluginAdapter } from '@/plugin/adapter'
 
 const STORAGE_KEY = 'aidea-plugins'
 
@@ -36,10 +35,8 @@ export const usePluginStore = defineStore('plugin', () => {
   /** 引导装载插件（应用启动后调用一次） */
   async function init(): Promise<void> {
     if (manager.value) return
-    const adapter = createPluginAdapter()
     const mgr = new PluginManager({
       entries: collectPluginEntries(),
-      adapter,
       getEnabled: readEnabled,
     })
     mgr.onChange((snapshot) => {

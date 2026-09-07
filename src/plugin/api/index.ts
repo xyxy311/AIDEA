@@ -9,15 +9,17 @@ import { createConnectionApi } from './connection'
 import { createTagApi } from './tag'
 import { createProjectApi } from './project'
 import { createViewApi } from './view'
-import { createAdditionsApi } from './additions'
 import { createPresetsApi } from './presets'
 import { createThemeApi } from './theme'
 import { createFileApi } from './file'
 import { createShortcutsApi } from './shortcuts'
 
 /**
- * 构造分类好的应用 api。已有域：node / connection / tag / project / view /
- * additions（共享只读域）；新增域：presets / theme / file / shortcuts。
+ * 构造分类好的应用 api。已有域：node / connection / tag / project / view；
+ * 新增域：presets / theme / file / shortcuts（仅只读查询）。
+ * additions 已移出共享 api：插件命名空间数据仅经 adapter.for(pluginId) 的
+ * PluginScope.additions 提供（`pluginId:` 前缀桶，见 api/additions.ts）；
+ * shortcuts 的动作注册已移至注册面（ctx.register.registerShortcutAction）。
  * （AI 功能已移除，未来迁移为内置插件，不再占用独立 api 域。）
  */
 export function createPluginApi() {
@@ -27,7 +29,6 @@ export function createPluginApi() {
     tag: createTagApi(),
     project: createProjectApi(),
     view: createViewApi(),
-    additions: createAdditionsApi(null),
     presets: createPresetsApi(),
     theme: createThemeApi(),
     file: createFileApi(),

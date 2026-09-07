@@ -1,23 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { createPluginAdapter, SDK_VERSION } from '@/plugin/adapter'
+import { adapter, SDK_VERSION } from '@/plugin/adapter'
+import { useAdditionsStore } from '@/stores/additions'
 import { ROOT_NODE_ID } from '@/stores/node'
 
 /**
- * 适配层分类 api 测试（node / connection / tag / project / view）。
+ * 适配层单例契约 + 分类 api 测试（node / connection / tag / project / view）。
+ * 单例契约：九域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离。
  * 只读方法如实反映 store；写方法产生可撤销历史（undo/redo）；batch 合并单条历史。
  */
 function makeApi() {
-  return createPluginAdapter().api
+  return adapter.api
 }
 
-describe('createPluginAdapter 分类 api', () => {
+describe('adapter 单例契约', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
-  it('exposes the adapter + all categorized api groups', () => {
-    const adapter = createPluginAdapter()
+  it('exposes sdkVersion + all categorized api groups (without additions)', () => {
     expect(adapter.sdkVersion).toBe(SDK_VERSION)
     const domains = [
       'node',
@@ -33,6 +34,44 @@ describe('createPluginAdapter 分类 api', () => {
     for (const key of domains) {
       expect(adapter.api).toHaveProperty(key)
     }
+    // additions 已移出共享 api：仅经 for(id) 的 PluginScope 提供
+    expect(adapter.api).not.toHaveProperty('additions')
+  })
+
+  it('for：非法 id（空 / 含冒号）抛错', () => {
+    expect(() => adapter.for('')).toThrow()
+    expect(() => adapter.for('a:b')).toThrow()
+  })
+
+  it('for：同 id 重复调用返回同一实例（模块级缓存）', () => {
+    expect(adapter.for('dup')).toBe(adapter.for('dup'))
+  })
+
+  it('scope.additions：命名空间前缀隔离与写校验', () => {
+    const a = adapter.for('p1').additions
+    const b = adapter.for('p2').additions
+
+    // 写入完整键带插件前缀（写校验：经 store 直查）
+    a.set('k', 'v1')
+    expect(useAdditionsStore().has('p1:k')).toBe(true)
+    expect(a.get('k')).toBe('v1')
+    expect(a.keys()).toEqual(['k'])
+
+    // 跨插件不可见
+    expect(b.has('k')).toBe(false)
+    expect(b.get('k')).toBeUndefined()
+    expect(b.keys()).toEqual([])
+
+    // key 含冒号 → 抛错（不能伪造其他插件命名空间），且不越界写入
+    expect(() => a.set('x:y', 1)).toThrow()
+    expect(() => a.remove('x:y')).toThrow()
+    expect(useAdditionsStore().has('p1:x:y')).toBe(false)
+  })
+})
+
+describe('adapter 分类 api', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
   })
 
   it('presets: lists builtin node/connection presets (first-run defaults)', () => {

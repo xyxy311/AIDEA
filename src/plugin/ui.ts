@@ -1,16 +1,19 @@
 /**
- * ui.ts —— 插件 UI 注册子系统（面板 / 顶栏按钮 / 设置栏目）
+ * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作）
  *
- * 插件 setup(ctx) 经 ctx.adapter.ui 现场注册**运行时组件对象**。
+ * 插件 setup(ctx) 经 ctx.register 现场注册**运行时组件对象**。
  * 注册去向统一为 **uiRegistry 登记总表**（stores/uiRegistry.ts）：
  * 内置目录（PANEL_CATALOG / TOP_BAR_CATALOG / SETTINGS_CATALOG）已在 store 初始化时
  * seed 进同一张表；插件条目（origin='plugin'，key = `${pluginId}:${id}`）经本模块
  * 转发写入 uiRegistry，排布（顺序 / 归类 / 持久化）由 layout store 纯派生，无需任何落位调用。
+ * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）。
  *
  * 本模块负责：
- * - 定义插件 UI 注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
- * - 按插件作用域组装 PluginUiApi（createPluginUiApi）：校验短 id，冲突/非法时
+ * - 定义插件注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
+ * - 按插件作用域组装 PluginRegisterApi（createPluginRegister）：校验短 id，冲突/非法时
  *   console.warn 并跳过（不抛错，其余注册项继续生效）。
+ * - 快捷键动作注册（registerShortcutAction）：承接原 api.shortcuts.registerAction 的
+ *   实现与四级校验；api/shortcuts.ts 本体只留只读查询。
  * - 顶栏按钮描述符 → 等价逻辑组件（wrapTopBarButton），供 uiRegistry 存储，TopBarZone 零改动渲染。
  * - setup 抛错时的批量回滚（rollbackPluginUi → registry.removePlugin）。
  *
@@ -20,8 +23,12 @@
 import { defineComponent, h } from 'vue'
 import type { Component } from 'vue'
 import type { TopBarZone } from '@/constants/topbar'
+import type { ShortcutScope } from '@/types/shortcuts'
 import TopBarButton from '@/components/common/TopBarButton.vue'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
+import { useShortcutsStore } from '@/stores/shortcuts'
+import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
+import { isValidChord } from '@/utils/shortcuts'
 
 /**
  * 下拉菜单单项（结构上与 TopBarButton 的 TopBarMenuOption 兼容）。
@@ -85,13 +92,57 @@ export interface PluginSettingsCategoryRegistration {
   component: Component
 }
 
-// ── 插件可获得的能力面（adapter.ui）──
+/** 插件快捷键动作：经 ctx.register.registerShortcutAction 注册（登记进 uiRegistry.shortcutActions） */
+export interface PluginShortcutActionRegistration {
+  /** 插件内短 id；归一为 `${pluginId}:${id}` */
+  id: string
+  /** 成品文案（插件不接主 i18n，设置面板直接展示该字符串） */
+  label: string
+  /** 触发作用域：'always' 在输入框/编辑守卫之前；'canvas' 在守卫之后 */
+  scope: ShortcutScope
+  /** 可选默认绑定（规范化 chord；须不与保留键/既有绑定冲突才被接受） */
+  defaultChord?: string
+  /** 触发时执行（无事件参数） */
+  run: () => void
+}
 
-/** 插件 UI 注册 API（只增不改，稳定层）。注册方法均返回 void；冲突检测交由 registry（warn + 拒绝） */
-export interface PluginUiApi {
+/** 插件右键菜单项显示位置：空白画布（无选中）或有选中节点 */
+export type PluginContextMenuScope = 'canvas' | 'selection'
+
+/** 插件右键菜单项：经 ctx.register.registerContextMenuItem 注册（登记进 uiRegistry.contextMenuItems） */
+export interface PluginContextMenuItemRegistration {
+  /** 插件内短 id；归一为 `${pluginId}:${id}` */
+  id: string
+  /** 显示位置：'canvas'=无选中分支；'selection'=有选中节点分支 */
+  scope: PluginContextMenuScope
+  /** 成品文案（插件不接主 i18n，菜单直接展示该字符串） */
+  label: string
+  /** 可选图标组件（@vicons/ionicons5 同款形态） */
+  icon?: Component
+  /** 危险操作样式（红色文字） */
+  danger?: boolean
+  /** 可选显示守卫：返回 false 则该项不出现（ctx.selectedNodeIds 为展开拷贝） */
+  when?: (ctx: { selectedNodeIds: string[] }) => boolean
+  /** 点击执行；收到选中节点 id 数组（展开拷贝，可安全改写） */
+  run: (ctx: { selectedNodeIds: string[] }) => void
+}
+
+// ── 插件可获得的能力面（ctx.register，仅插件 setup 内可用）──
+
+/** 插件注册面（只增不改，稳定层；数据操作不走这里——经全局 adapter）。前三类返回 void（冲突由 registry warn + 拒绝）；右键菜单项 / 快捷键动作返回注册结果 */
+export interface PluginRegisterApi {
   registerPanel(entry: PluginPanelRegistration): void
   registerTopBarButton(entry: PluginTopBarButtonRegistration): void
   registerSettingsCategory(entry: PluginSettingsCategoryRegistration): void
+  /** 注册右键菜单项；短 id 非法 / key 冲突 → { ok:false, conflict:'id' }（同时 console.warn） */
+  registerContextMenuItem(entry: PluginContextMenuItemRegistration): { ok: boolean; conflict?: 'id' }
+  /**
+   * 注册插件快捷键动作（登记进 uiRegistry.shortcutActions，key = `${pluginId}:${id}`）。
+   * 四级校验失败返回 { ok:false, conflict } 并 console.warn，不抛错：
+   * 'id' = 短 id 非法或 key 已注册；'chord' = defaultChord 非法 / 保留键 / 与既有绑定冲突。
+   * 注册不改写用户已有绑定；用户改键在设置面板进行（对完整登记 key 直接生效）。
+   */
+  registerShortcutAction(entry: PluginShortcutActionRegistration): { ok: boolean; conflict?: 'id' | 'chord' | 'reserved' | 'binding' }
 }
 
 // ── 内部校验与工厂 ──
@@ -102,11 +153,27 @@ function isValidShortId(id: string): boolean {
 }
 
 /**
- * 按插件作用域组装 PluginUiApi。
+ * 查询哪个动作（内置返回短 id；插件动作返回完整登记 key `${pluginId}:${id}`）绑定到该 chord。
+ * 仅用于 registerShortcutAction 的 defaultChord 冲突校验（api/shortcuts.ts 的同名只读方法面向插件）。
+ */
+function findActionByChord(chord: string): string | null {
+  const store = useShortcutsStore()
+  for (const def of CUSTOM_SHORTCUTS) {
+    if (store.getBinding(def.id) === chord) return def.id
+  }
+  const registry = useUiRegistryStore()
+  for (const key of registry.shortcutActions.keys()) {
+    if (store.getBinding(key) === chord) return key
+  }
+  return null
+}
+
+/**
+ * 按插件作用域组装注册面 PluginRegisterApi（经 manager 组装 PluginContext 时注入 ctx.register）。
  * 非法短 id / key 冲突：console.warn 并跳过（不抛错，其余注册项继续生效）。
  * 注册最终落位到 uiRegistry 登记总表（origin='plugin'，key = `${pluginId}:${id}`）。
  */
-export function createPluginUiApi(pluginId: string): PluginUiApi {
+export function createPluginRegister(pluginId: string): PluginRegisterApi {
   const registry = useUiRegistryStore
 
   /** 校验某注册项的短 id；非法时 warn 并返回 false */
@@ -148,6 +215,52 @@ export function createPluginUiApi(pluginId: string): PluginUiApi {
       if (!registry().registerPluginSettingsCategory(pluginId, entry)) {
         console.warn(`[plugin] ${pluginId} 设置栏目「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
+    },
+
+    registerContextMenuItem(entry) {
+      if (!requireValidId('右键菜单项', entry.id)) return { ok: false, conflict: 'id' }
+      const res = registry().registerPluginContextMenuItem(pluginId, entry)
+      if (!res.ok) {
+        console.warn(`[plugin] ${pluginId} 右键菜单项「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
+      }
+      return res
+    },
+
+    /**
+     * 注册插件快捷键动作（自 api/shortcuts.ts 迁移；四级校验语义不变）：
+     * 1. 短 id 非法（空 / 含 ':' / 含空白）→ { ok:false, conflict:'id' }
+     * 2. key 已注册 → { ok:false, conflict:'id' }
+     * 3. defaultChord 给出时：非法 chord / 保留键 / 与任何动作当前生效绑定冲突 → { ok:false, conflict:'chord' }
+     * 4. 通过 → 登记 → { ok:true }（registry 内再兜底一次 id / 冲突校验）
+     */
+    registerShortcutAction(entry) {
+      if (!requireValidId('快捷键动作', entry.id)) return { ok: false, conflict: 'id' }
+      const store = useShortcutsStore()
+      const key = `${pluginId}:${entry.id}`
+      // 2. key 冲突
+      if (registry().shortcutActions.has(key)) {
+        console.warn(`[plugin] ${pluginId} 快捷键动作「${entry.id}」注册冲突：${key} 已存在，已跳过`)
+        return { ok: false, conflict: 'id' }
+      }
+      // 3. defaultChord：合法性 / 保留键 / 与全部动作当前生效绑定冲突（内置 + 已注册插件动作）
+      if (entry.defaultChord !== undefined) {
+        const chord = entry.defaultChord
+        const taken =
+          !isValidChord(chord) || store.isReserved(chord).reserved || findActionByChord(chord) !== null
+        if (taken) {
+          console.warn(
+            `[plugin] ${pluginId} 快捷键动作「${entry.id}」默认键「${chord}」不可用（非法 / 保留键 / 与既有绑定冲突），已跳过`,
+          )
+          return { ok: false, conflict: 'chord' }
+        }
+      }
+      // 4. 登记（registry 内再兜底一次 id / 冲突校验）
+      const res = registry().registerPluginShortcutAction(pluginId, entry)
+      if (!res.ok) {
+        console.warn(`[plugin] ${pluginId} 快捷键动作「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
+        return res
+      }
+      return { ok: true }
     },
   }
 }

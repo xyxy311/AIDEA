@@ -1,23 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAdditionsStore } from '@/stores/additions'
-import { createAdditionsApi, createPluginApi } from '@/plugin/api'
+import { adapter } from '@/plugin/adapter'
 import { serializeProject, parseProjectFile, defaultProjectAIConfig } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
 import type { ProjectViewState } from '@/utils/projectFile'
 
 /**
- * additions 域测试：additionsStore + createAdditionsApi（含 undo/redo）+ projectFile 往返。
+ * additions 域测试：additionsStore + adapter.for(id) 作用域 additions（含 undo/redo）+ projectFile 往返。
  * pinia 初始化沿用 api.test.ts：setActivePinia(createPinia())。
- * 历史控制（undo/redo）经共享 createPluginApi 的 project 域驱动——历史控制不分命名空间。
+ * 历史控制（undo/redo）经共享 adapter.api 的 project 域驱动——历史控制不分命名空间。
+ * additions 仅经 adapter.for(pluginId) 的 PluginScope 提供（共享 api 上无 additions 域）。
  */
-function makePluginApi() {
-  return createAdditionsApi('hello')
+function makeAdditions() {
+  return adapter.for('hello').additions
 }
 
 function makeHistory() {
-  return createPluginApi().project
+  return adapter.api.project
 }
 
 describe('useAdditionsStore', () => {
@@ -68,13 +69,13 @@ describe('useAdditionsStore', () => {
   })
 })
 
-describe("createAdditionsApi('hello')", () => {
+describe("adapter.for('hello').additions", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
 
   it('set：写入完整键 hello:key，插件内 keys 去前缀', () => {
-    const api = makePluginApi()
+    const api = makeAdditions()
     const store = useAdditionsStore()
     api.set('key', { v: 1 })
     expect(store.has('hello:key')).toBe(true)
@@ -85,7 +86,7 @@ describe("createAdditionsApi('hello')", () => {
   })
 
   it('set 后 undo 恢复旧值；redo 恢复新值', () => {
-    const api = makePluginApi()
+    const api = makeAdditions()
     const history = makeHistory()
     api.set('key', 'A')
     api.set('key', 'B')
@@ -98,7 +99,7 @@ describe("createAdditionsApi('hello')", () => {
   })
 
   it('remove 后 undo 恢复', () => {
-    const api = makePluginApi()
+    const api = makeAdditions()
     const history = makeHistory()
     api.set('key', 'X')
 
@@ -111,18 +112,21 @@ describe("createAdditionsApi('hello')", () => {
   })
 
   it('key 含冒号 → 抛错，且不越界写入', () => {
-    const api = makePluginApi()
+    const api = makeAdditions()
     expect(() => api.set('a:b', 1)).toThrow()
     expect(() => api.remove('a:b')).toThrow()
     expect(useAdditionsStore().has('hello:a:b')).toBe(false)
   })
 
-  it('共享只读 api（ownerId null）：set / remove → 抛错，只读可用', () => {
-    const shared = createAdditionsApi(null)
-    expect(() => shared.set('k', 1)).toThrow(/仅可在插件上下文/)
-    expect(() => shared.remove('k')).toThrow(/仅可在插件上下文/)
-    expect(shared.get('k')).toBeUndefined()
-    expect(shared.keys()).toEqual([])
+  it('作用域隔离：不同插件的 additions 互不可见；共享 api 上无 additions 域', () => {
+    const hello = makeAdditions()
+    const other = adapter.for('other').additions
+    hello.set('k', 'v')
+    expect(other.has('k')).toBe(false)
+    expect(other.get('k')).toBeUndefined()
+    expect(other.keys()).toEqual([])
+    // additions 已移出共享 api（仅经 for(id) 提供）
+    expect(adapter.api).not.toHaveProperty('additions')
   })
 })
 

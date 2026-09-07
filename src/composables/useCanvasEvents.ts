@@ -2,6 +2,7 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import { t } from '@/composables/useT'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
@@ -37,6 +38,8 @@ const DBL_CLICK_DISTANCE = 12
  * - 粘贴：剪贴板有内容时可用
  * - 单选节点：进入子视图 / 清空子级（有子节点时）
  * - 多选节点：组合
+ * - 插件注册项（uiRegistry.contextMenuItems）：按 scope（canvas / selection）追加在
+ *   内置项之后（登记序），经 when 守卫过滤，run 收到选中节点 id 的展开拷贝
  */
 export function useCanvasEvents(viewId: string) {
   const view = useViewStore(viewId)
@@ -47,12 +50,37 @@ export function useCanvasEvents(viewId: string) {
   const clipboard = useClipboard()
   const aiWord = useAIWordPanel()
   const aiDirections = useAIDirectionsStore()
+  const uiRegistry = useUiRegistryStore()
 
   /**
    * 上一次「空白画布单击」的记录（时间 + 屏幕坐标），用于手动判定空白双击。
    * 仅在本视图实例内共享，跨实例无关。
    */
   let lastEmptyClick: { time: number; screenX: number; screenY: number } | null = null
+
+  /**
+   * 把插件注册的右键菜单项追加到 items 末尾（登记序，位于内置项之后；不加分隔线）。
+   * 按 scope 过滤 + when 守卫（when 返回 false 的项不出现）；
+   * 转换为 ContextMenuItem：key 为完整登记 key，action 闭包内对 selectedNodeIds 再展开拷贝。
+   */
+  function appendPluginContextMenuItems(
+    target: ContextMenuItem[],
+    scope: 'canvas' | 'selection',
+    selectedNodeIds: string[],
+  ): void {
+    for (const entry of uiRegistry.contextMenuItems.values()) {
+      const def = entry.def
+      if (def.scope !== scope) continue
+      if (def.when?.({ selectedNodeIds }) === false) continue
+      target.push({
+        key: entry.key,
+        label: def.label,
+        danger: def.danger,
+        icon: def.icon,
+        action: () => def.run({ selectedNodeIds: [...selectedNodeIds] }),
+      })
+    }
+  }
 
   /**
    * 处理画布点击事件
@@ -176,8 +204,10 @@ export function useCanvasEvents(viewId: string) {
       })
     }
 
-    // 无选中节点：仅在有可粘贴内容时显示"粘贴"，否则关闭菜单
+    // 无选中节点：显示"粘贴"与插件画布级（scope='canvas'）菜单项；两者皆无则关闭菜单
     if (count === 0) {
+      // 追加插件画布级菜单项（when 收到空选中数组）
+      appendPluginContextMenuItems(items, 'canvas', [])
       if (items.length === 0) {
         contextMenu.close()
         return
@@ -254,6 +284,9 @@ export function useCanvasEvents(viewId: string) {
       label: t('canvas.divergence'),
       children: divergenceChildren,
     })
+
+    // ── 插件注册的选中级（scope='selection'）菜单项：追加在内置项之后（登记序）──
+    appendPluginContextMenuItems(items, 'selection', Array.from(view.selectedNodeIds))
 
     contextMenu.open(e.evt.clientX, e.evt.clientY, items)
   }

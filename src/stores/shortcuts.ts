@@ -14,6 +14,11 @@
  *   1. assign：候选键与锁定键（RESERVED_CHORDS）冲突 → 拒绝
  *   2. assign：候选裸单键与序号修饰键冲突 → 拒绝
  *   3. setSeqModKey：序号修饰键与锁定键单键或自定义动作裸单键冲突 → 拒绝
+ *
+ * 插件动作合并：uiRegistry.shortcutActions 中的插件动作（key = `${pluginId}:${id}`）
+ * 并入有效绑定表（有 defaultChord 的作默认，overrides 覆盖优先）；assign 的冲突校验
+ * 范围同样覆盖插件动作。validate 对含 ':' 的插件命名空间覆盖**跳过清理**（插件禁用
+ * 重启期间动作不在表，保留覆盖以便重装后恢复）。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'
@@ -26,13 +31,14 @@ import {
   type ShortcutDef,
 } from '@/constants/shortcuts'
 import { isValidChord, parseChord } from '@/utils/shortcuts'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 
 /** 用户覆盖绑定持久化 key */
 const STORAGE_BINDINGS = 'aidea-shortcuts'
 /** 序号修饰键持久化 key */
 const STORAGE_SEQMOD = 'aidea-shortcuts-seqmod'
 
-/** assign 结果 */
+/** assign 结果（conflict 对象的 labelKey：内置动作是 i18n key；插件动作填成品 label——t() 未命中回退即展示原文） */
 export type AssignResult =
   | { ok: true }
   | { ok: false; conflict: 'locked' }
@@ -74,6 +80,11 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
   function validate(): void {
     const next: Record<string, string> = {}
     const used = new Set(RESERVED_CHORDS)
+    // 插件命名空间（key 含 ':'）的覆盖跳过清理：插件禁用 / 重启期间动作可能不在登记表，
+    // 原样保留以便插件重装后恢复绑定（未注册 key 在 bindings 的归属判断中被忽略）
+    for (const [key, chord] of Object.entries(overrides.value)) {
+      if (key.includes(':')) next[key] = chord
+    }
     for (const id of CUSTOM_SHORTCUT_IDS) {
       const chord = overrides.value[id]
       if (chord === undefined) continue
@@ -90,12 +101,17 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
     }
   }
 
-  /** 有效绑定：覆盖优先，未覆盖回退默认 */
+  /** 有效绑定：默认（内置 + 插件动作 defaultChord）之上，覆盖优先 */
   const bindings = computed<Record<string, string>>(() => {
     const out = defaultBindings()
-    for (const id of CUSTOM_SHORTCUT_IDS) {
-      const over = overrides.value[id]
-      if (over !== undefined && isValidChord(over)) out[id] = over
+    // 插件注册动作并入默认表（仅取有 defaultChord 的；key = 完整登记 key）
+    const registry = useUiRegistryStore()
+    for (const [key, entry] of registry.shortcutActions) {
+      if (entry.def.defaultChord) out[key] = entry.def.defaultChord
+    }
+    // 覆盖优先（内置 id 与插件完整 key 统一处理；不在 out 中的未知 key 忽略）
+    for (const [id, over] of Object.entries(overrides.value)) {
+      if (id in out && over !== undefined && isValidChord(over)) out[id] = over
     }
     return out
   })
@@ -120,10 +136,13 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
 
   /**
    * 赋值：冲突校验通过则写入覆盖并持久化。
-   * 冲突规则：非法输入 / 与锁定键 / 与序号修饰键（裸单键）/ 与其它自定义动作 → 拒绝。
+   * id 须为已知动作（内置可自定义动作或已注册插件动作的完整登记 key）。
+   * 冲突规则：非法输入 / 与锁定键 / 与序号修饰键（裸单键）/ 与其它动作（内置 + 插件）→ 拒绝。
    */
   function assign(id: string, chord: string): AssignResult {
-    if (!CUSTOM_SHORTCUT_IDS.includes(id) || !isValidChord(chord)) {
+    const registry = useUiRegistryStore()
+    const known = CUSTOM_SHORTCUT_IDS.includes(id) || registry.shortcutActions.has(id)
+    if (!known || !isValidChord(chord)) {
       return { ok: false, conflict: 'locked' }
     }
     if (RESERVED_CHORDS.includes(chord)) {
@@ -134,11 +153,17 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
     if (parsed && !parsed.mod && !parsed.alt && !parsed.shift && parsed.key === seqModKey.value) {
       return { ok: false, conflict: 'seqMod' }
     }
-    // 与其它自定义动作冲突
+    // 与其它动作（内置 + 插件）冲突；插件动作 labelKey 填成品 label（t() 未命中回退即显示原文）
     for (const other of CUSTOM_SHORTCUTS) {
       if (other.id === id) continue
       if (getBinding(other.id) === chord) {
         return { ok: false, conflict: { id: other.id, labelKey: other.labelKey } }
+      }
+    }
+    for (const [otherKey, entry] of registry.shortcutActions) {
+      if (otherKey === id) continue
+      if (getBinding(otherKey) === chord) {
+        return { ok: false, conflict: { id: otherKey, labelKey: entry.def.label } }
       }
     }
     overrides.value = { ...overrides.value, [id]: chord }
@@ -189,5 +214,6 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
     resetAll,
     setSeqModKey,
     resetSeqModKey,
+    validate,
   }
 })

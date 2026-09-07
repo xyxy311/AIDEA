@@ -1,10 +1,12 @@
 /**
- * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目）
+ * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项）
  *
  * 全应用唯一的「UI 元素登记表」：内置目录（PANEL_CATALOG / TOP_BAR_CATALOG /
- * SETTINGS_CATALOG）在 store 初始化时 seed 进表，插件经适配层（ctx.adapter.ui →
- * plugin/ui.ts）把运行时组件注册进**同一张表**。条目带 origin（builtin | plugin）
- * 与 pluginId 归因，供布局派生、恢复默认、错误隔离按来源过滤。
+ * SETTINGS_CATALOG）在 store 初始化时 seed 进表，插件经注册面（ctx.register →
+ * plugin/ui.ts）把运行时组件 / 动作注册进**同一张表**。条目带 origin（builtin | plugin）与 pluginId 归因，
+ * 供布局派生、恢复默认、错误隔离按来源过滤。
+ * 快捷键动作与右键菜单项两表只收插件条目（内置动作在 CUSTOM_SHORTCUTS、内置菜单项
+ * 在 useCanvasEvents 构建处，均不走登记表）。
  *
  * 分层：
  * - constants 品类表保持纯数据（不持有运行时状态）；
@@ -21,7 +23,12 @@ import type { PanelKey } from '@/constants/panels'
 import { TOP_BAR_CATALOG } from '@/constants/topbar'
 import type { TopBarKey, TopBarZone } from '@/constants/topbar'
 import { SETTINGS_CATALOG } from '@/constants/settings'
-import type { PluginPanelRegistration, PluginSettingsCategoryRegistration } from '@/plugin/ui'
+import type {
+  PluginPanelRegistration,
+  PluginSettingsCategoryRegistration,
+  PluginShortcutActionRegistration,
+  PluginContextMenuItemRegistration,
+} from '@/plugin/ui'
 
 // ── 登记条目类型（统一形态，内置与插件共用）──
 
@@ -78,6 +85,29 @@ export interface PluginTopBarButtonRegistered {
   defaultZone: TopBarZone
 }
 
+/** 快捷键动作 / 右键菜单项登记结果（两新表的注册方法返回值） */
+export type UiRegisterResult = { ok: true } | { ok: false; conflict: 'id' }
+
+/** 快捷键动作登记条目（仅插件条目；内置动作在 constants/shortcuts.ts 的 CUSTOM_SHORTCUTS） */
+export interface UiShortcutActionEntry {
+  /** 完整键：`${pluginId}:${id}` */
+  key: string
+  origin: UiOrigin
+  pluginId?: string
+  /** 插件动作定义（label 为成品字符串，defaultChord 可选） */
+  def: PluginShortcutActionRegistration
+}
+
+/** 右键菜单项登记条目（仅插件条目；内置菜单项在 useCanvasEvents 构建处硬编码） */
+export interface UiContextMenuItemEntry {
+  /** 完整键：`${pluginId}:${id}` */
+  key: string
+  origin: UiOrigin
+  pluginId?: string
+  /** 插件菜单项定义（label 为成品字符串） */
+  def: PluginContextMenuItemRegistration
+}
+
 // ── 内部校验 ──
 
 /** id 合法性：非空 + 不含 ':' + 不含空白（pluginId 与短 id 同规则） */
@@ -95,6 +125,9 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
   const panels = reactive(new Map<string, UiPanelEntry>())
   const topBarButtons = reactive(new Map<string, UiTopBarEntry>())
   const settingsCategories = reactive(new Map<string, UiSettingsEntry>())
+  // 两新表只收插件条目（内置动作 / 内置菜单项不走登记表，见各表类型注释）
+  const shortcutActions = reactive(new Map<string, UiShortcutActionEntry>())
+  const contextMenuItems = reactive(new Map<string, UiContextMenuItemEntry>())
 
   /** seed 内置目录（store 创建时执行一次；reset 后重跑） */
   function seedBuiltins(): void {
@@ -198,11 +231,43 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     return true
   }
 
+  /** 注册插件快捷键动作；非法 id / key 冲突 → warn + { ok:false, conflict:'id' } */
+  function registerPluginShortcutAction(pluginId: string, def: PluginShortcutActionRegistration): UiRegisterResult {
+    if (!isValidId(pluginId) || !isValidId(def.id)) {
+      console.warn(`[uiRegistry] 插件「${pluginId}」快捷键动作「${def.id}」注册失败：id 非法`)
+      return { ok: false, conflict: 'id' }
+    }
+    const key = pluginKey(pluginId, def.id)
+    if (shortcutActions.has(key)) {
+      console.warn(`[uiRegistry] 快捷键动作注册冲突：${key} 已存在，拒绝覆盖`)
+      return { ok: false, conflict: 'id' }
+    }
+    shortcutActions.set(key, { key, origin: 'plugin', pluginId, def })
+    return { ok: true }
+  }
+
+  /** 注册插件右键菜单项；非法 id / key 冲突 → warn + { ok:false, conflict:'id' } */
+  function registerPluginContextMenuItem(pluginId: string, def: PluginContextMenuItemRegistration): UiRegisterResult {
+    if (!isValidId(pluginId) || !isValidId(def.id)) {
+      console.warn(`[uiRegistry] 插件「${pluginId}」右键菜单项「${def.id}」注册失败：id 非法`)
+      return { ok: false, conflict: 'id' }
+    }
+    const key = pluginKey(pluginId, def.id)
+    if (contextMenuItems.has(key)) {
+      console.warn(`[uiRegistry] 右键菜单项注册冲突：${key} 已存在，拒绝覆盖`)
+      return { ok: false, conflict: 'id' }
+    }
+    contextMenuItems.set(key, { key, origin: 'plugin', pluginId, def })
+    return { ok: true }
+  }
+
   /** 按插件批量移除全部登记（setup 抛错回滚 / 清理）；不做任何布局操作（布局派生自动收缩） */
   function removePlugin(pluginId: string): void {
     for (const [key, e] of panels) if (e.pluginId === pluginId) panels.delete(key)
     for (const [key, e] of topBarButtons) if (e.pluginId === pluginId) topBarButtons.delete(key)
     for (const [key, e] of settingsCategories) if (e.pluginId === pluginId) settingsCategories.delete(key)
+    for (const [key, e] of shortcutActions) if (e.pluginId === pluginId) shortcutActions.delete(key)
+    for (const [key, e] of contextMenuItems) if (e.pluginId === pluginId) contextMenuItems.delete(key)
   }
 
   /** 清空并重置为内置目录（测试用） */
@@ -210,6 +275,8 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     panels.clear()
     topBarButtons.clear()
     settingsCategories.clear()
+    shortcutActions.clear()
+    contextMenuItems.clear()
     seedBuiltins()
   }
 
@@ -217,9 +284,13 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     panels,
     topBarButtons,
     settingsCategories,
+    shortcutActions,
+    contextMenuItems,
     registerPluginPanel,
     registerPluginTopBarButton,
     registerPluginSettingsCategory,
+    registerPluginShortcutAction,
+    registerPluginContextMenuItem,
     removePlugin,
     reset,
   }

@@ -1,19 +1,37 @@
 /**
- * 示例插件：hello —— 演示插件 UI 注册（面板 / 顶栏按钮 / 设置栏目）与 additions 项目化数据。
+ * 示例插件：hello —— 演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作）、
+ * 全局 adapter 数据操作与 additions 项目化数据。
  *
  * 要点：
- * 1. 插件经 `ctx.adapter.api` 的**分类子对象**查询数据或执行命令。
- * 2. 插件自己需要"多步命令"时写成普通函数（本插件内部私有），仅供自身使用，
+ * 1. 数据操作经全局单例：`import { adapter } from '@/plugin/adapter'`——
+ *    `adapter.api.*` 查询 / 执行命令；`scope.additions.*` 读写本插件命名空间数据
+ *    （scope = adapter.for(manifest.id)，additions 自动加 `hello:` 前缀）。
+ * 2. UI / 动作注册经 setup(ctx) 的 ctx.register.*（registerShortcutAction /
+ *    registerContextMenuItem 可探测注册结果，ok=false 时打印被拒原因）。
+ * 3. 插件自己需要"多步命令"时写成普通函数（本插件内部私有），仅供自身使用，
  *    **无需注册**（命令已并入 api）。
- * 3. 写方法自动入历史（可撤销）；`project.beginBatch/commitBatch` 合并单条历史。
- * 4. **启动副作用收敛**：setup 只做「只读查询 console.log + 注册三类 UI」，
- *    避免每次启动污染项目数据。写演示（创建节点 / batch / undo 等）由面板 / 顶栏按钮触发。
+ * 4. 写方法自动入历史（可撤销）；`adapter.api.project.beginBatch/commitBatch` 合并单条历史。
+ * 5. **启动副作用收敛**：setup 只做「只读查询 console.log + 注册」，避免每次启动污染项目数据。
+ *    写演示（创建节点 / batch / additions 写 / undo 等）由面板 / 顶栏按钮触发。
  */
-import type { AideaPlugin, PluginContext, PluginApi } from '@/plugin/adapter'
-import { SDK_VERSION } from '@/plugin/adapter'
+import type { AideaPlugin, PluginApi, PluginContext, PluginManifest } from '@/plugin/adapter'
+import { adapter, SDK_VERSION } from '@/plugin/adapter'
 import { StatsChartOutline, ColorWandOutline } from '@vicons/ionicons5'
 import HelloStatsPanel from './HelloStatsPanel.vue'
 import HelloSettingsPanel from './HelloSettingsPanel.vue'
+
+/** 插件清单（常量先行：模块顶层用它声明命名空间作用域，避免硬编码重复） */
+const manifest: PluginManifest = {
+  id: 'hello',
+  name: '示例插件',
+  version: '0.3.0',
+  description: '演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项）、快捷键动作注册与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
+  author: 'aidea',
+  sdkVersion: SDK_VERSION,
+}
+
+/** 本插件命名空间作用域：for 有模块级缓存（同 id 返回同一实例），additions 自动加 `hello:` 前缀 */
+const scope = adapter.for(manifest.id)
 
 /**
  * 插件内部私有"命令"（复用 api 的组合动作）——无需注册。
@@ -33,7 +51,8 @@ function summarize(api: PluginApi, focusId: string): string | null {
 
 /**
  * 写演示动作（由顶栏按钮触发，不再在启动时执行）：
- * 创建节点 + 改文本 / 样式 / 应用预设 + 插件私有命令 + project 批量合并为单条历史。
+ * 创建节点 + 改文本 / 样式 / 应用预设 + 插件私有命令 + project 批量合并为单条历史
+ * + additions 插件命名空间写。
  */
 function runWriteDemo(api: PluginApi): void {
   const view = api.view.active()
@@ -53,6 +72,9 @@ function runWriteDemo(api: PluginApi): void {
   api.node.create(view.viewedNodeId, 260, 220, '批量二')
   api.project.commitBatch()
 
+  // 插件命名空间数据（scope.additions）：完整键为 `hello:lastRun`，随项目保存、可撤销
+  scope.additions.set('lastRun', { ts: Date.now() })
+
   // 视图 / 历史
   api.view.select(nodeId)
   api.project.undo()
@@ -60,23 +82,16 @@ function runWriteDemo(api: PluginApi): void {
 }
 
 const plugin: AideaPlugin = {
-  manifest: {
-    id: 'hello',
-    name: '示例插件',
-    version: '0.2.0',
-    description: '演示插件 UI 注册（面板 / 顶栏按钮 / 设置栏目）与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
-    author: 'aidea',
-    sdkVersion: SDK_VERSION,
-  },
+  manifest,
 
   setup(ctx: PluginContext): void {
     // ── ① 启动副作用收敛：仅只读查询 console.log（不污染项目数据）──
-    const view = ctx.adapter.api.view.active()
-    const root = ctx.adapter.api.node.get('root')
-    console.log('[hello] 当前视图', view, '根节点', root?.text)
+    const view = adapter.api.view.active()
+    const root = adapter.api.node.get('root')
+    console.log('[hello] 当前视图', view, '根节点', root?.text, '已有 additions 键', scope.additions.keys())
 
-    // ── ② 注册三类 UI（面板 / 顶栏按钮 / 设置栏目）──
-    ctx.adapter.ui.registerPanel({
+    // ── ② 经注册面注册三类 UI（面板 / 顶栏按钮 / 设置栏目）──
+    ctx.register.registerPanel({
       id: 'stats',
       title: '统计助手',
       icon: StatsChartOutline,
@@ -84,7 +99,7 @@ const plugin: AideaPlugin = {
       defaultPlacement: 'right',
     })
 
-    ctx.adapter.ui.registerTopBarButton({
+    ctx.register.registerTopBarButton({
       id: 'hello-action',
       title: '示例动作',
       icon: ColorWandOutline,
@@ -93,15 +108,42 @@ const plugin: AideaPlugin = {
       onClick: () => {
         // 写演示由用户触发执行，避免启动即污染项目数据
         console.log('[hello] 触发示例动作（写演示）')
-        runWriteDemo(ctx.adapter.api)
+        runWriteDemo(adapter.api)
       },
     })
 
-    ctx.adapter.ui.registerSettingsCategory({
+    ctx.register.registerSettingsCategory({
       id: 'hello-config',
       title: '示例插件配置',
       component: HelloSettingsPanel,
     })
+
+    // ── ③ 注册快捷键动作（Ctrl/Cmd+Shift+G 问候；mod+shift+g 未占用保留键与内置绑定）──
+    const shortcutRes = ctx.register.registerShortcutAction({
+      id: 'greet',
+      label: 'Hello 问候',
+      scope: 'canvas',
+      defaultChord: 'mod+shift+g',
+      run: () => {
+        console.info('[hello] 快捷键触发')
+      },
+    })
+    if (!shortcutRes.ok) {
+      console.warn('[hello] 快捷键动作注册被拒：', shortcutRes.conflict)
+    }
+
+    // ── ④ 注册右键菜单项（有选中节点时出现在菜单末尾）──
+    const menuRes = ctx.register.registerContextMenuItem({
+      id: 'hello-item',
+      scope: 'selection',
+      label: 'Hello 演示',
+      run: ({ selectedNodeIds }) => {
+        console.info('[hello] 右键菜单触发，选中节点：', selectedNodeIds)
+      },
+    })
+    if (!menuRes.ok) {
+      console.warn('[hello] 右键菜单项注册被拒：', menuRes.conflict)
+    }
   },
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useShortcutsStore } from '@/stores/shortcuts'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { CUSTOM_SHORTCUTS, RESERVED_CHORDS } from '@/constants/shortcuts'
 
 function freshStore() {
@@ -115,5 +116,81 @@ describe('shortcuts store', () => {
     const s = freshStore()
     expect(s.getBinding('enterChild')).toBe('a')
     expect(s.overrides.not_exist).toBeUndefined()
+  })
+})
+
+describe('shortcuts store：插件注册动作（经 uiRegistry 登记）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.removeItem('aidea-shortcuts')
+    localStorage.removeItem('aidea-shortcuts-seqmod')
+  })
+
+  /** 经 uiRegistry 登记一个带默认键的插件动作 */
+  function registerDemoAction(defaultChord = 'mod+shift+g'): void {
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'act',
+      label: '演示动作',
+      scope: 'canvas',
+      defaultChord,
+      run: () => undefined,
+    })
+  }
+
+  it('注册插件动作后 bindings 含其 default（无覆盖时）', () => {
+    registerDemoAction()
+    const s = freshStore()
+    expect(s.bindings['demo:act']).toBe('mod+shift+g')
+    expect(s.getBinding('demo:act')).toBe('mod+shift+g')
+  })
+
+  it('无 defaultChord 的插件动作不进 bindings（getBinding 空串）', () => {
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'bare',
+      label: '无默认键动作',
+      scope: 'canvas',
+      run: () => undefined,
+    })
+    const s = freshStore()
+    expect(s.bindings['demo:bare']).toBeUndefined()
+    expect(s.getBinding('demo:bare')).toBe('')
+  })
+
+  it('assign 撞插件动作绑定被拒（conflict.id = 完整 key，labelKey = 成品 label）', () => {
+    registerDemoAction()
+    const s = freshStore()
+    const r = s.assign('enterChild', 'mod+shift+g')
+    expect(r.ok).toBe(false)
+    if (!r.ok && typeof r.conflict === 'object') {
+      expect(r.conflict.id).toBe('demo:act')
+      expect(r.conflict.labelKey).toBe('演示动作')
+    } else {
+      throw new Error('应返回对象冲突')
+    }
+  })
+
+  it('assign 对插件动作完整 key 可改键，且反向挡住内置动作撞插件绑定', () => {
+    registerDemoAction()
+    const s = freshStore()
+    // 给插件动作改键
+    expect(s.assign('demo:act', 'j')).toEqual({ ok: true })
+    expect(s.getBinding('demo:act')).toBe('j')
+    // 内置动作撞插件动作的当前绑定 → 拒绝
+    expect(s.assign('aiClear', 'j').ok).toBe(false)
+    // 恢复默认（reset 对完整 key 直接工作）
+    s.reset('demo:act')
+    expect(s.getBinding('demo:act')).toBe('mod+shift+g')
+  })
+
+  it('validate 不清含 ":" 的插件命名空间覆盖（动作不在表也保留）', () => {
+    localStorage.setItem('aidea-shortcuts', JSON.stringify({ 'demo:act': 'j', not_exist: 'x' }))
+    const s = freshStore() // store 创建时自动 validate
+    expect(s.overrides['demo:act']).toBe('j') // 插件命名空间保留
+    expect(s.overrides.not_exist).toBeUndefined() // 非命名空间未知 id 仍清理
+
+    // 卸载动作后手动 validate，覆盖依旧保留
+    useUiRegistryStore().removePlugin('demo')
+    s.validate()
+    expect(s.overrides['demo:act']).toBe('j')
   })
 })

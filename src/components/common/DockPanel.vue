@@ -35,12 +35,15 @@ const props = withDefaults(
     draggable?: boolean
     /** 覆盖标题（默认从品类表 titleKey / 插件 title 读取） */
     title?: string
+    /** 覆盖关闭按钮 tooltip（默认「关闭面板」；左侧单面板区传「收起面板」） */
+    closeHint?: string
   }>(),
   {
     showHeader: true,
     showClose: true,
     draggable: true,
     title: undefined,
+    closeHint: undefined,
   },
 )
 
@@ -60,6 +63,9 @@ const title = computed(
     meta.value?.title ??
     (meta.value?.titleKey ? t(meta.value.titleKey) : ''),
 )
+
+/** 关闭按钮 tooltip：优先 prop 覆盖，否则默认「关闭面板」 */
+const closeHint = computed(() => props.closeHint ?? t('dock.closePanel'))
 
 /** 关闭按钮点击 → 触发 close 事件 */
 function onClose(): void {
@@ -87,6 +93,7 @@ function onClose(): void {
         class="dock-panel-close"
         size="tiny"
         quaternary
+        :title="closeHint"
         @click="onClose"
       >
         <template #icon>

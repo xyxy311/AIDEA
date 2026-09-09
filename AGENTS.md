@@ -60,7 +60,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 
 - 布局：`ActivityBar`（固定 48px 竖向条，始终可见）+ `LeftSidebar`（面板容器，可 resize，收起=宽度 0 完全隐藏）。
 - **活动栏**：图标序列渲染 `layout.panels`（顺序受拖拽 reorder 影响），元信息从 `PANEL_CATALOG` 解析（`constants/panels.ts`：id/icon/titleKey/component + `defaultPlacement`）。新增面板只需在品类表登记。
-- **收起/展开只经活动栏**：点击图标 = `layout.togglePanel(id)`（同 id → 收起，激活由 `activePanelId` 驱动，null=收起）。面板统一由 `DockPanel` 外壳提供标题栏/图标/关闭/拖拽手柄，面板组件本身**无 header**。
+- **收起/展开主要经活动栏**：点击图标 = `layout.togglePanel(id)`（同 id → 收起，激活由 `activePanelId` 驱动，null=收起）；左侧面板 × = 收起（`collapse`，不移除面板），右侧 dock 面板 × = 移除到「未放置」（`removePanel`，经活动栏「+」恢复）。面板统一由 `DockPanel` 外壳提供标题栏/图标/关闭/拖拽手柄，面板组件本身**无 header**。
 - **拖拽排序**：HTML5 drag（dragstart/dragover/drop）调 `layout.reorder`；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位，抑制拖拽后误触 click 切换面板。内存态，不持久化。
 - layout store：`panels`（顺序）/`activePanelId`/`lastPanelId`（收起后 `expand()` 恢复）/`togglePanel`/`setActive`/`reorder`/`collapse`/`expand`。
 - 新增面板只需在 `constants/panels.ts` 品类表登记，活动栏图标、面板容器、拖拽排序、展开/收起自动生效。

@@ -291,7 +291,9 @@
   },
   "dock": {
     "panelEmpty": "拖入面板以固定在此",
-    "noPanel": "暂无可用面板"},
+    "noPanel": "暂无可用面板",
+    "closePanel": "关闭面板",
+    "collapsePanel": "收起面板"},
   "canvas": {
     "enterChildView": "进入子视图",
     "collapseInlineView": "收起内联视图",

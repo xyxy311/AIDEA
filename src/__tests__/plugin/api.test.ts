@@ -1,12 +1,19 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
 import { adapter, SDK_VERSION } from '@/plugin/adapter'
+import { createPluginRegister } from '@/plugin/ui'
 import { useAdditionsStore } from '@/stores/additions'
+import { useModalStore } from '@/stores/modal'
 import { ROOT_NODE_ID } from '@/stores/node'
+
+/** 测试用最小插件模态内容组件 */
+const DummyComp = defineComponent(() => () => null)
 
 /**
  * 适配层单例契约 + 分类 api 测试（node / connection / tag / project / view）。
- * 单例契约：九域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离。
+ * 单例契约：九域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离、
+ * scope.modal 与 ctx.modal 同工厂（短 id 拼前缀，随 for 缓存同一实例）。
  * 只读方法如实反映 store；写方法产生可撤销历史（undo/redo）；batch 合并单条历史。
  */
 function makeApi() {
@@ -45,6 +52,26 @@ describe('adapter 单例契约', () => {
 
   it('for：同 id 重复调用返回同一实例（模块级缓存）', () => {
     expect(adapter.for('dup')).toBe(adapter.for('dup'))
+  })
+
+  it('for：scope.modal 与 ctx.modal 同构——形状、随 for 缓存、短 id 拼前缀接线', () => {
+    const scope = adapter.for('modaltest')
+    // 形状：open / close 均为函数（与 ctx.modal 同一工厂产物）
+    expect(typeof scope.modal.open).toBe('function')
+    expect(typeof scope.modal.close).toBe('function')
+    // 缓存：同 id 重复 for → 同一 modal 实例（随 scope 一起缓存）
+    expect(adapter.for('modaltest').modal).toBe(scope.modal)
+
+    // 入口校验（for 位与 ctx 位同一工厂）：未登记的短 id → false
+    expect(scope.modal.open('about')).toBe(false)
+
+    // 接线：登记后短 id 自动拼 `${pluginId}:` 前缀（工厂行为细节由 ctx-modal.test.ts 覆盖）
+    expect(createPluginRegister('modaltest').registerModal({ id: 'about', title: '演示模态', component: DummyComp }))
+      .toEqual({ ok: true })
+    expect(scope.modal.open('about')).toBe(true)
+    expect(useModalStore().activeKey).toBe('modaltest:about')
+    scope.modal.close()
+    expect(useModalStore().activeKey).toBeNull()
   })
 
   it('scope.additions：命名空间前缀隔离与写校验', () => {

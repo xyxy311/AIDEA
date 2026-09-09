@@ -8,6 +8,7 @@ import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
+import { useModalStore } from '@/stores/modal'
 import { useTagsStore } from '@/stores/tags'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
 
@@ -293,6 +294,62 @@ describe('useKeyboardShortcuts', () => {
     const isEditing = ref(true)
     wrapper = mountWithShortcuts(isEditing)
 
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
+    expect(run).toHaveBeenCalledTimes(1)
+
+    // 清理登记，避免污染其它用例
+    useUiRegistryStore().removePlugin('demo')
+    useShortcutsStore().resetAll()
+  })
+
+  it('模态打开时 canvas scope 动作（Delete）不触发，close 后恢复', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+    const modal = useModalStore()
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1)
+
+    // 模态打开（含 always 在内的全部 scope 一律抑制）
+    expect(modal.open('settings')).toBe(true)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1) // 模态抑制，未删除
+
+    // 关闭模态后恢复触发
+    modal.close()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
+  })
+
+  it('模态打开时 always scope 动作不触发，close 后恢复', () => {
+    // 仿 save 类全局动作：注册 scope='always' 的插件动作观察 run 调用
+    const run = vi.fn()
+    useUiRegistryStore().registerPluginShortcutAction('demo', {
+      id: 'global',
+      label: '全局演示动作',
+      scope: 'always',
+      defaultChord: 'mod+shift+k',
+      run,
+    })
+
+    const modal = useModalStore()
+    expect(modal.open('settings')).toBe(true)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    // 模态打开：always scope 也被抑制（与「编辑态仍触发」的既有行为不同）
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
+    expect(run).not.toHaveBeenCalled()
+
+    // close 后恢复触发
+    modal.close()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
     expect(run).toHaveBeenCalledTimes(1)
 

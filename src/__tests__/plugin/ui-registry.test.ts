@@ -11,6 +11,7 @@ import {
   type PluginShortcutActionRegistration,
   type PluginContextMenuItemRegistration,
 } from '@/plugin/ui'
+import type { ModalRegistration } from '@/types/modal'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 
 /**
@@ -66,6 +67,15 @@ function dummyMenuItem(over: Partial<PluginContextMenuItemRegistration> = {}): P
     scope: 'selection',
     label: '演示菜单',
     run: () => undefined,
+    ...over,
+  }
+}
+
+function dummyModal(over: Partial<ModalRegistration> = {}): ModalRegistration {
+  return {
+    id: 'modal',
+    title: '演示模态',
+    component: defineComponent(() => () => h('div')),
     ...over,
   }
 }
@@ -304,6 +314,118 @@ describe('uiRegistry 两新表：快捷键动作 / 右键菜单项登记', () =>
     expect(ui.registerContextMenuItem(dummyMenuItem({ id: 'dup' }))).toEqual({ ok: true })
     expect(ui.registerContextMenuItem(dummyMenuItem({ id: 'dup' })))
       .toEqual({ ok: false, conflict: 'id' })
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
+describe('uiRegistry 模态面板表：登记 / 冲突 / 清理', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
+
+  it('registerPluginModal：成功返回 {ok:true}，key 归一 demo:modal，条目含 pluginId 与 def', () => {
+    const registry = useUiRegistryStore()
+    const res = registry.registerPluginModal('demo', dummyModal({ width: 480 }))
+    expect(res).toEqual({ ok: true })
+
+    const entry = registry.modals.get('demo:modal')
+    expect(entry).toBeDefined()
+    expect(entry!.key).toBe('demo:modal')
+    expect(entry!.origin).toBe('plugin')
+    expect(entry!.pluginId).toBe('demo')
+    expect(entry!.def.title).toBe('演示模态')
+    expect(entry!.def.width).toBe(480)
+    // reactive Map 深响应式会代理组件对象；断言存在性而非同一引用
+    expect(entry!.def.component).toBeTruthy()
+  })
+
+  it('registerPluginModal：width 缺省 → def 原样保留（无 width 字段）', () => {
+    const registry = useUiRegistryStore()
+    registry.registerPluginModal('demo', dummyModal())
+    expect(registry.modals.get('demo:modal')!.def.width).toBeUndefined()
+  })
+
+  it('短 id 非法（空 / 含 : / 含空白）→ warn + { ok:false, conflict:"id" }，不入表', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = useUiRegistryStore()
+
+    expect(registry.registerPluginModal('demo', dummyModal({ id: '' })))
+      .toEqual({ ok: false, conflict: 'id' })
+    expect(registry.registerPluginModal('demo', dummyModal({ id: 'a:b' })))
+      .toEqual({ ok: false, conflict: 'id' })
+    expect(registry.registerPluginModal('demo', dummyModal({ id: 'a b' })))
+      .toEqual({ ok: false, conflict: 'id' })
+
+    expect(registry.modals.size).toBe(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('key 冲突：同插件内同短 id 二次注册 → warn + { ok:false, conflict:"id" }，def 不被覆盖', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = useUiRegistryStore()
+    registry.registerPluginModal('demo', dummyModal({ title: '原始模态' }))
+
+    expect(registry.registerPluginModal('demo', dummyModal({ title: '新模态' })))
+      .toEqual({ ok: false, conflict: 'id' })
+
+    expect(registry.modals.get('demo:modal')!.def.title).toBe('原始模态') // 未被覆盖
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('不同插件同短 id 不冲突：demo:modal 与 other:modal 共存', () => {
+    const registry = useUiRegistryStore()
+    expect(registry.registerPluginModal('demo', dummyModal({ title: 'demo 的' }))).toEqual({ ok: true })
+    expect(registry.registerPluginModal('other', dummyModal({ title: 'other 的' }))).toEqual({ ok: true })
+
+    expect(registry.modals.get('demo:modal')!.def.title).toBe('demo 的')
+    expect(registry.modals.get('other:modal')!.def.title).toBe('other 的')
+    expect(registry.modals.size).toBe(2)
+  })
+
+  it('removePlugin 只清理对应插件条目，其它插件保留；reset 一并清空；其它表不受影响', () => {
+    const registry = useUiRegistryStore()
+    // 注册 modals 前记录其它表现状（内置 seed + 无插件条目）
+    const panelsSizeBefore = registry.panels.size
+
+    registry.registerPluginModal('demo', dummyModal())
+    registry.registerPluginModal('other', dummyModal({ id: 'modal2' }))
+    // 顺手注册一条其它表条目，验证 removePlugin 不误伤非 modals 表的 demo 条目之外的场景在其余用例覆盖
+    registry.registerPluginShortcutAction('demo', dummyShortcutAction())
+
+    registry.removePlugin('demo')
+    expect(registry.modals.has('demo:modal')).toBe(false)
+    expect(registry.modals.has('other:modal2')).toBe(true) // 其它插件保留
+    expect(registry.shortcutActions.has('demo:act')).toBe(false) // 同插件其它表条目一并清理
+
+    // modals 注册/清理不影响面板表（内置 seed 条目数量不变）
+    expect(registry.panels.size).toBe(panelsSizeBefore)
+
+    registry.reset()
+    expect(registry.modals.size).toBe(0)
+  })
+
+  it('rollbackPluginUi：清掉该插件 modals 条目（经 removePlugin 自动覆盖）', () => {
+    const ui = createPluginRegister('demo')
+    expect(ui.registerModal(dummyModal())).toEqual({ ok: true })
+    expect(useUiRegistryStore().modals.has('demo:modal')).toBe(true)
+
+    rollbackPluginUi('demo')
+    expect(useUiRegistryStore().modals.has('demo:modal')).toBe(false)
+  })
+
+  it('经 PluginRegisterApi.registerModal：透传 ok/conflict，非法短 id 返回 conflict:"id"', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const ui = createPluginRegister('demo')
+    expect(ui.registerModal(dummyModal())).toEqual({ ok: true })
+    expect(useUiRegistryStore().modals.has('demo:modal')).toBe(true)
+
+    expect(ui.registerModal(dummyModal({ id: 'bad:id' })))
+      .toEqual({ ok: false, conflict: 'id' })
+    expect(ui.registerModal(dummyModal())).toEqual({ ok: false, conflict: 'id' })
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })

@@ -24,6 +24,7 @@ import { useDialog } from 'naive-ui'
 import { useLayoutStore } from '@/stores/layout'
 import { useFileStore } from '@/stores/file'
 import { useViewStore } from '@/stores/view'
+import { useModalStore, SETTINGS_MODAL_KEY } from '@/stores/modal'
 import { useProjectFile } from '@/composables/useProjectFile'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { t } from '@/composables/useT'
@@ -32,6 +33,7 @@ import ActivityBar from './ActivityBar.vue'
 import LeftSidebar from './LeftSidebar.vue'
 import RightSidebar from './RightSidebar.vue'
 import SettingsModal from '@/components/settings/SettingsModal.vue'
+import PluginModalHost from '@/components/layout/PluginModalHost.vue'
 import RightTopBar from '@/components/layout/RightTopBar.vue'
 import TabBar from './TabBar.vue'
 import WheelScroll from '@/components/common/WheelScroll.vue'
@@ -106,7 +108,8 @@ useEventListener('pointerup', () => {
   isDraggingRight.value = false
 })
 
-const showSettings = ref(false)
+// ── 模态运行时状态（单实例）：设置等模态的开关状态归 modal store ──
+const modalStore = useModalStore()
 
 // ── 项目文件（新建 / 保存 / 打开）──
 const dialog = useDialog()
@@ -130,11 +133,6 @@ function confirm(message: string): Promise<boolean> {
 // 单实例创建并注入，各按钮组件等子孙组件通过 inject 共享同一状态
 const projectFile = useProjectFile({ confirm })
 provide('projectFile', projectFile)
-
-// 设置按钮注入：打开设置弹窗
-provide('openSettings', () => {
-  showSettings.value = true
-})
 
 // ── 键盘快捷键（全局单份，含文件快捷键）──
 const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
@@ -222,11 +220,14 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
       />
     </div>
 
-    <!-- 设置面板 -->
+    <!-- 设置面板（开关状态由 modal store 驱动） -->
     <SettingsModal
-      :show="showSettings"
-      @close="showSettings = false"
+      :show="modalStore.activeKey === SETTINGS_MODAL_KEY"
+      @close="modalStore.close()"
     />
+
+    <!-- 插件模态宿主（按 uiRegistry.modals 登记条目渲染 activeKey 指向的插件模态） -->
+    <PluginModalHost />
 
     <!-- 浮动属性编辑器（全局单实例挂载） -->
     <FloatingPropertyEditor />

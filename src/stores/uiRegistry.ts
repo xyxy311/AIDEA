@@ -1,12 +1,13 @@
 /**
- * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项）
+ * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项 / 模态面板）
  *
  * 全应用唯一的「UI 元素登记表」：内置目录（PANEL_CATALOG / TOP_BAR_CATALOG /
  * SETTINGS_CATALOG）在 store 初始化时 seed 进表，插件经注册面（ctx.register →
  * plugin/ui.ts）把运行时组件 / 动作注册进**同一张表**。条目带 origin（builtin | plugin）与 pluginId 归因，
  * 供布局派生、恢复默认、错误隔离按来源过滤。
  * 快捷键动作与右键菜单项两表只收插件条目（内置动作在 CUSTOM_SHORTCUTS、内置菜单项
- * 在 useCanvasEvents 构建处，均不走登记表）。
+ * 在 useCanvasEvents 构建处，均不走登记表）。模态面板表同样只收插件条目，且不进
+ * dock/活动栏布局派生体系（只登记，打开/关闭运行时另行实现）。
  *
  * 分层：
  * - constants 品类表保持纯数据（不持有运行时状态）；
@@ -23,6 +24,7 @@ import type { PanelKey } from '@/constants/panels'
 import { TOP_BAR_CATALOG } from '@/constants/topbar'
 import type { TopBarKey, TopBarZone } from '@/constants/topbar'
 import { SETTINGS_CATALOG } from '@/constants/settings'
+import type { ModalRegistration } from '@/types/modal'
 import type {
   PluginPanelRegistration,
   PluginSettingsCategoryRegistration,
@@ -108,6 +110,16 @@ export interface UiContextMenuItemEntry {
   def: PluginContextMenuItemRegistration
 }
 
+/** 模态面板登记条目（仅插件条目；模态不进 dock/活动栏布局体系，只登记不派生布局） */
+export interface UiModalEntry {
+  /** 完整键：`${pluginId}:${id}` */
+  key: string
+  origin: UiOrigin
+  pluginId?: string
+  /** 插件模态面板定义（title 为成品字符串，component 为纯内容组件，width 可选） */
+  def: ModalRegistration
+}
+
 // ── 内部校验 ──
 
 /** id 合法性：非空 + 不含 ':' + 不含空白（pluginId 与短 id 同规则） */
@@ -125,9 +137,10 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
   const panels = reactive(new Map<string, UiPanelEntry>())
   const topBarButtons = reactive(new Map<string, UiTopBarEntry>())
   const settingsCategories = reactive(new Map<string, UiSettingsEntry>())
-  // 两新表只收插件条目（内置动作 / 内置菜单项不走登记表，见各表类型注释）
+  // 三新表只收插件条目（内置动作 / 内置菜单项不走登记表，模态无内置目录，见各表类型注释）
   const shortcutActions = reactive(new Map<string, UiShortcutActionEntry>())
   const contextMenuItems = reactive(new Map<string, UiContextMenuItemEntry>())
+  const modals = reactive(new Map<string, UiModalEntry>())
 
   /** seed 内置目录（store 创建时执行一次；reset 后重跑） */
   function seedBuiltins(): void {
@@ -261,6 +274,21 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     return { ok: true }
   }
 
+  /** 注册插件模态面板；非法 id / key 冲突 → warn + { ok:false, conflict:'id' } */
+  function registerPluginModal(pluginId: string, def: ModalRegistration): UiRegisterResult {
+    if (!isValidId(pluginId) || !isValidId(def.id)) {
+      console.warn(`[uiRegistry] 插件「${pluginId}」模态面板「${def.id}」注册失败：id 非法`)
+      return { ok: false, conflict: 'id' }
+    }
+    const key = pluginKey(pluginId, def.id)
+    if (modals.has(key)) {
+      console.warn(`[uiRegistry] 模态面板注册冲突：${key} 已存在，拒绝覆盖`)
+      return { ok: false, conflict: 'id' }
+    }
+    modals.set(key, { key, origin: 'plugin', pluginId, def })
+    return { ok: true }
+  }
+
   /** 按插件批量移除全部登记（setup 抛错回滚 / 清理）；不做任何布局操作（布局派生自动收缩） */
   function removePlugin(pluginId: string): void {
     for (const [key, e] of panels) if (e.pluginId === pluginId) panels.delete(key)
@@ -268,6 +296,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     for (const [key, e] of settingsCategories) if (e.pluginId === pluginId) settingsCategories.delete(key)
     for (const [key, e] of shortcutActions) if (e.pluginId === pluginId) shortcutActions.delete(key)
     for (const [key, e] of contextMenuItems) if (e.pluginId === pluginId) contextMenuItems.delete(key)
+    for (const [key, e] of modals) if (e.pluginId === pluginId) modals.delete(key)
   }
 
   /** 清空并重置为内置目录（测试用） */
@@ -277,6 +306,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     settingsCategories.clear()
     shortcutActions.clear()
     contextMenuItems.clear()
+    modals.clear()
     seedBuiltins()
   }
 
@@ -286,11 +316,13 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     settingsCategories,
     shortcutActions,
     contextMenuItems,
+    modals,
     registerPluginPanel,
     registerPluginTopBarButton,
     registerPluginSettingsCategory,
     registerPluginShortcutAction,
     registerPluginContextMenuItem,
+    registerPluginModal,
     removePlugin,
     reset,
   }

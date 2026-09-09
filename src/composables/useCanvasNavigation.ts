@@ -1,6 +1,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
 import { useViewStore } from '@/stores/view'
+import { useModalStore } from '@/stores/modal'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 /**
@@ -17,6 +18,7 @@ import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
  */
 export function useCanvasNavigation(viewId: string) {
   const view = useViewStore(viewId)
+  const modalStore = useModalStore()
   const isPanMode = ref(false)
 
   // ── 空格键处理 ──
@@ -25,6 +27,9 @@ export function useCanvasNavigation(viewId: string) {
     if (e.key !== ' ') return
     if (e.repeat) return
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
+    // 模态打开 = 独占交互：不进入平移模式
+    if (modalStore.hasOpenModal) return
 
     e.preventDefault()
     isPanMode.value = true

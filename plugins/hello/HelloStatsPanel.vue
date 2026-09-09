@@ -7,6 +7,8 @@
  * - additions 项目化数据：经 `adapter.for('hello').additions` 获取本插件命名空间作用域
  *   （for 有模块级缓存，与入口 setup 拿到同一实例），演示 set/get/undo。
  *   注意组件不得 import 插件入口（会被入口 import，构成循环依赖），直接 for('hello') 即可。
+ * - 插件模态：经 `adapter.for('hello').modal.open(短 id)` 打开本插件登记的模态
+ *   （与 setup 内 ctx.modal 同工厂，自动拼 `hello:` 前缀）。
  * 文本朴素，样式用项目通用 token（var(--color-*)）。
  */
 import { ref, onMounted } from 'vue'
@@ -14,7 +16,16 @@ import { NButton, NText } from 'naive-ui'
 import { adapter } from '@/plugin/adapter'
 
 const api = adapter.api
-const additions = adapter.for('hello').additions
+// 本插件命名空间作用域（for 有模块级缓存）：additions / modal 与入口 setup 同实例
+const scope = adapter.for('hello')
+const additions = scope.additions
+
+/** 打开本插件登记的「关于」模态（短 id `about`，内部自动拼 `hello:` 前缀） */
+function openAboutModal(): void {
+  // 单实例冲突（已有其他模态打开）→ false，store 内 warn，这里补一条插件侧提示
+  const ok = scope.modal.open('about')
+  if (!ok) console.warn('[hello] 打开「关于」模态失败：可能有其他模态打开中')
+}
 
 /** 演示键（插件作用域内短键，api 内部自动加 `hello:` 前缀） */
 const DEMO_KEY = 'demo'
@@ -69,6 +80,12 @@ onMounted(refreshDemo)
         <NButton size="small" @click="undoDemo">撤销（回退 additions）</NButton>
       </div>
       <div class="additions-hint">说明：additions 进项目保存、可经「撤销」回退。</div>
+    </div>
+
+    <div class="divider" />
+    <div class="about-block">
+      <NButton size="small" @click="openAboutModal">关于本插件（模态演示）</NButton>
+      <div class="additions-hint">说明：经 <code>adapter.for('hello').modal.open('about')</code> 以短 id 打开本插件模态（自动拼 <code>hello:</code> 前缀）。</div>
     </div>
   </div>
 </template>
@@ -127,5 +144,12 @@ onMounted(refreshDemo)
 .additions-empty {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+/* 「关于本插件」模态演示块（与 additions-block 同风格） */
+.about-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>

@@ -7,14 +7,15 @@
  *   api 不含 additions 与 config（插件命名空间能力仅经 `for(id)` 的 PluginScope 提供）；
  *   shortcuts 仅只读查询（动作注册在 ctx.register.registerShortcutAction）。
  * - 插件命名空间能力经 `adapter.for(pluginId)` 获取：模块级 Map 缓存，同 id
- *   重复调用返回同一实例；AdditionsApi / ConfigApi 闭包内才 useStore，模块加载期
- *   不触碰 pinia。
+ *   重复调用返回同一实例；AdditionsApi / ConfigApi / ModalApi 闭包内才 useStore，
+ *   模块加载期不触碰 pinia。
  * - 插件运行时契约类型（PluginAdapter / PluginContext / AideaPlugin）也定在这里，
  *   与实现型 api 类型聚于同一入口，插件统一从本文件导入。
  *
  * 数据操作：插件直接 `import { adapter }` 使用 `adapter.api`（共享，无命名空间）、
- * `adapter.for(id).additions`（插件命名空间的项目级数据桶）与
- * `adapter.for(id).config`（插件自身偏好的应用级独立存储，不入项目历史）；UI 注册
+ * `adapter.for(id).additions`（插件命名空间的项目级数据桶）、
+ * `adapter.for(id).config`（插件自身偏好的应用级独立存储，不入项目历史）与
+ * `adapter.for(id).modal`（本插件登记的模态运行时，open 收短 id）；UI 注册
  * 不在 adapter 上——setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
  *
  * SDK 通用 UI 组件：本文件同时 re-export 少量可复用 UI 组件（当前为
@@ -28,16 +29,19 @@ import { createAdditionsApi } from './api/additions'
 import type { AdditionsApi } from './api/additions'
 import { createPluginConfigApi } from './api/config'
 import type { PluginConfigApi } from './api/config'
-import type { PluginRegisterApi } from './ui'
+import { createPluginModalApi } from './ui'
+import type { PluginRegisterApi, PluginModalApi } from './ui'
 
 // ── 插件运行时契约（稳定）──
 
-/** adapter.for(pluginId) 返回的插件命名空间能力（additions 内部自动拼 `${pluginId}:` 前缀；config 绑定插件独立配置文件） */
+/** adapter.for(pluginId) 返回的插件命名空间能力（additions / modal 内部自动拼 `${pluginId}:` 前缀；config 绑定插件独立配置文件） */
 export interface PluginScope {
   /** 插件命名空间的 additions（内部自动拼 `${pluginId}:` 前缀，key 本身不得含冒号） */
   additions: AdditionsApi
   /** 插件自身配置（`aidea-plugin-config.<pluginId>` 的 data 段，get/set/remove，即时持久化） */
   config: PluginConfigApi
+  /** 本插件登记的模态运行时（open 收插件内短 id，内部拼 `${pluginId}:${id}`；与 ctx.modal 同工厂） */
+  modal: PluginModalApi
 }
 
 /** 插件的完整适配层（全局唯一实例 `adapter`，插件直接 import 使用） */
@@ -49,14 +53,16 @@ export interface PluginAdapter {
   for(pluginId: string): PluginScope
 }
 
-/** 插件 setup 上下文（注册面 + 清理出口；数据操作走全局 adapter） */
+/** 插件 setup 上下文（注册面 + 模态运行时 + 清理出口；数据操作走全局 adapter） */
 export interface PluginContext {
   /** 插件自身清单 */
   manifest: PluginManifest
   /** 卸载时让插件自清理副作用的出口 */
   onDispose(fn: () => void): void
-  /** 注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作），仅 setup 内使用 */
+  /** 注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板），仅 setup 内使用 */
   register: PluginRegisterApi
+  /** 模态运行时：open 收本插件登记的短 id（内部拼 `${pluginId}:${id}`），close 关闭当前模态 */
+  modal: PluginModalApi
 }
 
 /** 插件运行时模块：插件入口文件必须默认导出它 */
@@ -90,10 +96,12 @@ export function createPluginAdapter(): PluginAdapter {
       requireValidPluginId(pluginId)
       const cached = scopeCache.get(pluginId)
       if (cached) return cached
-      // 惰性：AdditionsApi / ConfigApi 只创建闭包，方法体内才 useStore，此处不触碰任何 pinia store
+      // 惰性：AdditionsApi / ConfigApi / ModalApi 只创建闭包（modal 工厂方法体内才
+      // useModalStore），此处不触碰任何 pinia store
       const scope: PluginScope = {
         additions: createAdditionsApi(pluginId),
         config: createPluginConfigApi(pluginId),
+        modal: createPluginModalApi(pluginId),
       }
       scopeCache.set(pluginId, scope)
       return scope
@@ -122,6 +130,7 @@ export type {
 export type { PluginConfigApi } from './api/config'
 export type {
   PluginRegisterApi,
+  PluginModalApi,
   PluginPanelRegistration,
   PluginTopBarButtonRegistration,
   PluginSettingsCategoryRegistration,

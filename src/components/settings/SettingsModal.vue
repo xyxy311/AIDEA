@@ -10,9 +10,10 @@
  * 品类表顺序；插件注册进同一张表并追加其后）。新增设置分类只需在
  * constants/settings.ts 登记 + 提供对应 Section 组件即可，导航 / 内容自动生效。
  */
-import { NModal, NCard, NIcon, NScrollbar } from 'naive-ui'
+import { NIcon, NScrollbar } from 'naive-ui'
 import { computed, ref } from 'vue'
 import type { Component } from 'vue'
+import ModalShell from '@/components/common/ModalShell.vue'
 import PluginErrorBoundary from '@/components/plugin/PluginErrorBoundary.vue'
 import { useUiRegistryStore, type UiSettingsEntry } from '@/stores/uiRegistry'
 import { t } from '@/composables/useT'
@@ -65,64 +66,59 @@ const activeDesc = computed<string | null>(() =>
 </script>
 
 <template>
-  <NModal
+  <!-- 模态外壳统一走 ModalShell（遮罩/Esc/标题栏关闭行为一致）；对外接口不变 -->
+  <ModalShell
     :show="show"
-    :mask-closable="true"
-    @update:show="(v: boolean) => { if (!v) emit('close') }"
+    :title="t('settings.title')"
+    :width="720"
+    @close="emit('close')"
   >
-    <NCard
-      :title="t('settings.title')"
-      style="width: 720px"
-      closable
-      @close="emit('close')"
-    >
-      <div class="settings-body">
-        <!-- 左侧分类导航 -->
-        <aside class="settings-sidebar">
-          <NScrollbar class="settings-sidebar-scroll">
-            <div class="settings-nav">
-              <!-- 全部分类（内置 + 插件）：以循环索引判断在第一个插件条目前渲染分隔线 -->
-              <template v-for="(entry, i) in categories" :key="entry.key">
-                <div v-if="i === firstPluginIndex" class="settings-nav-divider" />
-                <button
-                  type="button"
-                  class="settings-nav-item"
-                  :class="{ active: activeId === entry.key }"
-                  @click="activeId = entry.key"
-                >
-                  <NIcon v-if="entry.icon" :component="entry.icon" class="settings-nav-icon" />
-                  <span
-                    class="settings-nav-label"
-                    :class="{ 'plugin-nav-label': entry.origin === 'plugin' }"
-                  >{{ entry.origin === 'builtin' ? t(entry.titleKey!) : (entry.title ?? entry.key) }}</span>
-                </button>
-              </template>
-            </div>
-          </NScrollbar>
-        </aside>
-
-        <!-- 右侧内容区 -->
-        <div class="settings-content">
-          <NScrollbar class="settings-content-scroll">
-            <div class="settings-section">
-              <h3 class="settings-section-title">{{ activeTitle }}</h3>
-              <p v-if="activeDesc" class="settings-section-desc">{{ activeDesc }}</p>
-
-              <!-- 插件设置栏目外包错误边界，渲染异常隔离到占位 -->
-              <PluginErrorBoundary
-                v-if="activeEntry?.pluginId"
-                :plugin-id="activeEntry.pluginId"
-                :name="activeEntry.title ?? activeEntry.key"
+    <div class="settings-body">
+      <!-- 左侧分类导航 -->
+      <aside class="settings-sidebar">
+        <NScrollbar class="settings-sidebar-scroll">
+          <div class="settings-nav">
+            <!-- 全部分类（内置 + 插件）：以循环索引判断在第一个插件条目前渲染分隔线 -->
+            <template v-for="(entry, i) in categories" :key="entry.key">
+              <div v-if="i === firstPluginIndex" class="settings-nav-divider" />
+              <button
+                type="button"
+                class="settings-nav-item"
+                :class="{ active: activeId === entry.key }"
+                @click="activeId = entry.key"
               >
-                <component :is="activeSection" />
-              </PluginErrorBoundary>
-              <component v-else :is="activeSection" />
-            </div>
-          </NScrollbar>
-        </div>
+                <NIcon v-if="entry.icon" :component="entry.icon" class="settings-nav-icon" />
+                <span
+                  class="settings-nav-label"
+                  :class="{ 'plugin-nav-label': entry.origin === 'plugin' }"
+                >{{ entry.origin === 'builtin' ? t(entry.titleKey!) : (entry.title ?? entry.key) }}</span>
+              </button>
+            </template>
+          </div>
+        </NScrollbar>
+      </aside>
+
+      <!-- 右侧内容区 -->
+      <div class="settings-content">
+        <NScrollbar class="settings-content-scroll">
+          <div class="settings-section">
+            <h3 class="settings-section-title">{{ activeTitle }}</h3>
+            <p v-if="activeDesc" class="settings-section-desc">{{ activeDesc }}</p>
+
+            <!-- 插件设置栏目外包错误边界，渲染异常隔离到占位 -->
+            <PluginErrorBoundary
+              v-if="activeEntry?.pluginId"
+              :plugin-id="activeEntry.pluginId"
+              :name="activeEntry.title ?? activeEntry.key"
+            >
+              <component :is="activeSection" />
+            </PluginErrorBoundary>
+            <component v-else :is="activeSection" />
+          </div>
+        </NScrollbar>
       </div>
-    </NCard>
-  </NModal>
+    </div>
+  </ModalShell>
 </template>
 
 <style scoped>

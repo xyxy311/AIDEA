@@ -82,7 +82,7 @@ components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineVie
 - **通用按钮模板 `TopBarButton`**（`common/TopBarButton.vue`）：唯一按钮外壳，统一 tooltip / active（底部主色条）/ primary（主色填充）/ disabled / split-button 下拉菜单；各按钮只提供 `icon/title/disabled/active/variant/menu` 与 `@click`。
 - **通用容器 `TopBarZone`**（`common/TopBarZone.vue`）：按 `layout` store 某侧顺序（`leftTop`/`rightTop`）渲染已注册按钮 + 同侧拖拽排序（`layout.reorderTop`）/ 跨区放置（`layout.moveTopZone`，写入 `utils/topbar.ts` 的 `TOP_DRAG_MIME` 数据）；`dragstart` 置 `suppressClick`、`dragend` 用 `setTimeout(0)` 复位。`LeftTopBar`/`RightTopBar` 是固定 zone 的薄封装。
 - 顺序与归属持久化到 `localStorage`（`aidea-top-left` / `aidea-top-right`），只存用户显式顺序覆盖（delta），渲染目录 = `deriveTopLayout(uiRegistry 登记表, delta)` 实时派生（`layout.topLeft`/`topRight`），新增按钮自动出现；设置「恢复默认布局」调用 `layout.resetDock()`（内含 `resetTopBar`）。
-- 文件操作经 `inject('projectFile')`（AppShell 注入单实例）；设置按钮经 `inject('openSettings')`；撤销/重做经 `commands.undo()/redo()` 按 `canUndo/canRedo` 禁用。
+- 文件操作经 `inject('projectFile')`（AppShell 注入单实例）；设置按钮直接 `useModalStore().open(SETTINGS_MODAL_KEY)`（modal store 全局单例，无注入间接层）；撤销/重做经 `commands.undo()/redo()` 按 `canUndo/canRedo` 禁用。
 - 详见 `docs/顶部栏按钮注册与拖拽.md`。
 
 ### 预设样式系统（presets store）

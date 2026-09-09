@@ -1,17 +1,21 @@
 /**
- * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作）
+ * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板）
  *
  * 插件 setup(ctx) 经 ctx.register 现场注册**运行时组件对象**。
  * 注册去向统一为 **uiRegistry 登记总表**（stores/uiRegistry.ts）：
  * 内置目录（PANEL_CATALOG / TOP_BAR_CATALOG / SETTINGS_CATALOG）已在 store 初始化时
  * seed 进同一张表；插件条目（origin='plugin'，key = `${pluginId}:${id}`）经本模块
  * 转发写入 uiRegistry，排布（顺序 / 归类 / 持久化）由 layout store 纯派生，无需任何落位调用。
- * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）。
+ * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）；
+ * 模态面板同样只收插件条目，且只登记不派生布局（打开/关闭经 ctx.modal 运行时 API 走
+ * modal store，应用级宿主 PluginModalHost 按登记条目渲染）。
  *
  * 本模块负责：
  * - 定义插件注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
  * - 按插件作用域组装 PluginRegisterApi（createPluginRegister）：校验短 id，冲突/非法时
  *   console.warn 并跳过（不抛错，其余注册项继续生效）。
+ * - 按插件作用域组装模态运行时 PluginModalApi（createPluginModalApi）：open 收插件内
+ *   短 id，内部拼 `${pluginId}:${id}` 转发 modal store（单实例策略由 store 统一裁决）。
  * - 快捷键动作注册（registerShortcutAction）：承接原 api.shortcuts.registerAction 的
  *   实现与四级校验；api/shortcuts.ts 本体只留只读查询。
  * - 顶栏按钮描述符 → 等价逻辑组件（wrapTopBarButton），供 uiRegistry 存储，TopBarZone 零改动渲染。
@@ -24,8 +28,10 @@ import { defineComponent, h } from 'vue'
 import type { Component } from 'vue'
 import type { TopBarZone } from '@/constants/topbar'
 import type { ShortcutScope } from '@/types/shortcuts'
+import type { ModalRegistration } from '@/types/modal'
 import TopBarButton from '@/components/common/TopBarButton.vue'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
+import { useModalStore } from '@/stores/modal'
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
 import { isValidChord } from '@/utils/shortcuts'
@@ -143,6 +149,26 @@ export interface PluginRegisterApi {
    * 注册不改写用户已有绑定；用户改键在设置面板进行（对完整登记 key 直接生效）。
    */
   registerShortcutAction(entry: PluginShortcutActionRegistration): { ok: boolean; conflict?: 'id' | 'chord' | 'reserved' | 'binding' }
+  /** 注册模态面板（仅登记；打开/关闭走 ctx.modal 运行时）；短 id 非法 / key 冲突 → { ok:false, conflict:'id' }（同时 console.warn） */
+  registerModal(def: ModalRegistration): { ok: boolean; conflict?: 'id' }
+}
+
+/**
+ * 插件模态运行时面（ctx.modal / adapter.for(id).modal 两个注入位共用）：open 收插件内短 id，
+ * 校验登记表后拼 `${pluginId}:${id}` 转发 modal store。
+ */
+export interface PluginModalApi {
+  /**
+   * 打开本插件经 registerModal 登记的模态面板（id 为插件内短 id）。
+   * 未登记的短 id → console.warn + false（fail fast，杜绝「幽灵 key 挂上后
+   * hasOpenModal=true 却无可见模态」——modal store 本身不校验登记表，应用路径
+   * SETTINGS_MODAL_KEY 有意不校验）。
+   * 已登记 → 拼 key 转发 modal store，打开裁决沿用其单实例策略：同 key 幂等 true；
+   * 已有其他模态打开 → console.warn + false（不做栈）。
+   */
+  open(id: string): boolean
+  /** 关闭当前打开的模态（无模态打开时幂等） */
+  close(): void
 }
 
 // ── 内部校验与工厂 ──
@@ -261,6 +287,42 @@ export function createPluginRegister(pluginId: string): PluginRegisterApi {
         return res
       }
       return { ok: true }
+    },
+
+    registerModal(entry) {
+      if (!requireValidId('模态面板', entry.id)) return { ok: false, conflict: 'id' }
+      const res = registry().registerPluginModal(pluginId, entry)
+      if (!res.ok) {
+        console.warn(`[plugin] ${pluginId} 模态面板「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
+      }
+      return res
+    },
+  }
+}
+
+/**
+ * 按插件作用域组装模态运行时 PluginModalApi（两个注入位共用同一工厂：
+ * manager 组装 PluginContext 注入 ctx.modal——setup 内逻辑用；
+ * adapter.for(id) 注入 scope.modal——插件 UI 组件内用，与 additions/config 同源同构）。
+ * 与 createPluginRegister 同构：方法体内才触碰 pinia（惰性 useStore），模块加载期无副作用。
+ * open 先查登记表：未登记 → warn + false（fail fast），杜绝幽灵 key（modal store
+ * 不校验登记表，若放行会挂上 hasOpenModal=true 且无任何可见模态，画布快捷键全失效）；
+ * teardown 后误调同理被入口拒绝（运行期注册表不变：启停仅持久化重启生效，
+ * removePlugin 运行期唯一触发为启动期 setup 回滚，此时无模态打开），无需显式失效。
+ */
+export function createPluginModalApi(pluginId: string): PluginModalApi {
+  return {
+    open(id: string): boolean {
+      // 惰性取登记表：短 id 拼插件前缀成完整登记 key（与 uiRegistry.modals 表的 key 规则一致）
+      const key = `${pluginId}:${id}`
+      if (!useUiRegistryStore().modals.has(key)) {
+        console.warn(`[plugin] 插件「${pluginId}」打开未注册的模态「${id}」，已拒绝`)
+        return false
+      }
+      return useModalStore().open(key)
+    },
+    close(): void {
+      useModalStore().close()
     },
   }
 }

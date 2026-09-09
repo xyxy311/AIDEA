@@ -4,6 +4,7 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import type Konva from 'konva'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
+import { useModalStore } from '@/stores/modal'
 import { useCommands } from '@/composables/useCommands'
 import { NODE_DRAG_THRESHOLD } from '@/constants'
 import { snapPosition } from '@/utils/grid'
@@ -52,6 +53,7 @@ export function useNodeDragging(viewId: string) {
   const mainView = useViewStore('main')
   const nodeStore = useNodeStore()
   const commands = useCommands()
+  const modalStore = useModalStore()
 
   /** 是否正在拖动节点（已超过阈值激活） */
   const isDragging: Ref<boolean> = ref(false)
@@ -376,6 +378,11 @@ export function useNodeDragging(viewId: string) {
    * mousedown 接管后注册，cleanupDragState 时移除。
    */
   function onWindowMouseMove(e: MouseEvent): void {
+    // 模态打开 = 独占交互：冻结移动——不激活新拖拽，进行中的移动也不再跟随。
+    // 与 onWindowMouseUp 不对称（mouseup 兜底刻意不做模态检查）：
+    // mouseup 必须保证「模态打开前已开始的拖拽」在松手时经 finishDrag 自然 commit
+    // 收尾，否则拖拽状态（pendingNodeId / window 监听）悬挂、提交丢失。
+    if (modalStore.hasOpenModal) return
     if (!pendingNodeId || !pendingStart) return
     const pos = screenToWorld(e.clientX, e.clientY)
     if (!pos) return
@@ -403,6 +410,10 @@ export function useNodeDragging(viewId: string) {
    * 若 stage mouseup 已处理（状态已清），此处 pendingNodeId 为 null 直接返回，幂等无副作用。
    */
   function onWindowMouseUp(e: MouseEvent): void {
+    // 刻意不做 hasOpenModal 检查：拖拽进行中打开模态时（罕见，如程序化 open），
+    // 松手仍需经 finishDrag / cleanupDragState 自然收尾提交（commit 入历史栈），
+    // 避免拖拽状态悬挂与 window mousemove 监听泄漏；移动冻结由
+    // onWindowMouseMove 的模态守卫保证。与 mousemove 守卫不对称的原因见其注释。
     if (!pendingNodeId) return
     if (isDragging.value) {
       finishDrag(e.clientX, e.clientY)

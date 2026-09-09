@@ -4,6 +4,7 @@ import { useNodeStore } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useThemeStore } from '@/stores/theme'
 import { useCommands } from '@/composables/useCommands'
+import { useModalStore } from '@/stores/modal'
 import { globalIsDraggingNode } from '@/composables/useNodeDragging'
 import { CONNECTION_STROKE_WIDTH, CONNECTION_TEMP_DASH, GRID_G } from '@/constants'
 import {
@@ -38,6 +39,7 @@ export function useGridMode(viewId: string) {
   const project = useProjectStore()
   const commands = useCommands()
   const theme = useThemeStore()
+  const modalStore = useModalStore()
 
   /** 方向键映射 */
   const arrowDirMap: Record<string, GridDirection> = {
@@ -338,6 +340,8 @@ export function useGridMode(viewId: string) {
 
   /** 视图级守卫：主视图 + 网格开启 + 是当前活动视图 */
   function canAct(): boolean {
+    // 模态打开 = 独占交互：网格键盘状态机整体停摆
+    if (modalStore.hasOpenModal) return false
     if (view.type !== 'main') return false
     if (!view.gridMode) return false
     if (project.activeViewId !== viewId) return false

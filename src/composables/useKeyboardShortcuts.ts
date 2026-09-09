@@ -7,6 +7,7 @@ import { usePresetsStore } from '@/stores/presets'
 import { useLayoutStore } from '@/stores/layout'
 import { useTagsStore } from '@/stores/tags'
 import { useShortcutsStore } from '@/stores/shortcuts'
+import { useModalStore } from '@/stores/modal'
 import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
 import { useAIWordPanel } from '@/composables/useAIWordPanel'
@@ -52,6 +53,7 @@ export function useKeyboardShortcuts(
   const tagsStore = useTagsStore()
   const aiWord = useAIWordPanel()
   const shortcuts = useShortcutsStore()
+  const modalStore = useModalStore()
 
   /** 序号修饰键是否处于按下状态（决定 1-9 走预设还是打标签） */
   let seqHeld = false
@@ -247,6 +249,9 @@ export function useKeyboardShortcuts(
 
     const entry = runtimeMap.value.get(toChordString(e))
     if (!entry) return
+
+    // 模态打开 = 独占交互：抑制全部 scope（含 always）的画布快捷键
+    if (modalStore.hasOpenModal) return
 
     // scope='always'：在守卫之前执行（文件操作 / 搜索，编辑中也可用）
     if (entry.scope === 'always') {

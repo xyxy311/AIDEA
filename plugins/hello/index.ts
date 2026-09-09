@@ -21,13 +21,14 @@ import { adapter, SDK_VERSION } from '@/plugin/adapter'
 import { StatsChartOutline, ColorWandOutline } from '@vicons/ionicons5'
 import HelloStatsPanel from './HelloStatsPanel.vue'
 import HelloSettingsPanel from './HelloSettingsPanel.vue'
+import HelloAboutModal from './HelloAboutModal.vue'
 
 /** 插件清单（常量先行：模块顶层用它声明命名空间作用域，避免硬编码重复） */
 const manifest: PluginManifest = {
   id: 'hello',
   name: '示例插件',
-  version: '0.3.0',
-  description: '演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项）、快捷键动作注册与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
+  version: '0.4.0',
+  description: '演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 模态面板）、快捷键动作注册与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
   author: 'aidea',
   sdkVersion: SDK_VERSION,
 }
@@ -147,6 +148,32 @@ const plugin: AideaPlugin = {
     })
     if (!menuRes.ok) {
       console.warn('[hello] 右键菜单项注册被拒：', menuRes.conflict)
+    }
+
+    // ── ⑤ 注册模态面板（完整 key `hello:about`；内容为最小说明组件 HelloAboutModal）──
+    const modalRes = ctx.register.registerModal({
+      id: 'about',
+      title: '关于示例插件',
+      component: HelloAboutModal,
+    })
+    if (!modalRes.ok) {
+      console.warn('[hello] 模态面板注册被拒：', modalRes.conflict)
+    }
+
+    // ── ⑥ 打开模态入口 a)：右键菜单项（canvas scope，空白画布即可见）→
+    //    ctx.modal.open 收插件内短 id，内部自动拼 `hello:` 前缀 ──
+    const aboutRes = ctx.register.registerContextMenuItem({
+      id: 'hello-about-item',
+      scope: 'canvas',
+      label: '关于示例插件',
+      run: () => {
+        // 单实例冲突（已有其他模态打开）→ false，store 内 warn，这里补一条插件侧提示
+        const ok = ctx.modal.open('about')
+        if (!ok) console.warn('[hello] 打开「关于」模态失败：可能有其他模态打开中')
+      },
+    })
+    if (!aboutRes.ok) {
+      console.warn('[hello] 右键菜单项注册被拒：', aboutRes.conflict)
     }
   },
 }

@@ -20,7 +20,11 @@ import { useNodeStore } from '@/stores/node'
 import { useThemeStore } from '@/stores/theme'
 import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
-import { useStageSize } from '@/composables/useStageSize'
+import {
+  useStageSize,
+  registerStageContainer,
+  unregisterStageContainer,
+} from '@/composables/useStageSize'
 import { useCanvasEvents } from '@/composables/useCanvasEvents'
 import { useCanvasNavigation } from '@/composables/useCanvasNavigation'
 import { useConnectionCreation } from '@/composables/useConnectionCreation'
@@ -90,11 +94,18 @@ const conn = useConnectionCreation(props.viewId)
 const stageContainerRef = ref<HTMLDivElement | null>(null)
 
 // 挂载/卸载时设置/清理 containerEl（供跨视图拖拽坐标映射）
+// 主视图（未传 width props）：注册真实容器尺寸供 useStageSize 全局共享——
+// 画布实际宽度受侧边栏挤压，按窗口估算会导致小地图视口指示、网格边界、
+// 新增节点定位等整体偏移（左缘对齐、右缘超出）
 onMounted(() => {
   view.containerEl = stageContainerRef.value
+  if (props.width == null && stageContainerRef.value) {
+    registerStageContainer(stageContainerRef.value)
+  }
 })
 onUnmounted(() => {
   view.containerEl = null
+  if (props.width == null) unregisterStageContainer()
 })
 
 /** Konva Stage 引用（用于获取底层 Konva 实例） */

@@ -1,4 +1,8 @@
-export { useStageSize } from './useStageSize'
+export {
+  useStageSize,
+  registerStageContainer,
+  unregisterStageContainer,
+} from './useStageSize'
 export { useKeyboardShortcuts } from './useKeyboardShortcuts'
 export { useCanvasEvents } from './useCanvasEvents'
 export { useCanvasNavigation } from './useCanvasNavigation'

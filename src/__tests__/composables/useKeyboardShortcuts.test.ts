@@ -3,6 +3,7 @@ import { ref, defineComponent, h, type Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useCommands } from '@/composables/useCommands'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
@@ -93,6 +94,57 @@ describe('useKeyboardShortcuts', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(view.selectedNodeId).toBeNull()
+  })
+
+  it('方向键移动选中节点（ArrowDown y+100）且入历史可撤销', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+    const commands = useCommands()
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+    expect(commands.canUndo.value).toBe(false)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
+    // y + 100（步进 GRID_G），x 不变
+    expect(nodeStore.getNode(id)!.y).toBe(100)
+    expect(nodeStore.getNode(id)!.x).toBe(0)
+    // 移动已入历史栈，可撤销
+    expect(commands.canUndo.value).toBe(true)
+  })
+
+  it('Enter 编辑选中节点（editingNodeId = 选中节点 id）', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+    expect(view.editingNodeId).toBeNull()
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(view.editingNodeId).toBe(id)
+  })
+
+  it('无选中按 Enter 无效果（不新建、不编辑）', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))
+    expect(view.editingNodeId).toBeNull()
+    expect(view.selectedNodeId).toBeNull()
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
   })
 
   it('should NOT trigger shortcuts when isEditing is true', () => {

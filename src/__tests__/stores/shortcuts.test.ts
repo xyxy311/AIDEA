@@ -54,6 +54,17 @@ describe('shortcuts store', () => {
     expect(s.getBinding('enterChild')).toBe('a') // 保持原值
   })
 
+  it('assign 到方向键 / Enter 锁定键被拒绝（conflict=locked）', () => {
+    const s = freshStore()
+    // 方向键 chord 为规范化后的 up/down/left/right（utils/shortcuts KEY_ALIAS），Enter 为 enter
+    expect(s.assign('enterChild', 'enter')).toMatchObject({ ok: false, conflict: 'locked' })
+    expect(s.assign('enterChild', 'up')).toMatchObject({ ok: false, conflict: 'locked' })
+    expect(s.assign('enterChild', 'down')).toMatchObject({ ok: false, conflict: 'locked' })
+    expect(s.assign('enterChild', 'left')).toMatchObject({ ok: false, conflict: 'locked' })
+    expect(s.assign('enterChild', 'right')).toMatchObject({ ok: false, conflict: 'locked' })
+    expect(s.getBinding('enterChild')).toBe('a') // 保持原值
+  })
+
   it('assign 与其它自定义动作冲突被拒绝并返回冲突方', () => {
     const s = freshStore()
     s.assign('enterChild', 'q') // 与 enterParent 的默认 q 冲突

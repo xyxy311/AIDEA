@@ -15,11 +15,22 @@ import {
 } from '@/utils/grid'
 
 /**
- * 网格模式 - 键盘交互状态机
+ * 网格模式 - 键盘交互状态机（网格特有语义）
  *
- * 职责：在网格模式下注册 window keydown/keyup，实现"活动网格（焦点）"键盘操作。
+ * 职责：在网格模式下注册 window keydown/keyup，实现"活动网格（焦点）"相关操作。
  * 只承载逻辑与状态，渲染（网格线、活动格高亮、临时连线）由 CanvasStage 后续消费
  * （通过本 composable 暴露的 computed/ref：gridTempConn / isGridConnecting）。
+ *
+ * 节点级动作已上移为 useKeyboardShortcuts 的锁定绑定，本 composable 不再承载：
+ * - 方向键移动选中节点 → 快捷键层 arrowMove*（useActiveView.moveSelectedNodesByArrow）
+ * - Enter 编辑选中节点 → 快捷键层 editSelected
+ * - Esc 清空选中 → 快捷键层 escape（clearSelection）
+ *
+ * 本 composable 只承载网格特有语义：
+ * - 活动网格光标移动（方向键 ±G）
+ * - Ctrl+方向键最近节点导航（ctrlDirection）
+ * - Shift 连线预览（startGridConnection / releaseGridConnection / cancelGridConnection）
+ * - 焦点处建节点 / 命中仅选中（handleEnter，仅无选中时）
  *
  * 触发条件（守卫）：
  * - 仅主视图（view.type === 'main'）启用
@@ -28,8 +39,13 @@ import {
  * - 焦点不在输入框 / 文本域（e.target instanceof HTMLInputElement/HTMLTextAreaElement）
  * - 未处于文本编辑（view.editingNodeId === null）
  *
- * 覆盖键：方向键、Ctrl+方向键、Enter、Esc、Shift（连线预览）。
- * 不接管：Delete/Backspace、1-9、T+1-9、Ctrl+C/V 等（交给 useKeyboardShortcuts 照常处理）。
+ * 独占 / 放行事件顺序契约（与 useKeyboardShortcuts 协作）：
+ * - Vue 子组件 onMounted 先于父组件触发：CanvasStage（子）的网格监听先于
+ *   AppShell（父）挂载的快捷键监听执行。
+ * - 本层调用 stopImmediatePropagation = 独占该键（快捷键层收不到）；
+ *   不调用 = 放行给快捷键层（如非预览 Esc 清选中、有选中 Enter 进编辑、
+ *   无修饰方向键的节点移动——本层只移动活动网格）。
+ * - 不接管：Delete/Backspace、1-9、T+1-9、Ctrl+C/V 等（照常放行给快捷键层）。
  *
  * @param viewId - 视图 ID（仅主视图启用，调用方传 'main'）
  */
@@ -86,11 +102,6 @@ export function useGridMode(viewId: string) {
     }
   }
 
-  /** 焦点是否有效（activeGrid 已初始化） */
-  function hasFocus(): boolean {
-    return view.activeGrid !== null
-  }
-
   // ── 状态机动作 ──
 
   /** 移动活动网格一格（±G=100） */
@@ -99,7 +110,6 @@ export function useGridMode(viewId: string) {
     if (!g) return
     const { dx, dy } = dirDelta(dir)
     view.setActiveGrid(g.x + dx, g.y + dy)
-    console.log(view.activeGrid)
   }
 
   /**
@@ -133,50 +143,13 @@ export function useGridMode(viewId: string) {
   }
 
   /**
-   * 方向键：移动所有选中节点（仅当前视图直接子节点；跨视图选中节点不移动，参照 useNodeDragging 过滤）。
-   * 保持相对位置，步进 G。活动网格跟随主锚点节点中心。
-   * 历史：实时 nodeStore.moveNode 改数据，随后 commands.commitNodeMove 入栈
-   *       （带 coalesceKey，合并连续方向键步进为单条历史）。
-   */
-  function moveSelectedNodes(dir: GridDirection): void {
-    const { dx, dy } = dirDelta(dir)
-    const childIds = new Set(directChildren().map((c) => c.id))
-    const selected = Array.from(view.selectedNodeIds).filter((id) => childIds.has(id))
-    if (selected.length === 0) return
-    if (!hasFocus()) return
-
-    // 记录移动前坐标
-    const positions = selected.map((id) => {
-      const n = nodeStore.getNode(id)!
-      return { id, oldX: n.x, oldY: n.y }
-    })
-
-    // 实时移动所有选中节点（保持相对位置）
-    for (const id of selected) {
-      const n = nodeStore.getNode(id)!
-      nodeStore.moveNode(id, n.x + dx, n.y + dy)
-    }
-
-    // 入栈（coalesce 合并连续步进；key 含选中节点签名，切换选中后断开合并）
-    const sortedSelected = [...selected].sort().join(',')
-    commands.commitNodeMove(
-      positions.map((p) => {
-        const n = nodeStore.getNode(p.id)!
-        return { id: p.id, oldX: p.oldX, oldY: p.oldY, newX: n.x, newY: n.y }
-      }),
-      { coalesceKey: `grid-move-${viewId}-${sortedSelected}` },
-    )
-  }
-
-  /**
-   * Enter：焦点落在某节点范围内（含边）→ 选中它（单选替换）；
+   * Enter（仅无选中时被本层调用）：
+   * 焦点落在某节点范围内（含边）→ 仅选中它（单选替换，不进入编辑，编辑交给用户二次 Enter）；
    * 否则 → 在焦点处新建节点（左上角吸附最近 100 格点，默认 200×100）并选中、进入编辑。
+   * 有选中时的路由在 onKeydown 直接放行给快捷键层（editSelected 编辑选中节点）。
    */
   function handleEnter(): void {
-    if (view.selectedNodeId) {
-      view.startEditing(view.selectedNodeId)
-      return
-    }
+    if (view.selectedNodeId) return
     const g = view.activeGrid
     if (!g) return
     const hitId = findNodeAtCell({ nodes: directChildren(), x: g.x, y: g.y })
@@ -192,11 +165,6 @@ export function useGridMode(viewId: string) {
       view.selectNode(newId)
       view.startEditing(newId)
     }
-  }
-
-  /** Esc（有选中时）：仅清空选中，活动网格不跟随节点（保持独立光标位置） */
-  function escapeWithSelection(): void {
-    view.clearSelection()
   }
 
   // ── 连线预览（Shift+方向键）──
@@ -356,25 +324,20 @@ export function useGridMode(viewId: string) {
     if (view.editingNodeId !== null) return
     if (!canAct()) return
 
-    // Shift 按下（非 repeat）→ 进入连线预览
+    // Shift 按下（非 repeat）→ 进入连线预览（独占）
     if (e.key === 'Shift' && !e.repeat) {
       e.stopImmediatePropagation()
       startGridConnection()
       return
     }
 
-    // Esc：预览中取消预览；否则有选中时回退选中并移动活动网格
+    // Esc：预览中 → 独占取消预览（阻止快捷键层 clearSelection）；
+    // 非预览 → 直接放行给快捷键层（escape 清选中）
     if (e.key === 'Escape') {
       if (gridConnectingFrom.value !== null) {
         e.preventDefault()
         e.stopImmediatePropagation()
         cancelGridConnection()
-        return
-      }
-      if (view.selectedNodeIds.size > 0) {
-        e.preventDefault()
-        e.stopImmediatePropagation()
-        escapeWithSelection()
       }
       return
     }
@@ -384,30 +347,35 @@ export function useGridMode(viewId: string) {
     if (dir) {
       // 拖拽节点中不响应方向键（避免与拖拽冲突）
       if (globalIsDraggingNode.value) return
-      e.preventDefault()
-      e.stopImmediatePropagation()
-      // 预览中：方向键只移动活动网格
+      // 预览中 → 独占：只移动活动网格（锚点节点可能处于选中态，必须阻止快捷键层移动节点）
       if (gridConnectingFrom.value !== null) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
         moveActiveGrid(dir)
         return
       }
+      // Ctrl/Cmd+方向键 → 独占：最近节点导航
       if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
         ctrlDirection(dir)
         return
       }
+      // 普通方向键 → 放行（不 stopImmediatePropagation）：本层只移动活动网格，
+      // 节点移动由快捷键层 arrowMove*（moveSelectedNodesByArrow）承担
+      e.preventDefault()
       moveActiveGrid(dir)
-      if (view.selectedNodeIds.size > 0) {
-        moveSelectedNodes(dir)
-      }
       return
     }
 
-    // Enter
+    // Enter：有选中 → 放行给快捷键层（editSelected 进入编辑）；
+    // 无选中 → 独占处理（命中仅选中，防快捷键层接着进入编辑；
+    // 未命中新建+编辑，防 startEditing 被快捷键层二次触发）
     if (e.key === 'Enter') {
+      if (view.selectedNodeId) return
       e.preventDefault()
       e.stopImmediatePropagation()
       handleEnter()
-      return
     }
   }
 

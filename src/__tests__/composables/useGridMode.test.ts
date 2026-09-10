@@ -85,7 +85,7 @@ describe('useGridMode', () => {
     expect(view.editingNodeId).toBe(node.id)
   })
 
-  it('Enter 在焦点处有节点 → 选中该节点', () => {
+  it('Enter 在焦点处有节点 → 仅选中该节点（不进入编辑）', () => {
     const id = nodeStore.addNode(project.currentNodeId, 0, 0) // 默认 200×100，覆盖 (0,0)-(200,100)
     view.setGridMode(true)
     view.setActiveGrid(50, 50) // 落在节点 a 范围内
@@ -93,9 +93,11 @@ describe('useGridMode', () => {
 
     keydown('Enter')
     expect(view.selectedNodeId).toBe(id)
+    // 命中节点仅选中，editingNodeId 不变（编辑由快捷键层 editSelected 承担）
+    expect(view.editingNodeId).toBeNull()
   })
 
-  it('有选中时方向键移动所有直接子节点（保持相对位置）+ 入历史', () => {
+  it('有选中时方向键只移动活动网格，不移动节点（节点移动由快捷键层承担）', () => {
     const a = nodeStore.addNode(project.currentNodeId, 0, 0)
     const b = nodeStore.addNode(project.currentNodeId, 200, 0)
     view.setSelectedNodes([a, b])
@@ -104,20 +106,14 @@ describe('useGridMode', () => {
     wrapper = mountGrid()
 
     keydown('ArrowRight')
-    expect(nodeStore.getNode(a)!.x).toBe(100)
+    // 本测试只挂载网格层：节点不动（移动逻辑在快捷键层 arrowMove*）
+    expect(nodeStore.getNode(a)!.x).toBe(0)
     expect(nodeStore.getNode(a)!.y).toBe(0)
-    expect(nodeStore.getNode(b)!.x).toBe(300)
-
-    // 单条历史入栈
-    expect(history.past.length).toBe(1)
-    const top = history.past[0].patch
-    expect(top.nodeChanges.length).toBe(2)
-    const aChange = top.nodeChanges.find((c) => c.id === a)
-    expect(aChange?.old).toEqual({ x: 0, y: 0 })
-    expect(aChange?.new).toEqual({ x: 100, y: 0 })
-    const bChange = top.nodeChanges.find((c) => c.id === b)
-    expect(bChange?.old).toEqual({ x: 200, y: 0 })
-    expect(bChange?.new).toEqual({ x: 300, y: 0 })
+    expect(nodeStore.getNode(b)!.x).toBe(200)
+    // 活动网格移动一格
+    expect(view.activeGrid).toEqual({ x: 150, y: 50 })
+    // 本层不产生历史
+    expect(history.past.length).toBe(0)
   })
 
   it('Ctrl+方向键从当前焦点选最近节点（活动网格不跟随节点）', () => {
@@ -132,7 +128,7 @@ describe('useGridMode', () => {
     expect(view.selectedNodeId).toBe(b)
   })
 
-  it('Esc 仅清空选中，活动网格不跟随节点（保持原位）', () => {
+  it('非预览 Esc 放行给快捷键层：本层不清选中（清选中由快捷键层承担）', () => {
     const a = nodeStore.addNode(project.currentNodeId, 0, 0)
     view.selectNode(a)
     view.setGridMode(true)
@@ -141,9 +137,44 @@ describe('useGridMode', () => {
     wrapper = mountGrid()
 
     keydown('Escape')
-    expect(view.selectedNodeIds.size).toBe(0)
-    // 活动网格保持 (500,500)，不跟随被取消选中的节点 a
+    // 本测试只挂载网格层：非预览 Esc 直接放行，选中保持不变（快捷键层的 clearSelection 不参与）
+    expect(view.selectedNodeIds.size).toBe(1)
+    expect(view.selectedNodeId).toBe(a)
+    // 活动网格保持 (500,500)，不跟随被选中的节点 a
     expect(view.activeGrid).toEqual({ x: 500, y: 500 })
+  })
+
+  it('预览中按 Esc：取消预览且不清选中（独占，阻止快捷键层 clearSelection）', () => {
+    const a = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(a)
+    view.setGridMode(true)
+    view.setActiveGrid(50, 50) // 焦点落在起点 a 范围内
+    wrapper = mountGrid()
+
+    keydown('Shift')
+    expect(grid!.isGridConnecting.value).toBe(true)
+
+    keydown('Escape')
+    expect(grid!.isGridConnecting.value).toBe(false)
+    expect(grid!.gridConnectingFrom.value).toBeNull()
+    // 独占处理：选中保持（起点节点未新建，无历史入栈）
+    expect(view.selectedNodeId).toBe(a)
+    expect(history.past.length).toBe(0)
+  })
+
+  it('有选中时按 Enter：本层无动作（放行给快捷键层 editSelected）', () => {
+    const a = nodeStore.addNode(project.currentNodeId, 0, 0)
+    const b = nodeStore.addNode(project.currentNodeId, 300, 0)
+    view.selectNode(a)
+    view.setGridMode(true)
+    view.setActiveGrid(350, 50) // 焦点命中 b（若本层误处理会改选 b）
+    wrapper = mountGrid()
+
+    keydown('Enter')
+    // 放行：选中保持 a、不进入编辑、不新建节点（编辑由快捷键层 editSelected 承担）
+    expect(view.selectedNodeId).toBe(a)
+    expect(view.editingNodeId).toBeNull()
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(2)
   })
 
   it('连线预览：Shift按下+方向键移动+Shift释放 → 新建终点节点并连线，batch 单条历史', () => {
@@ -297,25 +328,22 @@ describe('useGridMode', () => {
     expect(top.connChanges.length).toBe(1)
   })
 
-  it('连续方向键 coalesce 合并为单条历史（old=首次前，new=最终）', () => {
+  it('有选中时连按方向键：节点不动、无历史入栈（节点移动已上移快捷键层）', () => {
     const a = nodeStore.addNode(project.currentNodeId, 0, 0)
     view.setSelectedNodes([a])
     view.setGridMode(true)
     view.setActiveGrid(50, 50)
     wrapper = mountGrid()
 
-    // 连按 3 次向右：x 0→100→200→300
+    // 连按 3 次向右：本层只移动活动网格（50→150→250→350），节点不动
     keydown('ArrowRight')
     keydown('ArrowRight')
     keydown('ArrowRight')
-    expect(nodeStore.getNode(a)!.x).toBe(300)
+    expect(nodeStore.getNode(a)!.x).toBe(0)
+    expect(view.activeGrid).toEqual({ x: 350, y: 50 })
 
-    // coalesce：单条历史，old 为首次前 (0,0)，new 为最终 (300,0)
-    expect(history.past.length).toBe(1)
-    const top = history.past[0].patch
-    expect(top.nodeChanges.length).toBe(1)
-    expect(top.nodeChanges[0].old).toEqual({ x: 0, y: 0 })
-    expect(top.nodeChanges[0].new).toEqual({ x: 300, y: 0 })
+    // 本层不再产生节点移动历史（coalesce 移动逻辑在快捷键层 arrowMove*）
+    expect(history.past.length).toBe(0)
   })
 
   it('守卫回归：未开网格 / 编辑态 / 输入框焦点时不响应方向键', () => {

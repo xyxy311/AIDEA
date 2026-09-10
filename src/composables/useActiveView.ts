@@ -3,6 +3,9 @@ import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useCommands } from '@/composables/useCommands'
 import { useClipboard } from '@/composables/useClipboard'
+import { globalIsDraggingNode } from '@/composables/useNodeDragging'
+import { GRID_G } from '@/constants'
+import type { GridDirection } from '@/utils/grid'
 
 /**
  * 快捷访问当前活跃视图的 composable
@@ -97,6 +100,49 @@ export function useActiveView() {
     v.clearSelection()
   }
 
+  /**
+   * 方向键移动所有选中节点（快捷键层锁定绑定 arrowMove* 的共享动作，网格模式不单独实现）。
+   *
+   * - 仅移动「选中 ∩ 当前视图直接子节点」（跨视图选中节点不移动，参照 useNodeDragging 过滤）。
+   * - 保持相对位置，步进 GRID_G（一格）。
+   * - 拖拽节点中直接返回（避免与拖拽冲突）。
+   * - 历史：实时 nodeStore.moveNode 改数据，随后 commands.commitNodeMove 入栈
+   *   （带 coalesceKey，合并连续方向键步进为单条历史；key 含视图与选中签名，切换后断开合并）。
+   */
+  function moveSelectedNodesByArrow(dir: GridDirection): void {
+    // 拖拽节点中不响应（避免与拖拽冲突）
+    if (globalIsDraggingNode.value) return
+    // 方向 → 步进（一格 G）
+    const dx = dir === 'left' ? -GRID_G : dir === 'right' ? GRID_G : 0
+    const dy = dir === 'up' ? -GRID_G : dir === 'down' ? GRID_G : 0
+    const v = view()
+    const childIds = new Set(nodeStore.childrenOf(v.viewedNodeId).map((c) => c.id))
+    const selected = Array.from(v.selectedNodeIds).filter((id) => childIds.has(id))
+    if (selected.length === 0) return
+
+    // 记录移动前坐标
+    const positions = selected.map((id) => {
+      const n = nodeStore.getNode(id)!
+      return { id, oldX: n.x, oldY: n.y }
+    })
+
+    // 实时移动所有选中节点（保持相对位置）
+    for (const id of selected) {
+      const n = nodeStore.getNode(id)!
+      nodeStore.moveNode(id, n.x + dx, n.y + dy)
+    }
+
+    // 入栈（coalesce 合并连续步进；key 含视图 + 选中节点签名，切换选中后断开合并）
+    const sortedSelected = [...selected].sort().join(',')
+    commands.commitNodeMove(
+      positions.map((p) => {
+        const n = nodeStore.getNode(p.id)!
+        return { id: p.id, oldX: p.oldX, oldY: p.oldY, newX: n.x, newY: n.y }
+      }),
+      { coalesceKey: `arrow-move-${project.activeViewId}-${sortedSelected}` },
+    )
+  }
+
   // ── 剪贴板编排：复制 / 剪切 / 粘贴（都不进入历史栈）──
 
   /** 剪贴板是否有可粘贴内容 */
@@ -141,6 +187,7 @@ export function useActiveView() {
     updateSelectedNodesTagsPerNode,
     deleteSelectedNodes,
     deleteSelectedConnections,
+    moveSelectedNodesByArrow,
     // 剪贴板
     canPaste,
     copySelectedNodes,

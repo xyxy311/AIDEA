@@ -24,7 +24,7 @@ import type { ShortcutScope } from '@/types/shortcuts'
  *   该键对应的条目 { id, scope, run }，结构上保证「一个键至多命中一个动作」。
  * - scope 决定触发时机：'always' 在输入框/编辑守卫之前执行（保存/打开/新建/搜索，
  *   与既有行为一致）；'canvas' 在守卫之后执行（其余全部可改动作 + 锁定动作）。
- * - 锁定键（撤销/重做、复制/剪切/粘贴、删除、Escape）与可改动作同进一个 Map，
+ * - 锁定键（撤销/重做、复制/剪切/粘贴、删除、Escape、方向键、Enter）与可改动作同进一个 Map，
  *   冲突由 shortcuts store 的 assign 在设置时挡住，无需额外判断。
  * - 序号键 1-9：按住「序号修饰键」(默认 T) 时打标签，否则应用可见预设。
  *
@@ -33,9 +33,16 @@ import type { ShortcutScope } from '@/types/shortcuts'
  * Ctrl/Cmd + C / X / V  - 复制 / 剪切 / 粘贴（锁定）
  * Delete / Backspace / D- 删除选中（锁定）
  * Escape             - 取消选中（锁定）
+ * 方向键（规范化 chord up/down/left/right）- 移动选中节点（锁定，不可自定义）
+ * Enter              - 编辑选中节点（锁定，不可自定义）
  * 1-9                - 应用预设 / 序号修饰键+1-9 打标签（锁定）
  *
  * S/O/N/F/G/A/Q/Tab/R/I/C  - 可自定义（见 constants/shortcuts.ts）
+ *
+ * 事件顺序契约（与网格层 useGridMode 协作）：Vue 子组件 onMounted 先于父组件触发，
+ * CanvasStage（子）的网格监听先于本文件（由 AppShell 父级挂载）的快捷键监听执行。
+ * 网格层调用 stopImmediatePropagation = 独占该键（本层收不到）；
+ * 不调用 = 放行给本层（如非预览 Esc、有选中 Enter、无修饰方向键的节点移动）。
  */
 export function useKeyboardShortcuts(
   isEditing: Ref<boolean>,
@@ -218,6 +225,21 @@ export function useKeyboardShortcuts(
       map.set('delete', { id: 'delete', scope: canvas, run: runDelete })
       map.set('backspace', { id: 'delete', scope: canvas, run: runDelete })
       map.set('escape', { id: 'escape', scope: canvas, run: (e) => { active.view.clearSelection() } })
+      // 方向键：移动选中节点（锁定；共享动作自带拖拽守卫与选中/直接子节点过滤，无选中时空转）
+      map.set('up', { id: 'arrowMoveUp', scope: canvas, run: (e) => { e.preventDefault(); active.moveSelectedNodesByArrow('up') } })
+      map.set('down', { id: 'arrowMoveDown', scope: canvas, run: (e) => { e.preventDefault(); active.moveSelectedNodesByArrow('down') } })
+      map.set('left', { id: 'arrowMoveLeft', scope: canvas, run: (e) => { e.preventDefault(); active.moveSelectedNodesByArrow('left') } })
+      map.set('right', { id: 'arrowMoveRight', scope: canvas, run: (e) => { e.preventDefault(); active.moveSelectedNodesByArrow('right') } })
+      // Enter：编辑选中节点（锁定；无选中时空转——网格模式下网格层会独占处理建节点/命中选中）
+      map.set('enter', {
+        id: 'editSelected', scope: canvas, run: (e) => {
+          const v = active.view
+          if (v.selectedNodeId) {
+            e.preventDefault()
+            v.startEditing(v.selectedNodeId)
+          }
+        },
+      })
       for (let n = 1; n <= 9; n++) {
         map.set(String(n), { id: `seq${n}`, scope: canvas, run: makeSeqRun(n) })
       }

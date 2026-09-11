@@ -9,15 +9,15 @@
  * - runSentenceMaking(text) : 连词成句（AI_SENTENCE_PROMPT）——把结构化上下文转自然语言
  * - runGenerateIdea(args)   : 发散 / 词生成——基于给定上下文 & 发散起点 & 角度发散灵感
  */
-import { useAIConfigStore } from '@/stores/ai'
-import { createOpenAIProvider } from '@/provider/openai'
-import type { AIProvider } from '@/provider/aiProvider'
-import type { AIDivergenceDirection } from '@/types/ai'
+import { useAIConfigStore } from '../stores/aiConfig'
+import { createOpenAIProvider } from '../provider/openai'
+import type { AIProvider } from '../provider/aiProvider'
+import type { AIDivergenceDirection } from '../types'
 import {
   AI_SENTENCE_PROMPT,
   AI_GENERATE_IDEA_NODE,
   AI_GENERATE_IDEA_DESCRIPTION,
-} from '@/constants/ai'
+} from '../constants'
 
 /** 从当前 store 读配置并创建 provider（每次调用新建，保证读到最新持久化配置） */
 function createProvider(): AIProvider {

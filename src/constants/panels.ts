@@ -6,7 +6,6 @@ import {
   ColorPaletteOutline,
   PricetagsOutline,
   OptionsOutline,
-  SparklesOutline,
 } from '@vicons/ionicons5'
 import NodeTreePanel from '@/components/panels/NodeTreePanel.vue'
 import ReferencesPanel from '@/components/panels/ReferencesPanel.vue'
@@ -14,7 +13,6 @@ import SearchPanel from '@/components/panels/SearchPanel.vue'
 import PresetManagerPanel from '@/components/panels/PresetManagerPanel.vue'
 import TagsPanel from '@/components/panels/TagsPanel.vue'
 import PropertyPanel from '@/components/panels/PropertyPanel.vue'
-import AIPanel from '@/components/panels/AIPanel.vue'
 
 /**
  * 引用定义图标（#）。
@@ -58,7 +56,7 @@ const HashIcon = defineComponent({
  * 新增面板只需在此登记，活动栏图标、左侧面板区、右侧 dock、左右互通自动生效。
  * 面板归属 / 顺序 / 激活等布局状态由 layout store 管理，不在此持久化。
  */
-export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property' | 'ai'
+export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property'
 
 /** 插件面板 key（注册表归一后的完整键：`${pluginId}:${id}`，插件经适配层注册） */
 export type PluginPanelKey = `${string}:${string}`
@@ -90,7 +88,6 @@ export const PANEL_CATALOG: PanelDef[] = [
   { id: 'tags', titleKey: 'leftSidebar.tags', icon: PricetagsOutline, component: TagsPanel, defaultPlacement: 'left' },
   { id: 'property', titleKey: 'rightSidebar.property', icon: OptionsOutline, component: PropertyPanel, defaultPlacement: 'right' },
   { id: 'presets', titleKey: 'leftSidebar.presets', icon: ColorPaletteOutline, component: PresetManagerPanel, defaultPlacement: 'right' },
-  { id: 'ai', titleKey: 'leftSidebar.ai', icon: SparklesOutline, component: AIPanel, defaultPlacement: 'left' },
 ]
 
 /** 面板 id -> 品类定义（快速索引） */

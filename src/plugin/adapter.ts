@@ -136,6 +136,8 @@ export type {
   PluginSettingsCategoryRegistration,
   PluginShortcutActionRegistration,
   PluginContextMenuItemRegistration,
+  PluginContextMenuChildItem,
+  PluginFloatingLayerRegistration,
 } from './ui'
 export { SDK_VERSION } from '@/types/plugin'
 export type { PluginManifest } from '@/types'

@@ -2,13 +2,11 @@ import type { Component } from 'vue'
 import {
   BrushOutline,
   LayersOutline,
-  CompassOutline,
   KeypadOutline,
   PulseOutline,
 } from '@vicons/ionicons5'
 import AppearanceSection from '@/components/settings/AppearanceSection.vue'
 import LayoutSection from '@/components/settings/LayoutSection.vue'
-import AIDirectionsSection from '@/components/settings/AIDirectionsSection.vue'
 import ShortcutsSection from '@/components/settings/ShortcutsSection.vue'
 import PluginsSection from '@/components/settings/PluginsSection.vue'
 
@@ -24,7 +22,7 @@ import PluginsSection from '@/components/settings/PluginsSection.vue'
  */
 
 /** 内置设置分类 id */
-export type SettingsCategoryId = 'appearance' | 'layout' | 'aiDirections' | 'shortcuts' | 'plugins'
+export type SettingsCategoryId = 'appearance' | 'layout' | 'shortcuts' | 'plugins'
 
 /** 设置分类品类定义 */
 export interface SettingsDef {
@@ -54,13 +52,6 @@ export const SETTINGS_CATALOG: SettingsDef[] = [
     descKey: 'settings.layoutDesc',
     icon: LayersOutline,
     component: LayoutSection,
-  },
-  {
-    id: 'aiDirections',
-    titleKey: 'settings.aiDirections',
-    descKey: 'settings.aiDirectionsDesc',
-    icon: CompassOutline,
-    component: AIDirectionsSection,
   },
   {
     id: 'shortcuts',

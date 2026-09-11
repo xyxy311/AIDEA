@@ -3,11 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useCommands } from '@/composables/useCommands'
-import {
-  serializeProject,
-  parseProjectFile,
-  defaultProjectAIConfig,
-} from '@/utils/projectFile'
+import { serializeProject, parseProjectFile } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import type { ProjectViewState } from '@/utils/projectFile'
 
@@ -222,7 +218,7 @@ describe('project store - 多标签页', () => {
         activeTabId: 'tab2',
       }
 
-      const json = serializeProject(nodes, '项目', viewState, [], defaultProjectAIConfig(), {})
+      const json = serializeProject(nodes, '项目', viewState, [], {})
       const parsed = parseProjectFile(json)
 
       expect(parsed.viewState.tabs).toBeDefined()
@@ -252,7 +248,7 @@ describe('project store - 多标签页', () => {
         selectedNodeIds: [],
         selectedConnectionIds: [],
       }
-      const json = serializeProject(nodes, 'x', viewState, [], defaultProjectAIConfig(), {})
+      const json = serializeProject(nodes, 'x', viewState, [], {})
       const parsed = parseProjectFile(json)
       expect(parsed.viewState.tabs).toBeUndefined()
       // activeTabId 为可空字段：无文件值时解析为 null

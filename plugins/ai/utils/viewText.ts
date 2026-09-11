@@ -269,7 +269,7 @@ export function getViewTextAlgorithm(id: string): ViewTextAlgorithm | undefined 
 /**
  * 视图转文本统一调度器。
  *
- * @param nodes  - 视图节点（通常 = nodeStore.childrenOf(currentNodeId)）
+ * @param nodes  - 视图节点（通常 = 当前视图节点的直接子级）
  * @param algoId - 算法 id；未知时回退到第一个注册算法
  * @param params - 算法参数字典（缺失字段用该算法 schema 的默认值）
  * @param title  - 可选：当前视图节点名称，非空时在结构化文本开头加 "{title} :\n"

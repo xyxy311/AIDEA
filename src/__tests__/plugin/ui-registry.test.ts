@@ -431,6 +431,102 @@ describe('uiRegistry 模态面板表：登记 / 冲突 / 清理', () => {
   })
 })
 
+describe('uiRegistry 浮动层表：登记 / 冲突 / 清理', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+  })
+
+  it('registerPluginFloatingLayer：成功返回 true，key 归一 demo:float，条目含 origin/pluginId/component', () => {
+    const registry = useUiRegistryStore()
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', component: Icon })).toBe(true)
+
+    const entry = registry.floatingLayers.get('demo:float')
+    expect(entry).toBeDefined()
+    expect(entry!.key).toBe('demo:float')
+    expect(entry!.origin).toBe('plugin')
+    expect(entry!.pluginId).toBe('demo')
+    // reactive Map 深响应式会代理组件对象；断言存在性而非同一引用
+    expect(entry!.component).toBeTruthy()
+  })
+
+  it('短 id 非法（空 / 含 : / 含空白）→ warn + false，不入表', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = useUiRegistryStore()
+
+    expect(registry.registerPluginFloatingLayer('demo', { id: '', component: Icon })).toBe(false)
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'a:b', component: Icon })).toBe(false)
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'a b', component: Icon })).toBe(false)
+
+    expect(registry.floatingLayers.size).toBe(0)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('key 冲突：同插件内同短 id 重复注册 → warn + false，component 不被覆盖', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = useUiRegistryStore()
+    const first = defineComponent({ name: 'FirstLayer', setup: () => () => h('div') })
+    const second = defineComponent({ name: 'SecondLayer', setup: () => () => h('div') })
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', component: first })).toBe(true)
+
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', component: second })).toBe(false)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+
+    // 条目仍为首次注册的组件（未被覆盖；代理对象下按组件名区分）
+    expect((registry.floatingLayers.get('demo:float')!.component as { name?: string }).name).toBe('FirstLayer')
+  })
+
+  it('不同插件同短 id 不冲突：demo:float 与 other:float 共存', () => {
+    const registry = useUiRegistryStore()
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', component: Icon })).toBe(true)
+    expect(registry.registerPluginFloatingLayer('other', { id: 'float', component: Icon })).toBe(true)
+    expect(registry.floatingLayers.size).toBe(2)
+  })
+
+  it('removePlugin 清理对应插件条目，其它插件保留；reset 一并清空；不误伤其它表', () => {
+    const registry = useUiRegistryStore()
+    const panelsSizeBefore = registry.panels.size
+
+    registry.registerPluginFloatingLayer('demo', { id: 'float', component: Icon })
+    registry.registerPluginFloatingLayer('other', { id: 'float', component: Icon })
+    registry.registerPluginModal('demo', dummyModal())
+
+    registry.removePlugin('demo')
+    expect(registry.floatingLayers.has('demo:float')).toBe(false)
+    expect(registry.floatingLayers.has('other:float')).toBe(true) // 其它插件保留
+    expect(registry.modals.has('demo:modal')).toBe(false) // 同插件其它表条目一并清理
+    expect(registry.panels.size).toBe(panelsSizeBefore) // 不误伤面板表（内置 seed 条目数量不变）
+
+    registry.reset()
+    expect(registry.floatingLayers.size).toBe(0)
+  })
+
+  it('rollbackPluginUi 覆盖浮动层：清掉该插件条目（经 removePlugin 统一清理）', () => {
+    const ui = createPluginRegister('demo')
+    ui.registerFloatingLayer({ id: 'float', component: Icon })
+    expect(useUiRegistryStore().floatingLayers.has('demo:float')).toBe(true)
+
+    rollbackPluginUi('demo')
+    expect(useUiRegistryStore().floatingLayers.has('demo:float')).toBe(false)
+  })
+
+  it('经 PluginRegisterApi.registerFloatingLayer：非法短 id / 冲突 → warn + 跳过（返回 void）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const ui = createPluginRegister('demo')
+    ui.registerFloatingLayer({ id: 'float', component: Icon })
+    expect(useUiRegistryStore().floatingLayers.has('demo:float')).toBe(true)
+
+    // 返回 void（对齐 registerPanel）：非法 / 冲突仅 warn + 不入表
+    expect(ui.registerFloatingLayer({ id: 'bad:id', component: Icon })).toBeUndefined()
+    expect(ui.registerFloatingLayer({ id: 'float', component: Icon })).toBeUndefined()
+    expect(useUiRegistryStore().floatingLayers.size).toBe(1)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
 describe('wrapTopBarButton（可选挂载冒烟）', () => {
   it('onClick 抛错被隔离：console.error 记录，不向外抛', async () => {
     setActivePinia(createPinia())

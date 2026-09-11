@@ -7,8 +7,6 @@ import { useCommands } from '@/composables/useCommands'
 import { useContextMenu, type ContextMenuItem } from '@/composables/useContextMenu'
 import { useNodeViewLink } from '@/composables/useNodeViewLink'
 import { useClipboard } from '@/composables/useClipboard'
-import { useAIWordPanel } from '@/composables/useAIWordPanel'
-import { useAIDirectionsStore } from '@/stores/aiDirections'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import { snapPosition, snapFocus } from '@/utils/grid'
 
@@ -48,8 +46,6 @@ export function useCanvasEvents(viewId: string) {
   const link = useNodeViewLink(viewId)
   const commands = useCommands()
   const clipboard = useClipboard()
-  const aiWord = useAIWordPanel()
-  const aiDirections = useAIDirectionsStore()
   const uiRegistry = useUiRegistryStore()
 
   /**
@@ -61,7 +57,9 @@ export function useCanvasEvents(viewId: string) {
   /**
    * 把插件注册的右键菜单项追加到 items 末尾（登记序，位于内置项之后；不加分隔线）。
    * 按 scope 过滤 + when 守卫（when 返回 false 的项不出现）；
-   * 转换为 ContextMenuItem：key 为完整登记 key，action 闭包内对 selectedNodeIds 再展开拷贝。
+   * 带 children 工厂的注册项产出分组父项（父项仅作分组入口不产生 action，子项经工厂
+   * 现场求值映射为叶子项）；其余转换为扁平 ContextMenuItem：key 为完整登记 key，
+   * action 闭包内对 selectedNodeIds 再展开拷贝。
    */
   function appendPluginContextMenuItems(
     target: ContextMenuItem[],
@@ -72,6 +70,24 @@ export function useCanvasEvents(viewId: string) {
       const def = entry.def
       if (def.scope !== scope) continue
       if (def.when?.({ selectedNodeIds }) === false) continue
+      // 带 children 工厂：父项仅作分组入口（与 run 互斥，不挂 action，点击不触发执行），
+      // 子项经工厂现场求值（收与 run 相同的选中上下文，展开拷贝），字段同名透传为叶子菜单项
+      if (def.children) {
+        target.push({
+          key: entry.key,
+          label: def.label,
+          danger: def.danger,
+          icon: def.icon,
+          children: def.children({ selectedNodeIds: [...selectedNodeIds] }).map((c) => ({
+            key: c.key,
+            label: c.label,
+            icon: c.icon,
+            danger: c.danger,
+            action: c.action,
+          })),
+        })
+        continue
+      }
       target.push({
         key: entry.key,
         label: def.label,
@@ -266,26 +282,8 @@ export function useCanvasEvents(viewId: string) {
       })
     }
 
-    // ── AI 定向发散（有选中节点时追加「发散」父级子菜单）──
-    // 以选中节点文本数组作为发散起点（保留非空过滤）；父项本身不执行，
-    // 由 ContextMenu 展开子菜单，点击子项才触发对应方向。
-    const from = Array.from(view.selectedNodeIds)
-      .map((id) => nodeStore.getNode(id)?.text)
-      .filter((s): s is string => !!s && s.trim().length > 0)
-    const divergenceChildren: ContextMenuItem[] = [
-      ...aiDirections.directionList.map((d) => ({
-        key: `divergence-${d.id}`,
-        label: d.title,
-        action: () => { void aiWord.generateDirectional(from, d) },
-      })),
-    ]
-    items.push({
-      key: 'divergence',
-      label: t('canvas.divergence'),
-      children: divergenceChildren,
-    })
-
     // ── 插件注册的选中级（scope='selection'）菜单项：追加在内置项之后（登记序）──
+    // 插件可带 children 工厂产出分组子菜单（如 ai 插件注册的「发散」父项）
     appendPluginContextMenuItems(items, 'selection', Array.from(view.selectedNodeIds))
 
     contextMenu.open(e.evt.clientX, e.evt.clientY, items)

@@ -5,7 +5,6 @@ import UndoButton from '@/components/topbar/UndoButton.vue'
 import RedoButton from '@/components/topbar/RedoButton.vue'
 import SettingsButton from '@/components/topbar/SettingsButton.vue'
 import DebugButton from '@/components/topbar/DebugButton.vue'
-import AIDisplayModeButton from '@/components/topbar/AIDisplayModeButton.vue'
 import GridButton from '@/components/topbar/GridButton.vue'
 import AddNodeButton from '@/components/topbar/AddNodeButton.vue'
 
@@ -30,7 +29,6 @@ export type TopBarId =
   | 'redo'
   | 'settings'
   | 'debug'
-  | 'ai-mode'
   | 'grid'
   | 'add-node'
 
@@ -62,7 +60,6 @@ export const TOP_BAR_CATALOG: TopBarDef[] = [
   { id: 'redo', titleKey: 'menuBar.redo', defaultZone: 'left', component: RedoButton },
   { id: 'settings', titleKey: 'menuBar.settings', defaultZone: 'left', component: SettingsButton },
   { id: 'debug', titleKey: 'toolbar.debug', defaultZone: 'right', component: DebugButton },
-  { id: 'ai-mode', titleKey: 'aiWord.switchToStrip', defaultZone: 'right', component: AIDisplayModeButton },
   { id: 'grid', titleKey: 'toolbar.grid', defaultZone: 'right', component: GridButton },
   { id: 'add-node', titleKey: 'toolbar.addNode', defaultZone: 'right', component: AddNodeButton },
 ]

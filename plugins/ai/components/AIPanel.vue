@@ -1,11 +1,12 @@
 <script setup lang="ts">
 /**
- * AIPanel - AI 面板（左侧活动栏面板之一）
+ * AIPanel - AI 面板（插件版；左侧活动栏面板之一）
  *
  * 负责 AI 提交流程的 UI 编排，AI 生成逻辑与状态由 useAIWordPanel 统一管理：
- * - 全局提示词：项目级背景，直绑 project.globalPrompt（自动保存）。
+ * - 全局提示词：项目级背景。插件化后经 stores/aiProject 写 additions `ai:projectConfig`
+ *   （自动入 undo）；组件内维护本地 ref 镜像保证输入响应式（additions 读为快照非响应式）。
  * - 当前视图设置：localPrompt / viewTextAlgoId 本地可编辑副本 + 深层 watch 自动保存；
- *   快速/精确模式由 useAIWordPanel 管理（setAIMode 写回 project）。
+ *   快速/精确模式由 useAIWordPanel 管理（setAIMode 写回项目级配置）。
  * - 上下文预览 / 连词成句 / 直接生成 / 重新生成：全部经 useAIWordPanel 无参方法驱动，
  *   本组件只绑定状态并触发。
  */
@@ -22,8 +23,16 @@ import {
 } from 'naive-ui'
 import { useProjectStore } from '@/stores/project'
 import { useNodeStore } from '@/stores/node'
-import { VIEW_TEXT_ALGORITHMS } from '@/utils/viewText'
-import { useAIWordPanel } from '@/composables/useAIWordPanel'
+import { VIEW_TEXT_ALGORITHMS } from '../utils/viewText'
+import { useAIWordPanel } from '../composables/useAIWordPanel'
+import {
+  currentViewedNodeId,
+  getAIConfig,
+  loadProjectData,
+  setGlobalPrompt,
+  setNodeAIConfig,
+  clearNodeAIConfig,
+} from '../stores/aiProject'
 import { t } from '@/composables/useT'
 
 const project = useProjectStore()
@@ -60,19 +69,26 @@ const modeOptions = computed(() => [
 
 /**
  * 非模式字段的本地可编辑副本（localPrompt / viewTextAlgoId）。
- * 进入面板 / currentNodeId 变化时从 project.getAIConfig 重载；
+ * 进入面板 / currentNodeId 变化时从项目级 AI 配置重载；
  * 改动经深层 watch 自动保存（无需手动保存）。
  */
 const currentCfg = reactive<{ localPrompt: string; viewTextAlgoId: string }>({
-  localPrompt: project.getAIConfig(project.currentNodeId).localPrompt,
-  viewTextAlgoId: project.getAIConfig(project.currentNodeId).viewTextAlgoId,
+  localPrompt: getAIConfig(project.currentNodeId).localPrompt,
+  viewTextAlgoId: getAIConfig(project.currentNodeId).viewTextAlgoId,
 })
 
-/** 从 project 重载本地副本，并同步 useAIWordPanel 的 AI 模式（切换视图时调用） */
+/**
+ * 全局提示词的本地 ref 镜像：additions 读是快照（非响应式），
+ * 输入框绑定本地镜像，变更经 setGlobalPrompt 整包写回（入 undo）。
+ */
+const globalPrompt = ref(loadProjectData().globalPrompt)
+
+/** 从项目级配置重载本地副本，并同步 useAIWordPanel 的 AI 模式（切换视图时调用） */
 function reloadConfig(): void {
-  const cfg = project.getAIConfig(project.currentNodeId)
+  const cfg = getAIConfig(project.currentNodeId)
   currentCfg.localPrompt = cfg.localPrompt
   currentCfg.viewTextAlgoId = cfg.viewTextAlgoId
+  globalPrompt.value = loadProjectData().globalPrompt
   syncAIMode()
 }
 
@@ -80,11 +96,11 @@ function reloadConfig(): void {
 watch(() => project.currentNodeId, reloadConfig)
 onMounted(reloadConfig)
 
-/** 配置改动自动保存到 project（深层 watch，覆盖各输入项；mode 取 useAIWordPanel 当前值） */
+/** 配置改动自动保存到项目级 additions 配置（深层 watch，覆盖各输入项；mode 取 useAIWordPanel 当前值） */
 watch(
   currentCfg,
   () => {
-    project.setNodeAIConfig(project.currentNodeId, {
+    setNodeAIConfig(currentViewedNodeId(), {
       localPrompt: currentCfg.localPrompt,
       mode: mode.value,
       viewTextAlgoId: currentCfg.viewTextAlgoId,
@@ -93,15 +109,16 @@ watch(
   { deep: true },
 )
 
-/** 全局提示词输入：经 setGlobalPrompt 写 store（内部 markDataDirty），保证项目 dirty 正确标记 */
+/** 全局提示词输入：更新本地镜像并经 setGlobalPrompt 整包写回 additions（单条历史） */
 function onGlobalPromptInput(val: string): void {
-  project.setGlobalPrompt(val)
+  globalPrompt.value = val
+  setGlobalPrompt(val)
 }
 
 /** 恢复默认：清空该节点覆盖，并把本地副本与 AI 模式重置为默认配置 */
 function resetConfig(): void {
-  project.clearNodeAIConfig(project.currentNodeId)
-  const d = project.defaultAIConfig
+  clearNodeAIConfig(project.currentNodeId)
+  const d = loadProjectData().default
   currentCfg.localPrompt = d.localPrompt
   currentCfg.viewTextAlgoId = d.viewTextAlgoId
   setAIMode(d.mode)
@@ -146,7 +163,7 @@ const sentenceCopy = makeCopier(sentenceText)
         <div class="ai-section">
           <label class="section-label">{{ t('aiPanel.globalPrompt') }}</label>
           <NInput
-            :value="project.globalPrompt"
+            :value="globalPrompt"
             @update:value="onGlobalPromptInput"
             type="textarea"
             size="small"

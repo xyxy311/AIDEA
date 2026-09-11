@@ -25,13 +25,12 @@ import {
   serializeProject,
   parseProjectFile,
   type ProjectViewState,
-  type ProjectAIConfigData,
   type ParsedProject,
 } from '@/utils/projectFile'
 
 export function createFileApi() {
   const api = {
-    /** 序列化当前项目为 JSON 字符串（与保存文件同构） */
+    /** 序列化当前项目为 JSON 字符串（与保存文件同构；AI 项目级配置归 ai 插件 additions，不写 aiConfig 字段） */
     serializeCurrent(): string {
       const nodeStore = useNodeStore()
       const project = useProjectStore()
@@ -57,22 +56,7 @@ export function createFileApi() {
       }
 
       const tags = useTagsStore().tagList
-      const aiConfig: ProjectAIConfigData = {
-        globalPrompt: project.globalPrompt,
-        defaultConfig: project.defaultAIConfig,
-        nodeConfigs: Array.from(project.nodeAIConfigs.entries()).map(([nodeId, config]) => ({
-          nodeId,
-          config,
-        })),
-      }
-      return serializeProject(
-        nodes,
-        projectName,
-        viewState,
-        tags,
-        aiConfig,
-        useAdditionsStore().serialize(),
-      )
+      return serializeProject(nodes, projectName, viewState, tags, useAdditionsStore().serialize())
     },
 
     /** 解析校验项目文件 JSON（只读，不落到 store；失败抛错） */

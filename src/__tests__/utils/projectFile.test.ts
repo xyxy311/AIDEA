@@ -9,7 +9,13 @@ import {
 } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
-import type { AIConfig } from '@/types'
+
+/** AI 配置结构（与 utils/projectFile.ts 的 legacy AIConfig 一致） */
+interface AIConfig {
+  localPrompt: string
+  mode: 'fast' | 'precise'
+  viewTextAlgoId: string
+}
 
 /** 构造一个合法的 AI 配置 */
 function validConfig(overrides: Partial<AIConfig> = {}): AIConfig {
@@ -52,32 +58,24 @@ function buildProjectJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify(base)
 }
 
-describe('projectFile - aiConfig 序列化', () => {
-  it('serializeProject 写入的 JSON 含 aiConfig 字段（globalPrompt/defaultConfig/nodeConfigs）', () => {
+describe('projectFile - 序列化', () => {
+  it('serializeProject 不再写出 aiConfig 字段（AI 项目级配置归 ai 插件 additions）', () => {
     const nodes = [
       createNode({ id: ROOT_NODE_ID, parentId: null, text: '项目' }),
       createNode({ id: 'child1', parentId: ROOT_NODE_ID, text: '子节点' }),
     ]
-    const aiConfig: ProjectAIConfigData = {
-      globalPrompt: '全局提示词',
-      defaultConfig: validConfig({ mode: 'precise' }),
-      nodeConfigs: [{ nodeId: 'child1', config: validConfig({ localPrompt: '节点局部提示' }) }],
-    }
 
-    const json = serializeProject(nodes, '项目', validViewState(), [], aiConfig, {})
+    const json = serializeProject(nodes, '项目', validViewState(), [], { 'ai:projectConfig': { globalPrompt: '全局' } })
     const data = JSON.parse(json)
 
-    expect(data.aiConfig).toBeDefined()
-    expect(data.aiConfig.globalPrompt).toBe('全局提示词')
-    expect(data.aiConfig.defaultConfig).toEqual(validConfig({ mode: 'precise' }))
-    expect(data.aiConfig.nodeConfigs).toEqual([
-      { nodeId: 'child1', config: validConfig({ localPrompt: '节点局部提示' }) },
-    ])
+    // 新保存文件不含 aiConfig 字段；additions 原样写出
+    expect(data.aiConfig).toBeUndefined()
+    expect(data.additions).toEqual({ 'ai:projectConfig': { globalPrompt: '全局' } })
   })
 
   it('版本号恒为 1', () => {
     const nodes = [createNode({ id: ROOT_NODE_ID, parentId: null, text: '项目' })]
-    const json = serializeProject(nodes, '项目', validViewState(), [], defaultProjectAIConfig(), {})
+    const json = serializeProject(nodes, '项目', validViewState(), [], {})
     const data = JSON.parse(json)
     expect(data.version).toBe(1)
   })
@@ -94,6 +92,8 @@ describe('projectFile - aiConfig 解析', () => {
     const parsed = parseProjectFile(buildProjectJson({ aiConfig }))
 
     expect(parsed.aiConfig).toEqual(aiConfig)
+    // legacy 标记：原文件携带 aiConfig 字段
+    expect(parsed.hasAIConfig).toBe(true)
   })
 
   it('旧文件缺 aiConfig 字段 → 回退 defaultProjectAIConfig()', () => {
@@ -106,6 +106,8 @@ describe('projectFile - aiConfig 解析', () => {
     const parsed = parseProjectFile(JSON.stringify(raw))
 
     expect(parsed.aiConfig).toEqual(defaultProjectAIConfig())
+    // legacy 标记：原文件不含 aiConfig 字段（迁移桥据此跳过）
+    expect(parsed.hasAIConfig).toBe(false)
   })
 
   it('aiConfig 整体非对象（如 null） → 回退默认', () => {

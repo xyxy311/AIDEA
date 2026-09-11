@@ -3,8 +3,8 @@ import { setActivePinia, createPinia } from 'pinia'
 import {
   runSentenceMaking,
   runGenerateIdea,
-} from '@/composables/useAIGenerate'
-import { useAIConfigStore } from '@/stores/ai'
+} from '../composables/useAIGenerate'
+import { useAIConfigStore } from '../stores/aiConfig'
 import {
   AI_SENTENCE_PROMPT,
   AI_GENERATE_IDEA_NODE,
@@ -12,8 +12,8 @@ import {
   AI_DIRECTION_ANY,
   AI_DIRECTION_FOCUS,
   DEFAULT_AI_DIRECTIONS,
-} from '@/constants/ai'
-import type { AIDivergenceDirection } from '@/types/ai'
+} from '../constants'
+import type { AIDivergenceDirection } from '../types'
 
 /** 构造 OpenAI 兼容成功响应 */
 function okResponse(content: string): Response {

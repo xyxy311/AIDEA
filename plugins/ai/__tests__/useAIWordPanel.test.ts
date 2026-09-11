@@ -9,17 +9,17 @@ import {
   sentenceMaking,
   setAIMode,
   generateDirectional,
-} from '@/composables/useAIWordPanel'
-import { AI_SENTENCE_PROMPT, AI_GENERATE_IDEA_NODE, AI_GENERATE_IDEA_DESCRIPTION, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS } from '@/constants/ai'
-import type { AIConfig } from '@/types'
-import type { AIDivergenceDirection } from '@/types/ai'
+} from '../composables/useAIWordPanel'
+import { currentViewedNodeId, getAIConfig, setDefaultAIConfig } from '../stores/aiProject'
+import { AI_SENTENCE_PROMPT, AI_GENERATE_IDEA_NODE, AI_GENERATE_IDEA_DESCRIPTION, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS } from '../constants'
+import type { AIConfig, AIDivergenceDirection } from '../types'
 
-// 用 vi.hoisted Mock useAIDirectionsStore，隔离真实 localStorage，聚焦默认发散方向接线
+// 用 vi.hoisted Mock 插件内 useAIDirectionsStore，隔离真实持久化，聚焦默认发散方向接线
 const dirMocks = vi.hoisted(() => ({
   getDefaultDirection: vi.fn(),
 }))
 
-vi.mock('@/stores/aiDirections', () => ({
+vi.mock('../stores/aiDirections', () => ({
   useAIDirectionsStore: () => ({
     getDefaultDirection: dirMocks.getDefaultDirection,
   }),
@@ -84,7 +84,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     nodeStore.addNode(target, 0, 0, '子A\n副标题A')
     nodeStore.addNode(target, 100, 0, '子B')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ localPrompt: '局部见解', mode: 'fast' }))
+    setDefaultAIConfig(cfg({ localPrompt: '局部见解', mode: 'fast' }))
 
     const words = await directGenerate()
 
@@ -121,7 +121,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     nodeStore.addNode(target, 0, 0, '子1')
     nodeStore.addNode(target, 0, 0, '子2')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'precise' }))
+    setDefaultAIConfig(cfg({ mode: 'precise' }))
 
     const words = await directGenerate()
 
@@ -145,7 +145,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     const fetchMock = vi.fn().mockResolvedValue(okResponse('结果词'))
     vi.stubGlobal('fetch', fetchMock)
 
-    project.setDefaultAIConfig(cfg({ mode: 'precise' }))
+    setDefaultAIConfig(cfg({ mode: 'precise' }))
     const panel = useAIWordPanel()
     panel.previewText.value = '用户已编辑的预览'
     panel.sentenceText.value = '用户已编辑的句子'
@@ -207,7 +207,7 @@ describe('useAIWordPanel - regenerate（无参）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+    setDefaultAIConfig(cfg({ mode: 'fast' }))
 
     const panel = useAIWordPanel()
     panel.previewText.value = '会被覆盖的旧预览'
@@ -258,12 +258,11 @@ describe('useAIWordPanel - sentenceMaking / setAIMode', () => {
     expect(body.messages[0].content).toBe(AI_SENTENCE_PROMPT)
   })
 
-  it('setAIMode：更新内部 mode 并写回 project', () => {
-    const project = useProjectStore()
+  it('setAIMode：更新内部 mode 并写回项目级 additions 配置', () => {
     setAIMode('precise')
 
     expect(useAIWordPanel().mode.value).toBe('precise')
-    expect(project.getAIConfig(project.currentNodeId).mode).toBe('precise')
+    expect(getAIConfig(currentViewedNodeId()).mode).toBe('precise')
   })
 })
 
@@ -301,7 +300,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子A')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ localPrompt: '局部见解', mode: 'fast' }))
+    setDefaultAIConfig(cfg({ localPrompt: '局部见解', mode: 'fast' }))
 
     const direction = dir()
     const words = await generateDirectional(['选中起点'], direction)
@@ -338,7 +337,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'precise' }))
+    setDefaultAIConfig(cfg({ mode: 'precise' }))
 
     const direction = dir()
     const words = await generateDirectional(['选中起点'], direction)
@@ -368,7 +367,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+    setDefaultAIConfig(cfg({ mode: 'fast' }))
 
     const words = await generateDirectional(['选中起点'], AI_DIRECTION_FOCUS)
 
@@ -387,7 +386,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+    setDefaultAIConfig(cfg({ mode: 'fast' }))
 
     const words = await generateDirectional(['选中起点'], AI_DIRECTION_ANY)
 
@@ -408,7 +407,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+    setDefaultAIConfig(cfg({ mode: 'fast' }))
 
     const words = await generateDirectional([], dir())
 
@@ -437,7 +436,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const target = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '目标')
     nodeStore.addNode(target, 0, 0, '子1')
     project.switchView(target)
-    project.setDefaultAIConfig(cfg({ mode: 'fast' }))
+    setDefaultAIConfig(cfg({ mode: 'fast' }))
 
     const words = await generateDirectional(['选中起点'], dir())
 

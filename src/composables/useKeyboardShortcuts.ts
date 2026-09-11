@@ -10,7 +10,6 @@ import { useShortcutsStore } from '@/stores/shortcuts'
 import { useModalStore } from '@/stores/modal'
 import type { WhiteboardNode } from '@/types'
 import { requestSearchFocus } from '@/composables/useSearchFocus'
-import { useAIWordPanel } from '@/composables/useAIWordPanel'
 import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { toChordString, normalizeKey } from '@/utils/shortcuts'
@@ -37,7 +36,8 @@ import type { ShortcutScope } from '@/types/shortcuts'
  * Enter              - 编辑选中节点（锁定，不可自定义）
  * 1-9                - 应用预设 / 序号修饰键+1-9 打标签（锁定）
  *
- * S/O/N/F/G/A/Q/Tab/R/I/C  - 可自定义（见 constants/shortcuts.ts）
+ * S/O/N/F/G/A/Q/Tab/R/D   - 可自定义（见 constants/shortcuts.ts）
+ *（AI 生成 I / 清除 C 已迁为 ai 插件的插件快捷键动作 ai:generate / ai:clear）
  *
  * 事件顺序契约（与网格层 useGridMode 协作）：Vue 子组件 onMounted 先于父组件触发，
  * CanvasStage（子）的网格监听先于本文件（由 AppShell 父级挂载）的快捷键监听执行。
@@ -58,7 +58,6 @@ export function useKeyboardShortcuts(
   const presets = usePresetsStore()
   const layout = useLayoutStore()
   const tagsStore = useTagsStore()
-  const aiWord = useAIWordPanel()
   const shortcuts = useShortcutsStore()
   const modalStore = useModalStore()
 
@@ -116,15 +115,6 @@ export function useKeyboardShortcuts(
           link.fitInlineView(nodeId)
         }
       }
-    },
-    aiGenerate: (e) => {
-      e.preventDefault()
-      // 与面板「直接生成」等价：一律触发任意发散，不因选中节点分流
-      void aiWord.directGenerate()
-    },
-    aiClear: (e) => {
-      e.preventDefault()
-      aiWord.clear()
     },
     // 字母 d 的删除（可自定义，默认 d）；Delete/Backspace 在锁定层固定
     deleteSelected: runDelete,

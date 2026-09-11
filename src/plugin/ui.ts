@@ -1,5 +1,5 @@
 /**
- * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板）
+ * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板 / 浮动层）
  *
  * 插件 setup(ctx) 经 ctx.register 现场注册**运行时组件对象**。
  * 注册去向统一为 **uiRegistry 登记总表**（stores/uiRegistry.ts）：
@@ -8,7 +8,8 @@
  * 转发写入 uiRegistry，排布（顺序 / 归类 / 持久化）由 layout store 纯派生，无需任何落位调用。
  * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）；
  * 模态面板同样只收插件条目，且只登记不派生布局（打开/关闭经 ctx.modal 运行时 API 走
- * modal store，应用级宿主 PluginModalHost 按登记条目渲染）。
+ * modal store，应用级宿主 PluginModalHost 按登记条目渲染）。浮动层同只收插件条目且
+ * 只登记不派生布局（应用级宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）。
  *
  * 本模块负责：
  * - 定义插件注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
@@ -131,6 +132,30 @@ export interface PluginContextMenuItemRegistration {
   when?: (ctx: { selectedNodeIds: string[] }) => boolean
   /** 点击执行；收到选中节点 id 数组（展开拷贝，可安全改写） */
   run: (ctx: { selectedNodeIds: string[] }) => void
+  /** 子菜单项工厂（与 run 互斥：children 存在时父项仅作分组入口）。收与 run 相同的选中上下文。 */
+  children?: (sel: { selectedNodeIds: string[] }) => PluginContextMenuChildItem[]
+}
+
+/** 插件右键菜单子项：children 工厂的元素形状，主程序映射为 ContextMenu 消费的叶子项（key/label/icon/danger/action 同名透传） */
+export interface PluginContextMenuChildItem {
+  /** 子项 key（菜单内唯一性由插件保证，主程序不加分隔前缀） */
+  key: string
+  /** 显示文案 */
+  label: string
+  /** 可选图标组件（@vicons/ionicons5 同款形态） */
+  icon?: Component
+  /** 危险操作样式（红色文字） */
+  danger?: boolean
+  /** 点击执行 */
+  action: () => void
+}
+
+/** 插件浮动层：注册进 uiRegistry.floatingLayers，宿主 PluginFloatingHost 常驻应用根级逐条渲染 */
+export interface PluginFloatingLayerRegistration {
+  /** 插件内短 id；归一为 `${pluginId}:${id}` */
+  id: string
+  /** 全局浮动层组件（自管显隐，如 AI 生成词浮动面板） */
+  component: Component
 }
 
 // ── 插件可获得的能力面（ctx.register，仅插件 setup 内可用）──
@@ -151,6 +176,8 @@ export interface PluginRegisterApi {
   registerShortcutAction(entry: PluginShortcutActionRegistration): { ok: boolean; conflict?: 'id' | 'chord' | 'reserved' | 'binding' }
   /** 注册模态面板（仅登记；打开/关闭走 ctx.modal 运行时）；短 id 非法 / key 冲突 → { ok:false, conflict:'id' }（同时 console.warn） */
   registerModal(def: ModalRegistration): { ok: boolean; conflict?: 'id' }
+  /** 注册全局浮动层（宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）；返回 void（冲突由 registry warn + 拒绝） */
+  registerFloatingLayer(entry: PluginFloatingLayerRegistration): void
 }
 
 /**
@@ -296,6 +323,13 @@ export function createPluginRegister(pluginId: string): PluginRegisterApi {
         console.warn(`[plugin] ${pluginId} 模态面板「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
       return res
+    },
+
+    registerFloatingLayer(entry) {
+      if (!requireValidId('浮动层', entry.id)) return
+      if (!registry().registerPluginFloatingLayer(pluginId, entry)) {
+        console.warn(`[plugin] ${pluginId} 浮动层「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
+      }
     },
   }
 }

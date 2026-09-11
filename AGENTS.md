@@ -36,7 +36,7 @@ config/     配色 colorSchemes.ts：亮/暗（Naive theme + overrides + CSS 变
 locales/    UI 文本 zh-CN.json（i18n 占位层）
 stores/     node(全局树+连线+派生索引 childrenIndex/referenceIndex/tagIndex) / tags(项目级标签定义) / view(工厂，视口/选中/编辑，不存数据)
             / project(导航+快照+销毁内联实例) / presets / history(undo+patch+batch+coalesce) / theme / layout(活动栏顺序/激活)
-components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / topbar(顶部按钮逻辑组件 OpenButton/SaveButton/UndoButton/RedoButton/SettingsButton/DebugButton/AIDisplayModeButton/GridButton/AddNodeButton) / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
+components/  canvas(/CanvasStage/WhiteboardNode/Connection/OverviewMap/InlineView*/TextAutocomplete) / topbar(顶部按钮逻辑组件 OpenButton/SaveButton/UndoButton/RedoButton/SettingsButton/DebugButton/GridButton/AddNodeButton) / panels(left:NodeTreePanel/ReferencesPanel/SearchPanel/PresetManagerPanel/TagsPanel
              / right:NodePropertyEditor/ConnectionPropertyEditor/PropertyPanel) / layout(ActivityBar/LeftTopBar/RightTopBar/AppShell/LeftSidebar/RightSidebar) / common(可复用通用件 DockPanel/DockContainer/DraggableSortList/TopBarZone—顶部通用容器/TopBarButton—通用按钮模板/WheelScroll/NodeItem)
 ```
 

@@ -45,12 +45,64 @@ import {
 import { isValidChord, parseChord } from '@/utils/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { usePluginConfigStore } from '@/stores/pluginConfig'
-import { migrateShortcutOverrides } from '@/utils/pluginConfig'
+import { migrateShortcutOverrides, readPluginConfig, writePluginConfig } from '@/utils/pluginConfig'
 
 /** 用户覆盖绑定持久化 key */
 const STORAGE_BINDINGS = 'aidea-shortcuts'
 /** 序号修饰键持久化 key */
 const STORAGE_SEQMOD = 'aidea-shortcuts-seqmod'
+
+/**
+ * 旧内置 AI 快捷键 id → ai 插件动作短 id 映射。
+ * 旧版 AI 生成/清除为内置动作（aiGenerate/aiClear），插件化后为 ai:generate/ai:clear。
+ */
+const LEGACY_AI_SHORTCUT_IDS: Record<string, string> = {
+  aiGenerate: 'generate',
+  aiClear: 'clear',
+}
+
+/**
+ * 一次性存量迁移（幂等）：旧内置 AI 快捷键的用户覆盖条目搬入 ai 插件配置文件 shortcuts 段。
+ * 仅当 aidea-shortcuts 中存在 aiGenerate/aiClear 条目（用户改过键）时执行：
+ * 读-改-写 `aidea-plugin-config.ai`（迁移值优先），并从旧文件删除对应条目；
+ * 无条目则不写任何文件（ai 插件默认键直接生效）。纯 localStorage 层、同步执行，
+ * 须先于 overrides 的 useStorage 读取与 validate（未知 id 丢弃规则）调用。
+ */
+function migrateLegacyAIShortcutOverrides(): void {
+  // 读旧混存（解析失败 / 结构不符按空处理）
+  let legacy: Record<string, unknown> = {}
+  try {
+    const raw = localStorage.getItem(STORAGE_BINDINGS)
+    if (raw !== null) {
+      const parsed: unknown = JSON.parse(raw)
+      if (typeof parsed === 'object' && parsed !== null) legacy = parsed as Record<string, unknown>
+    }
+  } catch {
+    legacy = {}
+  }
+
+  // 找出旧 AI 条目（值须为合法字符串 chord）；无条目幂等返回（不建任何插件文件）
+  const moved: Record<string, string> = {}
+  const legacyIds = new Set<string>()
+  for (const [oldId, actionId] of Object.entries(LEGACY_AI_SHORTCUT_IDS)) {
+    legacyIds.add(oldId)
+    const chord = legacy[oldId]
+    if (typeof chord === 'string' && chord.length > 0) moved[actionId] = chord
+  }
+  if (Object.keys(moved).length === 0) return
+
+  // 合并写入 ai 插件配置文件 shortcuts 段（迁移值优先；读-改-写保留该文件已有条目）
+  const cfg = readPluginConfig('ai')
+  cfg.shortcuts = { ...cfg.shortcuts, ...moved }
+  writePluginConfig('ai', cfg)
+
+  // 从旧文件删除已迁移条目（其余覆盖原样保留）
+  const kept: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(legacy)) {
+    if (!legacyIds.has(k)) kept[k] = v
+  }
+  localStorage.setItem(STORAGE_BINDINGS, JSON.stringify(kept))
+}
 
 /** assign 结果（conflict 对象的 labelKey：内置动作是 i18n key；插件动作填成品 label——t() 未命中回退即展示原文） */
 export type AssignResult =
@@ -88,6 +140,8 @@ export const useShortcutsStore = defineStore('shortcuts', () => {
   // 把旧混存在 aidea-shortcuts 中的插件覆盖条目搬入各插件配置文件；晚于此读取会让旧
   // 条目先进入内存，再经 validate 丢弃/写回造成回归。纯 localStorage 层，同步执行。
   migrateShortcutOverrides()
+  // 同批迁移：旧内置 AI 快捷键覆盖条目（aiGenerate/aiClear）搬入 ai 插件配置文件
+  migrateLegacyAIShortcutOverrides()
 
   /** 插件配置（插件覆盖独立存储的写入方；含 ':' 路由目标） */
   const pluginConfigs = usePluginConfigStore()

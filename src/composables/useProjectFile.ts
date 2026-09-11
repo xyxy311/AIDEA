@@ -10,12 +10,11 @@ import { useAdditionsStore } from '@/stores/additions'
 import { useCommands } from '@/composables/useCommands'
 import { useMessage } from 'naive-ui'
 import { t } from '@/composables/useT'
+import { markDataDirty } from '@/utils/dirtyMarker'
 import {
   serializeProject,
   parseProjectFile,
-  defaultProjectAIConfig,
   type ProjectViewState,
-  type ProjectAIConfigData,
 } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
@@ -111,11 +110,31 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     nodes: WhiteboardNode[]
     tags?: Tag[]
     viewState: ProjectViewState
-    aiConfig?: ProjectAIConfigData
+    /** legacy 迁移源：仅旧项目文件携带（解析层保证结构合法） */
+    aiConfig?: { globalPrompt: string; defaultConfig: unknown; nodeConfigs: Array<{ nodeId: string; config: unknown }> }
+    /** 原始文件是否携带 aiConfig 字段（据此执行一次性迁移） */
+    hasAIConfig?: boolean
     additions?: Record<string, unknown>
   }): void {
     // 0. 载入插件项目化扩展数据（逐一过滤 `pluginId:` 前缀，仅保留合法键）
     additionsStore.load(data.additions)
+
+    // 0.5 legacy 迁移桥：旧项目文件含 aiConfig 字段时，一次性搬入 ai 插件命名空间的
+    // additions 完整键 `ai:projectConfig`（AIProjectData 结构，与 plugins/ai/stores/aiProject.ts
+    // 对齐：globalPrompt / default / byNode）。直调 additions store 底层写（不入 undo、不经命令层）
+    // + markDataDirty；新保存的文件不再写 aiConfig 字段，故每次打开至多迁移一次。
+    if (data.hasAIConfig && data.aiConfig) {
+      const byNode: Record<string, unknown> = {}
+      for (const { nodeId, config } of data.aiConfig.nodeConfigs) {
+        byNode[nodeId] = config
+      }
+      additionsStore.applyValue('ai:projectConfig', {
+        globalPrompt: data.aiConfig.globalPrompt,
+        default: data.aiConfig.defaultConfig,
+        byNode,
+      })
+      markDataDirty()
+    }
 
     // 1. 整树替换，确保根节点存在
     const map = new Map<string, WhiteboardNode>()
@@ -135,16 +154,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     commands.clearHistory()
 
     // 3. 重置项目级与主视图状态（不含历史，不触发 dirty）
+    //    AI 项目级配置归 ai 插件的 additions 数据（ai:projectConfig），不由 project store 管理
     project.resetForNewProject()
-
-    // 3.5 恢复 AI 配置（先清空节点覆盖，再设全局 / 默认 / 逐条覆盖）
-    project.setGlobalPrompt(data.aiConfig?.globalPrompt ?? '')
-    project.setDefaultAIConfig(
-      data.aiConfig?.defaultConfig ?? defaultProjectAIConfig().defaultConfig,
-    )
-    for (const { nodeId, config } of data.aiConfig?.nodeConfigs ?? []) {
-      if (map.has(nodeId)) project.setNodeAIConfig(nodeId, config)
-    }
 
     const existingIds = new Set(map.keys())
 
@@ -229,16 +240,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     const projectName = nodeStore.rootNode?.text || t('common.untitledProject')
     const viewState = collectViewState()
     const tags = tagsStore.tagList
-    // 收集当前 project store 的 AI 配置组装成可持久化数据
-    const aiConfig: ProjectAIConfigData = {
-      globalPrompt: project.globalPrompt,
-      defaultConfig: project.defaultAIConfig,
-      nodeConfigs: Array.from(project.nodeAIConfigs.entries()).map(([nodeId, config]) => ({
-        nodeId,
-        config,
-      })),
-    }
-    return serializeProject(nodes, projectName, viewState, tags, aiConfig, additionsStore.serialize())
+    // AI 项目级配置已归 ai 插件的 additions 数据（ai:projectConfig），随 additions 一并写出
+    return serializeProject(nodes, projectName, viewState, tags, additionsStore.serialize())
   }
 
   /** 默认保存文件名（项目名 + '.aidea.json'） */

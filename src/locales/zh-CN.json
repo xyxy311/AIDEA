@@ -67,6 +67,19 @@
     "directionSeparatorHint": "多个发散起点合并时的分隔符，选填，默认空格。",
     "resetDirections": "恢复默认发散方向",
     "resetDirectionsConfirm": "确定恢复默认发散方向？将清空当前自定义方向并恢复内置默认。",
+    "aiConnection": "AI 连接",
+    "aiConnectionDesc": "配置大模型连接参数，改动即时保存到插件配置并生效，不随项目文件保存",
+    "aiBaseURL": "接口地址",
+    "aiBaseURLDesc": "OpenAI 兼容端点；本地 Ollama 默认 http://localhost:11434/v1",
+    "aiModel": "模型名称",
+    "aiModelDesc": "须与端点侧可用模型名一致，如 qwen2.5-coder:7b",
+    "aiApiKey": "API Key",
+    "aiApiKeyDesc": "可选项；本地 Ollama 通常无需填写",
+    "aiTimeout": "超时（毫秒）",
+    "aiTemperature": "温度",
+    "aiConnectionReset": "恢复默认连接配置",
+    "aiShortcuts": "快捷键",
+    "aiShortcutsDesc": "本插件注册的快捷键动作，点击键帽录制改键",
     "shortcuts": "快捷键",
     "shortcutsDesc": "自定义快捷键与序号修饰键",
     "plugins": "插件",
@@ -205,23 +218,9 @@
     "regenerate": "重新生成",
     "regenerateLoading": "重新生成中…",
     "directEmpty": "预览内容为空，请先点击「生成预览」或输入内容",
-    "empty": "当前视图暂无节点",
-    "directions": "发散方向",
-    "directionsEmpty": "暂无发散方向",
-    "addDirection": "添加方向",
-    "editDirection": "编辑方向",
-    "directionTitle": "标题",
-    "directionPrompt": "提示词",
-    "directionTitlePlaceholder": "如：为什么？",
-    "directionPromptPlaceholder": "该方向的系统提示词，调用时作为 system 传给 AI"
+    "empty": "当前视图暂无节点"
   },
   "viewTextPanel": {
-    "algorithm": "算法",
-    "generate": "生成文本",
-    "empty": "当前视图无节点",
-    "resultPlaceholder": "点击「生成文本」查看结果",
-    "copy": "复制",
-    "copied": "已复制",
     "paramTolerance": "纵向容差",
     "paramIncludeCoords": "显示坐标",
     "paramSeparator": "分隔符",
@@ -304,8 +303,7 @@
     "copy": "复制",
     "cut": "剪切",
     "paste": "粘贴",
-    "divergence": "发散",
-    "divergenceDirect": "直接发散"
+    "divergence": "发散"
   },
   "floatingEditor": {
     "nodeTitle": "节点",
@@ -340,17 +338,11 @@
   },
   "aiWord": {
     "title": "AI 生成词",
-    "generateBtn": "AI 生成词",
-    "loading": "正在生成…",
     "error": "生成失败：{message}",
     "empty": "暂无结果，请重新生成",
     "add": "添加",
     "addAll": "全部添加",
-    "regenerate": "重新生成",
     "close": "关闭",
-    "retry": "重试",
-    "switchToPanel": "切换为面板模式",
-    "switchToStrip": "切换为紧凑模式",
     "clear": "清除"
   }
 }

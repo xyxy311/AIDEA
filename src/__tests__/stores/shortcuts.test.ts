@@ -97,7 +97,7 @@ describe('shortcuts store', () => {
   it('resetAll 清空全部覆盖', () => {
     const s = freshStore()
     s.assign('enterChild', 'x')
-    s.assign('aiClear', 'k')
+    s.assign('enterParent', 'k')
     s.resetAll()
     for (const def of CUSTOM_SHORTCUTS) {
       expect(s.getBinding(def.id)).toBe(def.default)
@@ -116,9 +116,9 @@ describe('shortcuts store', () => {
 
   it('setSeqModKey 与自定义动作裸单键冲突被拒绝', () => {
     const s = freshStore()
-    // aiClear 默认裸单键 c
-    const r = s.setSeqModKey('c')
-    expect(r).toMatchObject({ ok: false, reason: 'custom', conflict: { id: 'aiClear' } })
+    // enterParent 默认裸单键 q
+    const r = s.setSeqModKey('q')
+    expect(r).toMatchObject({ ok: false, reason: 'custom', conflict: { id: 'enterParent' } })
     expect(s.seqModKey).toBe('t')
   })
 
@@ -201,7 +201,7 @@ describe('shortcuts store：插件注册动作（经 uiRegistry 登记）', () =
     expect(s.assign('demo:act', 'j')).toEqual({ ok: true })
     expect(s.getBinding('demo:act')).toBe('j')
     // 内置动作撞插件动作的当前绑定 → 拒绝
-    expect(s.assign('aiClear', 'j').ok).toBe(false)
+    expect(s.assign('enterParent', 'j').ok).toBe(false)
     // 恢复默认（reset 对完整 key 直接工作）
     s.reset('demo:act')
     expect(s.getBinding('demo:act')).toBe('mod+shift+g')

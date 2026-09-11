@@ -39,9 +39,7 @@ import TabBar from './TabBar.vue'
 import WheelScroll from '@/components/common/WheelScroll.vue'
 import WhiteboardCanvas from '@/components/canvas/WhiteboardCanvas.vue'
 import FloatingPropertyEditor from '@/components/floating/FloatingPropertyEditor.vue'
-import FloatingAIWordPanel from '@/components/floating/FloatingAIWordPanel.vue'
-import FloatingAIWordStrip from '@/components/floating/FloatingAIWordStrip.vue'
-import { useAIWordPanel } from '@/composables/useAIWordPanel'
+import PluginFloatingHost from '@/components/layout/PluginFloatingHost.vue'
 
 // ── 侧边栏收起状态 ──
 const layout = useLayoutStore()
@@ -136,7 +134,6 @@ provide('projectFile', projectFile)
 
 // ── 键盘快捷键（全局单份，含文件快捷键）──
 const isEditing = computed(() => useViewStore('main').editingNodeId !== null)
-const { displayMode } = useAIWordPanel()
 useKeyboardShortcuts(isEditing, projectFile)
 
 // ── 关闭 / 刷新前脏提示 ──
@@ -232,9 +229,8 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     <!-- 浮动属性编辑器（全局单实例挂载） -->
     <FloatingPropertyEditor />
 
-    <!-- AI 生成词：按 displayMode 二选一渲染（全局单实例挂载） -->
-    <FloatingAIWordStrip v-if="displayMode === 'strip'" />
-    <FloatingAIWordPanel v-else />
+    <!-- 插件浮动层宿主（登记即可见，显隐由插件组件自管，如 ai 插件的生成词浮动面板） -->
+    <PluginFloatingHost />
   </div>
 </template>
 

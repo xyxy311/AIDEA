@@ -6,7 +6,14 @@
  *
  * - AI 生成编排：directGenerate() / regenerate() / sentenceMaking() / generatePreview()
  * - AI 模式状态：mode（快速 / 精确）、previewText（上下文预览）、sentenceText（连词成句结果）
- * - 面板展示状态：show() / close() / setMode() / clear() + visible/words/error/displayMode
+ * - 面板展示状态：show() / close() / clear() + visible/words/error
+ *
+ * 插件化改造（相对原主程序版）：
+ * - 删除紧凑模式：displayMode / setMode 与 useStorage('aidea-ai-word-mode') 不再保留，
+ *   生成词仅浮动面板一种展示（FloatingAIWordPanel 经插件浮动层常驻渲染，显隐自管）。
+ * - 项目级 AI 配置（globalPrompt / getAIConfig / setAIMode 写回）改经 stores/aiProject
+ *   的 additions `ai:projectConfig` 键；节点数据读取改经 adapter.api.node（不依赖主程序
+ *   project store 的 AI 字段）。
  *
  * 设计边界：
  * - directGenerate() / regenerate() 无参自包含：预览为空时自动先生成上下文预览；
@@ -16,16 +23,17 @@
  *   浮动面板组件能感知到状态变化。
  */
 import { reactive, toRefs } from 'vue'
-import { useStorage } from '@vueuse/core'
-import { useNodeStore } from '@/stores/node'
-import { useProjectStore } from '@/stores/project'
-import { buildViewText } from '@/utils/viewText'
-import { runGenerateIdea, runSentenceMaking } from '@/composables/useAIGenerate'
-import { useAIDirectionsStore } from '@/stores/aiDirections'
-import type { AIDivergenceDirection } from '@/types/ai'
-
-/** 展示模式：'strip' 底部小字条 | 'panel' 浮动面板（持久化到 localStorage） */
-const displayMode = useStorage<'strip' | 'panel'>('aidea-ai-word-mode', 'strip')
+import { adapter } from '@/plugin/adapter'
+import { buildViewText } from '../utils/viewText'
+import { runGenerateIdea, runSentenceMaking } from './useAIGenerate'
+import { useAIDirectionsStore } from '../stores/aiDirections'
+import {
+  currentViewedNodeId,
+  getAIConfig,
+  loadProjectData,
+  setNodeAIConfig,
+} from '../stores/aiProject'
+import type { AIDivergenceDirection } from '../types'
 
 /** 模块顶层单例状态 */
 const state = reactive<{
@@ -64,14 +72,13 @@ function splitLines(reply: string): string[] {
 
 /** 拼接补充分段（addition）：全局提示词 + 局部提示词（非空白部分才拼接，不含 body） */
 function composeAddition(): string {
-  const project = useProjectStore()
-  const cfg = project.getAIConfig(project.currentNodeId)
-  const globalPrompt = project.globalPrompt
-  const localPrompt = cfg.localPrompt
+  const nodeId = currentViewedNodeId()
+  const cfg = getAIConfig(nodeId)
+  const data = loadProjectData()
 
   const parts: string[] = []
-  if (globalPrompt.trim()) parts.push(globalPrompt.trim())
-  if (localPrompt.trim()) parts.push(localPrompt.trim())
+  if (data.globalPrompt.trim()) parts.push(data.globalPrompt.trim())
+  if (cfg.localPrompt.trim()) parts.push(cfg.localPrompt.trim())
   return parts.join('\n')
 }
 
@@ -80,22 +87,20 @@ function isDescriptionBody(): boolean {
   return state.mode === 'precise'
 }
 
-/** 从 project 同步 AI 模式（保证 I 键与 AIPanel 一致、跟随节点切换） */
+/** 从项目级配置同步 AI 模式（保证 I 键与 AIPanel 一致、跟随节点切换） */
 export function syncAIMode(): void {
-  const project = useProjectStore()
-  state.mode = project.getAIConfig(project.currentNodeId).mode
+  state.mode = getAIConfig(currentViewedNodeId()).mode
 }
 
 /** 生成上下文预览：用 viewText 程序计算结果填充，返回是否非空 */
 export function generatePreview(): boolean {
-  const project = useProjectStore()
-  const nodeStore = useNodeStore()
-  const cfg = project.getAIConfig(project.currentNodeId)
+  const nodeId = currentViewedNodeId()
+  const cfg = getAIConfig(nodeId)
   // 标题 = 当前视图根节点首行（如根节点即项目名），非空时作为结构化文本前缀
-  const current = nodeStore.getNode(project.currentNodeId)
+  const current = adapter.api.node.get(nodeId)
   const title = current?.text ? (current.text.split('\n')[0] ?? '').trim() : ''
   state.previewText = buildViewText(
-    nodeStore.childrenOf(project.currentNodeId),
+    adapter.api.node.children(nodeId),
     cfg.viewTextAlgoId ?? 'collectAll',
     {},
     title,
@@ -111,10 +116,10 @@ export async function sentenceMaking(): Promise<string> {
   state.sentenceLoading = true
   state.error = null
   // 连词成句正文：全局提示 + 局部提示 + 预览正文（非空白部分才拼接）
-  const project = useProjectStore()
-  const cfg = project.getAIConfig(project.currentNodeId)
+  const data = loadProjectData()
+  const cfg = getAIConfig(currentViewedNodeId())
   const parts: string[] = []
-  if (project.globalPrompt.trim()) parts.push(`全局提示：${project.globalPrompt.trim()}`)
+  if (data.globalPrompt.trim()) parts.push(`全局提示：${data.globalPrompt.trim()}`)
   if (cfg.localPrompt.trim()) parts.push(`局部提示：${cfg.localPrompt.trim()}`)
   if (state.previewText.trim()) parts.push(state.previewText.trim())
   const context = parts.join('\n\n')
@@ -245,13 +250,11 @@ export async function generateDirectional(
   }
 }
 
-/** 设置 AI 模式（快速/精确）并写回 project（随项目持久化） */
+/** 设置 AI 模式（快速/精确）并写回项目级 additions 配置（随项目持久化） */
 export function setAIMode(m: 'fast' | 'precise'): void {
   state.mode = m
-  const project = useProjectStore()
-  const id = project.currentNodeId
-  const cfg = project.getAIConfig(id)
-  project.setNodeAIConfig(id, { ...cfg, mode: m })
+  const id = currentViewedNodeId()
+  setNodeAIConfig(id, { ...getAIConfig(id), mode: m })
 }
 
 // ───────────────────────────── 面板展示状态 ─────────────────────────────
@@ -268,11 +271,6 @@ function close(): void {
   state.visible = false
 }
 
-/** 切换展示模式（'strip' 底部小字条 | 'panel' 浮动面板） */
-function setMode(mode: 'strip' | 'panel'): void {
-  displayMode.value = mode
-}
-
 /** 清除状态：隐藏、清空错误与结果 */
 function clear(): void {
   state.visible = false
@@ -285,10 +283,8 @@ export function useAIWordPanel() {
   // 组件模板自动解包，script 中需用 .value 访问。
   return {
     ...toRefs(state),
-    displayMode,
     show,
     close,
-    setMode,
     clear,
     syncAIMode,
     generatePreview,

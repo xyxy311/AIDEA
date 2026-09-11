@@ -1,11 +1,9 @@
-import { ref, reactive, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { defineStore, getActivePinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
-import { markDataDirty } from '@/utils/dirtyMarker'
 import { generateId } from '@/utils/id'
 import type { InlineViewItem } from '@/stores/view'
-import type { AIConfig } from '@/types'
 
 /** 内联视图状态快照（切走时保存） */
 export interface InlineViewSnapshot {
@@ -108,50 +106,7 @@ export const useProjectStore = defineStore('project', () => {
     nodeStore.setNodeText(ROOT_NODE_ID, name)
   }
 
-  // ── AI 提示词 / 模式配置（项目级数据，随项目文件序列化，均标记脏） ──
-
-  /** 项目级全局提示词（独立于各节点配置） */
-  const globalPrompt = ref<string>('')
-
-  /** AI 默认配置（未按节点覆盖时的回退值） */
-  const defaultAIConfig = ref<AIConfig>({
-    localPrompt: '',
-    mode: 'fast',
-    viewTextAlgoId: 'collectAll',
-  })
-
-  /** 按节点覆盖的 AI 配置：Map<nodeId, AIConfig> */
-  const nodeAIConfigs = reactive(new Map<string, AIConfig>())
-
-  /** 获取某节点的 AI 配置；未覆盖时回退默认配置 */
-  function getAIConfig(nodeId: string): AIConfig {
-    return nodeAIConfigs.get(nodeId) ?? defaultAIConfig.value
-  }
-
-  /** 设置项目级全局提示词 */
-  function setGlobalPrompt(text: string): void {
-    globalPrompt.value = text
-    markDataDirty()
-  }
-
-  /** 设置 AI 默认配置（整体替换） */
-  function setDefaultAIConfig(cfg: AIConfig): void {
-    defaultAIConfig.value = cfg
-    markDataDirty()
-  }
-
-  /** 设置某节点的 AI 覆盖配置 */
-  function setNodeAIConfig(nodeId: string, cfg: AIConfig): void {
-    nodeAIConfigs.set(nodeId, cfg)
-    markDataDirty()
-  }
-
-  /** 清除某节点的 AI 覆盖配置（回退到默认） */
-  function clearNodeAIConfig(nodeId: string): void {
-    if (!nodeAIConfigs.has(nodeId)) return
-    nodeAIConfigs.delete(nodeId)
-    markDataDirty()
-  }
+  // ── AI 提示词 / 模式配置已迁为 ai 插件的 additions 项目级数据（ai:projectConfig）──
 
   // ── 树展开状态（全局导航态）──
 
@@ -409,19 +364,12 @@ export const useProjectStore = defineStore('project', () => {
   /**
    * 重置为新项目（新建 / 打开项目时调用）。
    * 清空展开态、标签页与主视图状态，销毁所有内联视图实例，重置主视图（视口归零、清选中）。
+   * AI 项目级配置归 ai 插件的 additions 数据管理（不由本 store 清理）。
    */
   function resetForNewProject(): void {
     expandedIds.value = new Set([ROOT_NODE_ID])
     // 重置标签页与主视图（清空快照、销毁内联实例、归位根节点）
     resetTabsForProject()
-    // 重置 AI 配置为默认（新建 / 打开项目时）
-    nodeAIConfigs.clear()
-    globalPrompt.value = ''
-    defaultAIConfig.value = {
-      localPrompt: '',
-      mode: 'fast',
-      viewTextAlgoId: 'collectAll',
-    }
   }
 
   return {
@@ -449,15 +397,6 @@ export const useProjectStore = defineStore('project', () => {
     closeTab,
     moveTab,
     resetTabsForProject,
-    // AI 配置
-    globalPrompt,
-    defaultAIConfig,
-    nodeAIConfigs,
-    getAIConfig,
-    setGlobalPrompt,
-    setDefaultAIConfig,
-    setNodeAIConfig,
-    clearNodeAIConfig,
     // 项目级重置
     resetForNewProject,
     // viewStore 生命周期

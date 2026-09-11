@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
-import { useAIDirectionsStore } from '@/stores/aiDirections'
-import { DEFAULT_AI_DIRECTIONS, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS } from '@/constants/ai'
-import type { AIDivergenceDirection } from '@/types/ai'
+import { useAIDirectionsStore } from '../stores/aiDirections'
+import { usePluginConfigStore } from '@/stores/pluginConfig'
+import { DEFAULT_AI_DIRECTIONS, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS, AI_PLUGIN_ID } from '../constants'
+import type { AIDivergenceDirection } from '../types'
 
-/** 内存版 localStorage mock（供 useStorage 使用） */
+/** 内存版 localStorage mock（供 pluginConfig / 迁移源键使用） */
 function createLocalStorageMock(): Storage {
   let store: Record<string, string> = {}
   return {
@@ -25,16 +27,25 @@ function createLocalStorageMock(): Storage {
   }
 }
 
-/** 读取当前 localStorage 中持久化的方向 JSON（未存则返回 null） */
+/** 插件配置文件 key（aiDirections 持久化于其 data 段） */
+const PLUGIN_FILE_KEY = `aidea-plugin-config.${AI_PLUGIN_ID}`
+/** data 段键：方向列表 / 默认方向 id */
+const DIRECTIONS_KEY = 'directions'
+const DEFAULT_DIRECTION_KEY = 'defaultDirectionId'
+/** 旧版主程序 localStorage 键（迁移源） */
+const LEGACY_STORAGE_KEY = 'bb-ai-directions'
+const LEGACY_DEFAULT_DIRECTION_KEY = 'bb-ai-default-direction'
+
+/** 读取插件配置文件 data 段中持久化的方向 JSON（未存/无文件返回 null；须在 nextTick 后调用） */
 function readStored(): AIDivergenceDirection[] | null {
-  const raw = localStorage.getItem('bb-ai-directions')
+  const raw = localStorage.getItem(PLUGIN_FILE_KEY)
   if (raw == null) return null
-  return JSON.parse(raw) as AIDivergenceDirection[]
+  const file = JSON.parse(raw) as { data?: Record<string, unknown> }
+  const stored = file.data?.[DIRECTIONS_KEY]
+  return Array.isArray(stored) ? (stored as AIDivergenceDirection[]) : null
 }
 
 describe('useAIDirectionsStore', () => {
-  const STORAGE_KEY = 'bb-ai-directions'
-
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.stubGlobal('localStorage', createLocalStorageMock())
@@ -44,7 +55,7 @@ describe('useAIDirectionsStore', () => {
     vi.unstubAllGlobals()
   })
 
-  it('空 localStorage 时初始化出默认方向（数量 ≥ 4，含「为什么？」；任意/聚焦固定 id）', () => {
+  it('空配置时初始化出默认方向（数量 ≥ 4，含「为什么？」；任意/聚焦固定 id）', () => {
     const store = useAIDirectionsStore()
     expect(store.directionList.length).toBeGreaterThanOrEqual(DEFAULT_AI_DIRECTIONS.length)
     expect(store.directionList.length).toBeGreaterThanOrEqual(4)
@@ -137,35 +148,30 @@ describe('useAIDirectionsStore', () => {
     expect(store.directionList.map((d) => d.id)).toEqual(['b', 'c', 'a'])
   })
 
-  it('坏 JSON 存储能自愈回退默认', () => {
-    localStorage.setItem(STORAGE_KEY, 'not-valid-json{{{')
+  it('坏插件配置文件存储能自愈回退默认', async () => {
+    localStorage.setItem(PLUGIN_FILE_KEY, 'not-valid-json{{{')
     const store = useAIDirectionsStore()
     expect(store.directionList.length).toBeGreaterThanOrEqual(DEFAULT_AI_DIRECTIONS.length)
-    // 坏文件被删除并回退为合法默认数据
+    // 坏文件被删除并回退为合法默认数据（pluginConfig 落盘为异步 flush，等微任务后断言）
+    await nextTick()
     const stored = readStored()
     expect(stored).not.toBeNull()
     expect(stored!.length).toBeGreaterThanOrEqual(DEFAULT_AI_DIRECTIONS.length)
     expect(store.directionList.some((d) => d.title === '为什么？')).toBe(true)
   })
 
-  it('结构不符（缺字段 / 空值 / 重复 id）自愈回退默认', () => {
+  it('结构不符（缺字段 / 重复 id）自愈回退默认', () => {
+    const pluginConfig = usePluginConfigStore()
     // 缺字段
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([{ id: 'x', title: '只有题' }]))
+    pluginConfig.setData(AI_PLUGIN_ID, DIRECTIONS_KEY, [{ id: 'x', title: '只有题' }])
     let store = useAIDirectionsStore()
     expect(store.directionList.length).toBeGreaterThanOrEqual(4)
 
-    // 空 title
-    store = useAIDirectionsStore()
-    expect(store.directionList.length).toBeGreaterThanOrEqual(4)
-
-    // 重复 id
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify([
-        { id: 'dup', title: 'T1', prompt: 'P1' },
-        { id: 'dup', title: 'T2', prompt: 'P2' },
-      ]),
-    )
+    // 重复 id（重开 store 前先重置持久化数据）
+    pluginConfig.setData(AI_PLUGIN_ID, DIRECTIONS_KEY, [
+      { id: 'dup', title: 'T1', prompt: 'P1' },
+      { id: 'dup', title: 'T2', prompt: 'P2' },
+    ])
     store = useAIDirectionsStore()
     expect(store.directionList.length).toBeGreaterThanOrEqual(4)
   })
@@ -199,7 +205,7 @@ describe('useAIDirectionsStore', () => {
     expect(store.getDefaultDirection()).toEqual(AI_DIRECTION_ANY)
   })
 
-  it('resetToDefaults：删除两存储键，方向重建为默认集、默认方向重置为任意发散', () => {
+  it('resetToDefaults：方向重建为默认集、默认方向重置为任意发散，并写回插件配置文件', async () => {
     const store = useAIDirectionsStore()
     store.directions = [store.addDirection('自定义', '提示', ' ')]
     store.setDefaultDirection(store.directionList[0].id)
@@ -217,8 +223,65 @@ describe('useAIDirectionsStore', () => {
     // 默认方向重置为任意发散
     expect(store.defaultDirectionId).toBe('direction-any')
     expect(store.getDefaultDirection()).toEqual(AI_DIRECTION_ANY)
-    // 同步落盘
-    expect(localStorage.getItem('bb-ai-directions')).not.toBeNull()
-    expect(localStorage.getItem('bb-ai-default-direction')).toBe('direction-any')
+    // 同步写回插件配置文件（落盘为异步 flush，等微任务后断言）
+    await nextTick()
+    expect(readStored()).not.toBeNull()
+    const file = JSON.parse(localStorage.getItem(PLUGIN_FILE_KEY)!) as {
+      data: Record<string, unknown>
+    }
+    expect(file.data[DEFAULT_DIRECTION_KEY]).toBe('direction-any')
+  })
+
+  it('一次性迁移：旧 localStorage 键（bb-ai-*）→ 插件 config，随后删除旧键', () => {
+    const legacy: AIDivergenceDirection[] = [
+      { id: 'legacy-1', title: '旧方向', prompt: '旧提示词' },
+    ]
+    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(legacy))
+    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'legacy-1')
+
+    const store = useAIDirectionsStore()
+
+    // 方向与默认方向来自旧键
+    expect(store.directionList).toEqual(legacy)
+    expect(store.defaultDirectionId).toBe('legacy-1')
+    // 插件 config 已写入（config.set 同步可见）
+    const pluginConfig = usePluginConfigStore()
+    expect(pluginConfig.getData(AI_PLUGIN_ID, DIRECTIONS_KEY)).toEqual(legacy)
+    expect(pluginConfig.getData(AI_PLUGIN_ID, DEFAULT_DIRECTION_KEY)).toBe('legacy-1')
+    // 旧键已删除
+    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
+  })
+
+  it('一次性迁移：坏 JSON 旧键直接丢弃走默认初始化，旧键仍被清理', () => {
+    localStorage.setItem(LEGACY_STORAGE_KEY, 'not-valid-json{{{')
+    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'direction-any')
+
+    const store = useAIDirectionsStore()
+
+    // 坏旧数据不进 config，走默认初始化
+    expect(store.directionList.some((d) => d.title === '为什么？')).toBe(true)
+    expect(store.defaultDirectionId).toBe('direction-any')
+    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
+  })
+
+  it('一次性迁移：插件 config 已有数据时保留 config 数据，仅清理旧键', () => {
+    const pluginConfig = usePluginConfigStore()
+    const configured: AIDivergenceDirection[] = [{ id: 'cfg-1', title: '配置方向', prompt: '配置提示词' }]
+    pluginConfig.setData(AI_PLUGIN_ID, DIRECTIONS_KEY, configured)
+    pluginConfig.setData(AI_PLUGIN_ID, DEFAULT_DIRECTION_KEY, 'cfg-1')
+
+    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify([{ id: 'legacy', title: '旧', prompt: '旧' }]))
+    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'legacy')
+
+    const store = useAIDirectionsStore()
+
+    // 尊重插件已有数据，不覆盖
+    expect(store.directionList).toEqual(configured)
+    expect(store.defaultDirectionId).toBe('cfg-1')
+    // 旧键仍被清理
+    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
   })
 })

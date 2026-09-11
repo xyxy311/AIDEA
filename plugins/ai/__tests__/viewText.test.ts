@@ -6,7 +6,7 @@ import {
   getViewTextAlgorithm,
   VIEW_TEXT_ALGORITHMS,
   type ViewTextNode,
-} from '../../utils/viewText'
+} from '../utils/viewText'
 
 /** 便捷构造视图节点 */
 function n(id: string, x: number, y: number, text: string, width = 100, height = 40): ViewTextNode {

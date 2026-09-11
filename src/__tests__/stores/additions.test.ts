@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useAdditionsStore } from '@/stores/additions'
 import { adapter } from '@/plugin/adapter'
-import { serializeProject, parseProjectFile, defaultProjectAIConfig } from '@/utils/projectFile'
+import { serializeProject, parseProjectFile } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
 import type { ProjectViewState } from '@/utils/projectFile'
@@ -155,7 +155,7 @@ describe('projectFile additions 往返', () => {
       noprefix: '应被过滤',
     }
 
-    const json = serializeProject(nodes, '项目', viewState, [], defaultProjectAIConfig(), additions)
+    const json = serializeProject(nodes, '项目', viewState, [], additions)
     const parsed = parseProjectFile(json)
 
     expect(parsed.additions).toEqual({ 'hello:counter': { count: 3, note: '来自示例插件' } })

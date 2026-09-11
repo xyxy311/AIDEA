@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { createOpenAIProvider, AIError } from '@/provider/openai'
+import { createOpenAIProvider, AIError } from '../provider/openai'
 
 /** 构造一个 OpenAI 兼容的成功响应 */
 function okResponse(content: string): Response {

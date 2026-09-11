@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * AIDirectionsSection — 设置面板「发散方向」分区
+ * AIDirectionsSection — 设置面板「发散方向」分区（插件版设置栏目）
  *
  * 默认方向下拉 + 方向列表 CRUD（新增 / 编辑 / 删除 / 拖拽排序 / 恢复默认），
- * 以及「新增 / 编辑发散方向」弹窗。所有分歧方向管理逻辑原样保留。
+ * 以及「新增 / 编辑发散方向」弹窗。所有分歧方向管理逻辑原样保留
+ * （持久化已随 aiDirections store 换到插件 config）。
  */
 import {
   NText,
@@ -25,7 +26,7 @@ import { ref, computed } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { CreateOutline, TrashOutline } from '@vicons/ionicons5'
 import DraggableSortList from '@/components/common/DraggableSortList.vue'
-import { useAIDirectionsStore } from '@/stores/aiDirections'
+import { useAIDirectionsStore } from '../stores/aiDirections'
 import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 

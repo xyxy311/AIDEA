@@ -6,26 +6,6 @@ import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import type { AIDivergenceDirection } from '@/types/ai'
-
-// 用 vi.hoisted 在模块顶层声明可复用的 mock，供 vi.mock 与测试内部共享
-const mocks = vi.hoisted(() => {
-  const directions: AIDivergenceDirection[] = []
-  return {
-    directions,
-    generateDirectional: vi.fn(),
-  }
-})
-
-vi.mock('@/composables/useAIWordPanel', () => ({
-  useAIWordPanel: () => ({ generateDirectional: mocks.generateDirectional }),
-}))
-
-vi.mock('@/stores/aiDirections', () => ({
-  useAIDirectionsStore: () => ({
-    directionList: mocks.directions,
-  }),
-}))
 
 /** 构造右键菜单事件（提供 preventDefault 与 clientX/clientY） */
 function mockContextMenuEvent(): KonvaEventObject<MouseEvent> {
@@ -44,7 +24,6 @@ function clearPluginRegistry(): void {
 describe('useCanvasEvents 插件右键菜单项（uiRegistry.contextMenuItems）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    mocks.generateDirectional.mockReset()
     clearPluginRegistry()
   })
 
@@ -71,7 +50,7 @@ describe('useCanvasEvents 插件右键菜单项（uiRegistry.contextMenuItems）
     const pluginItem = items.find((it) => it.key === 'demo:hello-item')
     expect(pluginItem).toBeDefined()
     expect(pluginItem!.label).toBe('Hello 演示')
-    // 插件项追加在内置项（含「发散」父项）之后
+    // 插件项追加在内置项（复制/剪切/粘贴/子视图等）之后
     expect(items[items.length - 1].key).toBe('demo:hello-item')
 
     pluginItem!.action!()
@@ -194,5 +173,88 @@ describe('useCanvasEvents 插件右键菜单项（uiRegistry.contextMenuItems）
     expect(item!.danger).toBe(true)
     // reactive Map 深响应式会代理组件对象，断言存在性而非同一引用（与 ui-registry 测试同约定）
     expect(item!.icon).toBeTruthy()
+  })
+
+  it('带 children 的 selection 项：父项作分组入口（无 action、不执行 run），子项映射为叶子项且 action 可调用', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0, '甲')
+    view.selectNode(id)
+
+    const run = vi.fn()
+    const childAction = vi.fn()
+    const otherAction = vi.fn()
+    const childrenFactory = vi.fn(() => [
+      { key: 'child-a', label: '子项甲', action: childAction },
+      { key: 'child-b', label: '子项乙', danger: true, action: otherAction },
+    ])
+    useUiRegistryStore().registerPluginContextMenuItem('demo', {
+      id: 'grouped',
+      scope: 'selection',
+      label: '分组父项',
+      run,
+      children: childrenFactory,
+    })
+
+    const { handleStageContextMenu, contextMenu } = useCanvasEvents('main')
+    handleStageContextMenu(mockContextMenuEvent())
+
+    const parent = contextMenu.items.value.find((it) => it.key === 'demo:grouped')
+    expect(parent).toBeDefined()
+    expect(parent!.label).toBe('分组父项')
+    // 父项仅作分组入口：children 存在且无 action（ContextMenu 点击父项不 select/close）
+    expect(parent!.children).toBeDefined()
+    expect(parent!.children!.length).toBe(2)
+    expect(parent!.action).toBeUndefined()
+    // 工厂收到与 run 相同的选中上下文（展开拷贝）
+    expect(childrenFactory).toHaveBeenCalledWith({ selectedNodeIds: [id] })
+
+    const [c1, c2] = parent!.children!
+    expect(c1.key).toBe('child-a')
+    expect(c1.label).toBe('子项甲')
+    expect(c1.danger).toBeUndefined()
+    expect(c2.key).toBe('child-b')
+    expect(c2.danger).toBe(true)
+    // 子项 action 可调用（ContextMenu 叶子项 select 时执行）
+    c1.action!()
+    expect(childAction).toHaveBeenCalledTimes(1)
+    c2.action!()
+    expect(otherAction).toHaveBeenCalledTimes(1)
+    // children 与 run 互斥：父项不执行 run
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('canvas 作用域同样支持 children 子菜单（无选中分支，字段同名透传）', () => {
+    const icon = { render: () => null } as unknown as import('vue').Component
+    const childAction = vi.fn()
+    useUiRegistryStore().registerPluginContextMenuItem('demo', {
+      id: 'canvas-group',
+      scope: 'canvas',
+      label: '画布分组',
+      run: vi.fn(),
+      children: () => [
+        { key: 'c1', label: '空白子项', icon, action: childAction },
+        { key: 'c2', label: '危险子项', danger: true, action: vi.fn() },
+      ],
+    })
+
+    const { handleStageContextMenu, contextMenu } = useCanvasEvents('main')
+    handleStageContextMenu(mockContextMenuEvent())
+
+    const parent = contextMenu.items.value.find((it) => it.key === 'demo:canvas-group')
+    expect(parent).toBeDefined()
+    expect(parent!.label).toBe('画布分组')
+    expect(parent!.children!.length).toBe(2)
+    // 子项字段同名透传（key/label/icon/danger/action）
+    const [c1, c2] = parent!.children!
+    expect(c1.key).toBe('c1')
+    expect(c1.label).toBe('空白子项')
+    expect(c1.icon).toBeTruthy()
+    expect(c1.danger).toBeUndefined()
+    expect(c2.key).toBe('c2')
+    expect(c2.danger).toBe(true)
+    c1.action!()
+    expect(childAction).toHaveBeenCalledTimes(1)
   })
 })

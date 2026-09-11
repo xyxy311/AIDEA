@@ -1,9 +1,13 @@
 /**
- * AI 常量 - Ollama 本地大模型调用相关配置与提示词
+ * AI 常量 - 本地大模型调用相关配置与提示词（迁自 src/constants/ai.ts）
  *
  * baseURL 采用 OpenAI 兼容端点（默认 Ollama: http://localhost:11434/v1）。
+ * 另导出插件命名空间 id（manifest.id 与 adapter.for 的路由键）。
  */
-import type { AIDivergenceDirection } from '@/types/ai'
+import type { AIDivergenceDirection } from './types'
+
+/** 插件命名空间 id（manifest.id；additions/config 自动加 `ai:` 前缀） */
+export const AI_PLUGIN_ID = 'ai'
 
 /** AI 调用默认配置（不随主题，属数据/配置范畴） */
 export const AI_DEFAULT_CONFIG = {
@@ -87,5 +91,5 @@ export const AI_SENTENCE_PROMPT = [
   '用户会提供提示和当前视图中的离散的节点文本，这些文本的排列顺序和逻辑顺序可能不同。',
   '请根据提示，把这些内容排列成通顺的逻辑，转化为一段通顺连贯的自然语言描述，不要解释和推测任何内容。',
   '要求：',
-  '不要输出 Markdown 代码块，不要使用编号列表或堆砌式罗列，保持段落化、自然流畅。',
+  '不要输出 Markdown 语法，不要使用编号列表或堆砌式罗列，保持段落化、自然流畅。',
 ].join('\n')

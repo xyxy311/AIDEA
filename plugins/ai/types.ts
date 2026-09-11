@@ -1,8 +1,9 @@
 /**
  * AI 提示词 / 模式配置（项目级数据，随项目文件序列化）。
  *
- * 分为全局默认配置（defaultConfig，project store 持有）与
- * 按节点覆盖配置（nodeAIConfigs，project store 持有）。
+ * 插件化后持有者由原主程序 project store 的 AI 字段改为插件命名空间 additions
+ * （完整键 `ai:projectConfig`，见 stores/aiProject.ts）：
+ * 分为全局默认配置（default）与按节点覆盖配置（byNode）。
  */
 export interface AIConfig {
   /** 局部提示词（跟随观察节点） */

@@ -1,5 +1,5 @@
 /**
- * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项 / 模态面板）
+ * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项 / 模态面板 / 浮动层）
  *
  * 全应用唯一的「UI 元素登记表」：内置目录（PANEL_CATALOG / TOP_BAR_CATALOG /
  * SETTINGS_CATALOG）在 store 初始化时 seed 进表，插件经注册面（ctx.register →
@@ -7,7 +7,8 @@
  * 供布局派生、恢复默认、错误隔离按来源过滤。
  * 快捷键动作与右键菜单项两表只收插件条目（内置动作在 CUSTOM_SHORTCUTS、内置菜单项
  * 在 useCanvasEvents 构建处，均不走登记表）。模态面板表同样只收插件条目，且不进
- * dock/活动栏布局派生体系（只登记，打开/关闭运行时另行实现）。
+ * dock/活动栏布局派生体系（只登记，打开/关闭运行时另行实现）。浮动层表同只收插件
+ * 条目（只登记不派生布局；宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）。
  *
  * 分层：
  * - constants 品类表保持纯数据（不持有运行时状态）；
@@ -30,6 +31,7 @@ import type {
   PluginSettingsCategoryRegistration,
   PluginShortcutActionRegistration,
   PluginContextMenuItemRegistration,
+  PluginFloatingLayerRegistration,
 } from '@/plugin/ui'
 
 // ── 登记条目类型（统一形态，内置与插件共用）──
@@ -120,6 +122,16 @@ export interface UiModalEntry {
   def: ModalRegistration
 }
 
+/** 插件浮动层登记条目（仅插件条目；浮动层不进 dock/活动栏布局体系，只登记，宿主 PluginFloatingHost 逐条常驻渲染） */
+export interface UiFloatingLayerEntry {
+  /** 完整键：`${pluginId}:${id}` */
+  key: string
+  origin: UiOrigin
+  pluginId?: string
+  /** 插件浮动层组件（自管显隐，如 AI 生成词浮动面板） */
+  component: Component
+}
+
 // ── 内部校验 ──
 
 /** id 合法性：非空 + 不含 ':' + 不含空白（pluginId 与短 id 同规则） */
@@ -137,10 +149,11 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
   const panels = reactive(new Map<string, UiPanelEntry>())
   const topBarButtons = reactive(new Map<string, UiTopBarEntry>())
   const settingsCategories = reactive(new Map<string, UiSettingsEntry>())
-  // 三新表只收插件条目（内置动作 / 内置菜单项不走登记表，模态无内置目录，见各表类型注释）
+  // 四张运行时表只收插件条目（内置动作 / 内置菜单项不走登记表，模态与浮动层无内置目录，见各表类型注释）
   const shortcutActions = reactive(new Map<string, UiShortcutActionEntry>())
   const contextMenuItems = reactive(new Map<string, UiContextMenuItemEntry>())
   const modals = reactive(new Map<string, UiModalEntry>())
+  const floatingLayers = reactive(new Map<string, UiFloatingLayerEntry>())
 
   /** seed 内置目录（store 创建时执行一次；reset 后重跑） */
   function seedBuiltins(): void {
@@ -289,6 +302,21 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     return { ok: true }
   }
 
+  /** 注册插件浮动层（component 自管显隐）；非法 id / key 冲突（重复注册）→ warn + false */
+  function registerPluginFloatingLayer(pluginId: string, reg: PluginFloatingLayerRegistration): boolean {
+    if (!isValidId(pluginId) || !isValidId(reg.id)) {
+      console.warn(`[uiRegistry] 插件「${pluginId}」浮动层「${reg.id}」注册失败：id 非法`)
+      return false
+    }
+    const key = pluginKey(pluginId, reg.id)
+    if (floatingLayers.has(key)) {
+      console.warn(`[uiRegistry] 浮动层注册冲突：${key} 已存在，拒绝覆盖`)
+      return false
+    }
+    floatingLayers.set(key, { key, origin: 'plugin', pluginId, component: reg.component })
+    return true
+  }
+
   /** 按插件批量移除全部登记（setup 抛错回滚 / 清理）；不做任何布局操作（布局派生自动收缩） */
   function removePlugin(pluginId: string): void {
     for (const [key, e] of panels) if (e.pluginId === pluginId) panels.delete(key)
@@ -297,6 +325,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     for (const [key, e] of shortcutActions) if (e.pluginId === pluginId) shortcutActions.delete(key)
     for (const [key, e] of contextMenuItems) if (e.pluginId === pluginId) contextMenuItems.delete(key)
     for (const [key, e] of modals) if (e.pluginId === pluginId) modals.delete(key)
+    for (const [key, e] of floatingLayers) if (e.pluginId === pluginId) floatingLayers.delete(key)
   }
 
   /** 清空并重置为内置目录（测试用） */
@@ -307,6 +336,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     shortcutActions.clear()
     contextMenuItems.clear()
     modals.clear()
+    floatingLayers.clear()
     seedBuiltins()
   }
 
@@ -317,12 +347,14 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     shortcutActions,
     contextMenuItems,
     modals,
+    floatingLayers,
     registerPluginPanel,
     registerPluginTopBarButton,
     registerPluginSettingsCategory,
     registerPluginShortcutAction,
     registerPluginContextMenuItem,
     registerPluginModal,
+    registerPluginFloatingLayer,
     removePlugin,
     reset,
   }

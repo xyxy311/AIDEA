@@ -32,8 +32,6 @@ export const CUSTOM_SHORTCUTS: ShortcutDef[] = [
   { id: 'enterParent', labelKey: 'shortcuts.actionEnterParent', scope: 'canvas', default: 'q' },
   { id: 'toggleInline', labelKey: 'shortcuts.actionToggleInline', scope: 'canvas', default: 'tab' },
   { id: 'fitInline', labelKey: 'shortcuts.actionFitInline', scope: 'canvas', default: 'r' },
-  { id: 'aiGenerate', labelKey: 'shortcuts.actionAIGenerate', scope: 'canvas', default: 'i' },
-  { id: 'aiClear', labelKey: 'shortcuts.actionAIClear', scope: 'canvas', default: 'c' },
   { id: 'deleteSelected', labelKey: 'shortcuts.actionDelete', scope: 'canvas', default: 'd' },
 ]
 

@@ -1,52 +1,77 @@
-# AI 功能
+# AI 功能（内置插件 `plugins/ai/`）
 
-调用本地 Ollama 大模型，把「当前视图节点」转成上下文文本发给模型发散灵感，结果经浮动面板展示、可点击添加为节点。尚未实现渲染到画布 / 项目顾问建议。
+> AI 功能已从主程序完全迁移为**内置插件** `plugins/ai/`（插件 id `ai`），主程序不再包含任何
+> AI 代码（原 `src/provider/`、`src/stores/ai*.ts`、`src/constants/ai.ts`、`src/types/ai.ts`、
+> `src/composables/useAI*.ts`、`src/utils/viewText.ts` 及 AI 组件均已删除）。本文描述插件形态。
+
+## 功能面
+
+全部经插件 SDK 注册（`plugins/ai/index.ts` 的 `setup(ctx)`）：
+
+| 能力 | 注册面 | 说明 |
+| --- | --- | --- |
+| AI 面板 | `ctx.register.registerPanel`（左侧活动栏，SparklesOutline） | 全局提示词 / 视图级局部提示词与模式 / 上下文预览 / 连词成句 / 直接生成 / 重新生成 |
+| 发散方向管理 | `ctx.register.registerSettingsCategory`（设置弹窗「发散方向」栏目） | 方向 CRUD / 拖拽排序 / 默认方向 / 恢复默认 |
+| AI 连接 | `ctx.register.registerSettingsCategory`（设置弹窗「AI 连接」栏目） | 连接参数编辑（baseURL / model / apiKey / 超时 / 温度，即时写回插件 config，可恢复默认）+ 快捷键改键行（`ShortcutActionRow`） |
+| 生成词浮动面板 | `ctx.register.registerFloatingLayer`（宿主 `PluginFloatingHost` 常驻渲染，显隐由组件自管） | 展示生成结果，点击词经 `useAIWordAdd` 添加为节点 |
+| 右键「发散」子菜单 | `ctx.register.registerContextMenuItem`（selection scope，`children` 工厂按方向展开子项） | 主程序右键菜单的 children 子菜单能力即为此引入 |
+| 快捷键 | `ctx.register.registerShortcutAction` | `ai:generate`（默认 I，直接生成）/ `ai:clear`（默认 C，清除生成词） |
+
+紧凑模式（strip 浮动条）与顶部「切换显示模式」按钮（`AIDisplayModeButton`）已随迁移**移除**，
+生成词仅浮动面板一种展示形态。
 
 ## 工作流
 
 ```
-视图节点 → viewText 空间布局算法生成上下文
+选中节点文本（或当前视图节点）→ viewText 空间布局算法生成上下文
         → runGenerateIdea({...}) 调模型发散
-        → 按行拆词 → 浮动面板(FloatingAIWordPanel/Strip) 展示
-        → 点击词调 useAIWordAdd 添加为节点
+        → 按行拆词 → 浮动面板展示 → 点击词添加为节点
 ```
 
-- 「直接生成 / 重新生成」（AIPanel）与快捷键 **I** 统一走 `useAIWordPanel.directGenerate()`，用**默认发散方向**；`C` 清除生成词。
-- 快速 / 精确二段式：精确模式先「连词成句」（`runSentenceMaking` + `AI_SENTENCE_PROMPT`）再发散；`mode` 存于 `AIConfig`。
+- 「直接生成 / 重新生成」（AI 面板）与快捷键 **I** 统一走 `useAIWordPanel.directGenerate()`，
+  用**默认发散方向**；**C** 清除生成词。
+- 快速 / 精确二段式：精确模式先「连词成句」（`runSentenceMaking` + `AI_SENTENCE_PROMPT`）再发散。
 
-## 发散方向
+## 持久化（两类严格区分）
 
-`AIDivergenceDirection = { id, title, prompt?, separator? }`，管理在**设置弹窗（编辑→设置）**的「发散方向」分区：可增删改、拖拽排序、恢复默认、设置默认方向。默认方向即生成按钮与 I 键所用。
+### 1. 连接配置与发散方向 → 插件 config（应用级，不入项目）
 
-- `prompt` 为发散角度指令，可含 `${from}` 占位（被替换为发散起点文本）；含 `${from}` 才注入起点，否则起点被忽略（「任意发散」即此语义）。
-- `separator` 为多节点起点合并分隔符（默认空格）。
-- 特殊方向「任意 / 聚焦」用固定 id（`direction-any` / `direction-focus`）；其余预设与用户新增用 `nanoid`。`getDefaultDirection()` 在默认方向失效时回退任意发散。
-- 数据持久化于 `stores/aiDirections.ts`（localStorage `bb-ai-directions` / `bb-ai-default-direction`），不随项目文件序列化。右键菜单「发散」从 `directionList` 全量列出可用方向，选中起点后围绕其发散。
+经 `adapter.for('ai').config` 读写 `aidea-plugin-config.ai` 文件（`data` 段）：
+- 连接参数（`stores/aiConfig.ts`）：`baseURL` / `model` / `timeoutMs` / `temperature`；
+- 发散方向（`stores/aiDirections.ts`）：方向列表、默认方向、恢复默认。
+随插件启停保留，不进项目文件、不入 undo。
 
-## 提示词分层
+### 2. 项目级提示词 / 模式 → additions `ai:projectConfig`（随项目文件保存、入 undo）
 
-- system 按 `runGenerateIdea` 的 `isDescription` 二选一：`AI_GENERATE_IDEA_NODE`（结构化文本）/ `AI_GENERATE_IDEA_DESCRIPTION`（连贯描述）。
-- 全局提示词 `globalPrompt` + 节点级 `localPrompt` 经 `composeAddition` 拼为 user 的「# 补充」段；上下文为「# 上下文」、方向指令为「# 指令」。
-- user 消息按「# 上下文 / # 指令 / # 补充（可有可无）」三段组织。
+经 `adapter.for('ai').additions` 读写完整键 **`ai:projectConfig`**（`stores/aiProject.ts`，
+`AIProjectData = { globalPrompt: string; default: AIConfig; byNode: Record<nodeId, AIConfig> }`）：
+- 一次 set = 单条历史（可撤销），随项目文件 `additions` 字段保存 / 打开恢复；
+- 原主程序 `projectStore` 的 `globalPrompt` / `defaultAIConfig` / `nodeAIConfigs` 已删除。
 
-## 连接与配置
+## 旧数据迁移（一次性，均幂等）
 
-- **连接参数**：`stores/ai.ts`（localStorage `aidea-ai-config-*`）：`baseURL`（默认 Ollama `http://localhost:11434/v1`）、`model`、`timeoutMs`、`temperature`。`provider/openai.ts` 提供 OpenAI 兼容实现（含网络重试 1 次、错误分级 `AIError`）。
-- **项目级提示词 / 模式**：随项目文件序列化（`projectStore` 的 `globalPrompt` + `AIConfig{ localPrompt, mode, viewTextAlgoId }`，可按节点覆盖）。
+1. **localStorage 旧键**：旧版发散方向（`bb-ai-directions` / `bb-ai-default-direction`）与连接配置
+   （`aidea-ai-config-*`）由插件内各自的启动迁移逻辑搬入 `aidea-plugin-config.ai`；
+2. **旧项目文件 `aiConfig` 字段**：主程序加载项目时（`useProjectFile.loadProjectIntoApp` 的迁移桥）
+   若文件含 `aiConfig` 字段，把 `{ globalPrompt, defaultConfig, nodeConfigs }` 转换为
+   `{ globalPrompt, default, byNode }` 一次性写入 additions `ai:projectConfig`
+   （直调 additions store 底层写，非 undo，仅当字段存在时执行）；
+3. **新保存的项目文件不再写出 `aiConfig` 字段**（`serializeProject` 已去参），AI 项目级数据
+   只经 `additions['ai:projectConfig']` 序列化；
+4. **快捷键覆盖**：旧内置 `aiGenerate` / `aiClear` 的用户改键（`aidea-shortcuts`）由
+   shortcuts store 启动迁移一次性搬入 `aidea-plugin-config.ai` 的 `shortcuts` 段
+   （`generate` / `clear`）并删除旧条目。
 
-## 核心文件
+## 插件内部结构
 
-| 文件 | 职责 |
-| --- | --- |
-| `composables/useAIGenerate.ts` | 纯调用层：`runSentenceMaking(text)`、统一入口 `runGenerateIdea({ text, isDescription, from?, direction, addition? })` |
-| `composables/useAIWordPanel.ts` | 模块级单例：AI 生成状态 + 无参编排（`directGenerate` / `regenerate` / `sentenceMaking` / `generatePreview`）+ 面板展示状态 |
-| `stores/aiDirections.ts` | 发散方向 CRUD / 排序 / 默认方向 / 恢复默认（localStorage 持久化） |
-| `constants/ai.ts` | system 提示词、`DEFAULT_AI_DIRECTIONS`、`AI_DIRECTION_ANY/FOCUS`、`AI_SENTENCE_PROMPT` |
-| `utils/viewText.ts` | 上下文唯一来源：空间布局算法注册表 + `buildViewText` |
-| `panels/AIPanel.vue` / `panels/SettingsModal.vue` | AI 面板 / 设置弹窗（含发散方向管理分区） |
-| `floating/FloatingAIWordPanel(vue/Strip).vue`、`useAIWordAdd.ts` | 生成词展示与添加为节点 |
-
-## 边界
-
-- 生成结果经浮动面板展示并添加为节点，但**不渲染到画布**；采纳流程未实现。
-- 项目顾问（评价 / 建议）未实现；`stream` 已预留接口未实现。
+```
+plugins/ai/
+  index.ts          # 插件入口：manifest + setup 注册（面板/设置栏目/快捷键/右键菜单/浮动层）
+  constants.ts      # system 提示词、默认方向、AI_SENTENCE_PROMPT 等（迁自 src/constants/ai.ts）
+  types.ts          # AIConfig / AIDivergenceDirection 等
+  provider/         # openai.ts（OpenAI 兼容实现）、aiProvider.ts（接口）
+  composables/      # useAIWordPanel（共享单例编排）、useAIGenerate（纯调用层）、useAIWordAdd
+  stores/           # aiDirections（发散方向）、aiConfig（连接配置）、aiProject（additions 项目级数据）
+  utils/viewText.ts # 空间布局算法注册表 + buildViewText（迁自 src/utils/viewText.ts）
+  components/       # AIPanel / FloatingAIWordPanel / AIDirectionsSection
+```

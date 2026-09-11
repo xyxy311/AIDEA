@@ -1,4 +1,4 @@
-import type { WhiteboardNode, Tag, AIConfig } from '@/types'
+import type { WhiteboardNode, Tag } from '@/types'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
 import { ROOT_NODE_ID } from '@/stores/node'
@@ -17,8 +17,12 @@ import { deepClone } from '@/utils/command'
  *     "viewedNodeId", "stageX", "stageY", "stageScale",
  *     "expandedIds", "inlineViews", "selectedNodeIds", "selectedConnectionIds"
  *   },
+ *   "aiConfig"?: {                  // ⚠ legacy：旧项目文件残留（仅解析迁移用，新保存不再写出）
+ *     "globalPrompt", "defaultConfig", "nodeConfigs"
+ *   },
  *   "additions": {                  // 插件项目化数据（键 → 插件原始数据，保存时全量写出）
- *     "stats:counter": { "count": 3 }
+ *     "stats:counter": { "count": 3 },
+ *     "ai:projectConfig": { ... }   // AI 项目级配置（ai 插件命名空间；含旧 aiConfig 迁移产物）
  *   }
  * }
  *
@@ -58,12 +62,23 @@ export interface ProjectFileData {
   nodes: WhiteboardNode[]
   tags: Tag[]
   viewState: ProjectViewState
-  aiConfig: ProjectAIConfigData
+  /** ⚠ legacy 迁移源：旧项目文件残留的 AI 配置（解析读取用；新保存不再写出该字段） */
+  aiConfig?: ProjectAIConfigData
   /** 插件项目化扩展数据（键须匹配 `pluginId:` 前缀；无键时可为空对象） */
   additions?: Record<string, unknown>
 }
 
-/** 项目文件中可持久化的 AI 配置数据 */
+/**
+ * AI 配置（legacy 迁移源；结构对齐 ai 插件的 AIConfig：
+ * localPrompt / mode / viewTextAlgoId，随插件 AIConfig 增长保持独立冻结副本）
+ */
+export interface AIConfig {
+  localPrompt: string
+  mode: 'fast' | 'precise'
+  viewTextAlgoId: string
+}
+
+/** 项目文件中可持久化的 AI 配置数据（legacy 迁移源：仅旧项目文件解析用） */
 export interface ProjectAIConfigData {
   globalPrompt: string
   defaultConfig: AIConfig
@@ -77,6 +92,11 @@ export interface ParsedProject {
   tags: Tag[]
   viewState: ProjectViewState
   aiConfig: ProjectAIConfigData
+  /**
+   * 原始文件是否携带 aiConfig 字段（legacy 迁移源标记）。
+   * 新保存的文件不再写出 aiConfig；仅旧项目文件为 true，加载方据此执行一次性迁移。
+   */
+  hasAIConfig: boolean
   /** 插件项目化扩展数据（解析缺省 {}；仅保留匹配 `pluginId:` 前缀的键） */
   additions: Record<string, unknown>
 }
@@ -94,13 +114,12 @@ export function defaultProjectAIConfig(): ProjectAIConfigData {
   }
 }
 
-/** 序列化项目为 JSON 字符串 */
+/** 序列化项目为 JSON 字符串（AI 项目级配置归 ai 插件 additions，不再写出 aiConfig 字段） */
 export function serializeProject(
   nodes: WhiteboardNode[],
   projectName: string,
   viewState: ProjectViewState,
   tags: Tag[],
-  aiConfig: ProjectAIConfigData,
   additions: Record<string, unknown>,
 ): string {
   const data: ProjectFileData = {
@@ -109,7 +128,6 @@ export function serializeProject(
     nodes,
     tags,
     viewState,
-    aiConfig,
     additions,
   }
   return JSON.stringify(data)
@@ -289,7 +307,7 @@ export function parseProjectFile(json: string): ParsedProject {
       typeof vs.activeTabId === 'string' && vs.activeTabId ? vs.activeTabId : null,
   }
 
-  // —— 解析并自愈 AI 配置（旧文件缺字段回退默认；nodeConfigs 过滤悬空引用） ——
+  // —— 解析并自愈 AI 配置（legacy 迁移源：旧文件缺字段回退默认；nodeConfigs 过滤悬空引用）——
   const aiConfig = parseAIConfig(raw.aiConfig, nodeById)
 
   // —— 解析插件项目化数据 additions（对象则逐键过滤，值深拷贝；非对象 → {}） ——
@@ -303,5 +321,5 @@ export function parseProjectFile(json: string): ParsedProject {
     }
   }
 
-  return { projectName, nodes, tags, viewState, aiConfig, additions }
+  return { projectName, nodes, tags, viewState, aiConfig, hasAIConfig: raw.aiConfig !== undefined, additions }
 }

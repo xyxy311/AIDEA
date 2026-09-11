@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
- * FloatingAIWordPanel — AI 生成词浮动面板
+ * FloatingAIWordPanel — AI 生成词浮动面板（插件版，经插件浮动层常驻渲染）
  *
  * 本面板只展示共享状态内容 + 添加/关闭，不调用 AI 生成逻辑。
  * 内容（words/error）由 useAIWordPanel 共享单例提供，无加载态；
  * 生成由 AIPanel / 键盘快捷键完成，完成后再经 show(words) 注入。
+ * 显隐由本组件自管（visible），宿主 PluginFloatingHost 常驻应用根级渲染。
  *
  * 渲染到 Teleport 浮动面板中：
  * - 头部为可拖拽把手（pointerdown/move/up + setPointerCapture），面板用 translate 定位
@@ -12,13 +13,14 @@
  * - 底部操作区：「全部添加」「关闭」
  *
  * 添加节点换算：视口中心屏幕坐标 → 世界坐标（world = (screen - offset) / scale），
- * 再经 useCommands().createNode 创建并入历史栈；批量操作用 beginBatch/commitBatch 合并为单条历史。
+ * 经 adapter.api.node.create 创建并入历史栈；批量操作用
+ * adapter.api.project.beginBatch/commitBatch 合并为单条历史。
  * 添加逻辑已抽取到 useAIWordAdd，此处直接复用。
  */
 import { ref, computed } from 'vue'
 import { NScrollbar, NButton } from 'naive-ui'
-import { useAIWordPanel } from '@/composables/useAIWordPanel'
-import { useAIWordAdd } from '@/composables/useAIWordAdd'
+import { useAIWordPanel } from '../composables/useAIWordPanel'
+import { useAIWordAdd } from '../composables/useAIWordAdd'
 import { t } from '@/composables/useT'
 
 const { visible, error, words, close } = useAIWordPanel()

@@ -106,8 +106,6 @@ export const useProjectStore = defineStore('project', () => {
     nodeStore.setNodeText(ROOT_NODE_ID, name)
   }
 
-  // ── AI 提示词 / 模式配置已迁为 ai 插件的 additions 项目级数据（ai:projectConfig）──
-
   // ── 树展开状态（全局导航态）──
 
   /** 展开的节点 ID 集合（根节点默认展开） */

@@ -6,7 +6,7 @@ import { usePluginConfigStore } from '@/stores/pluginConfig'
 import { DEFAULT_AI_DIRECTIONS, AI_DIRECTION_ANY, AI_DIRECTION_FOCUS, AI_PLUGIN_ID } from '../constants'
 import type { AIDivergenceDirection } from '../types'
 
-/** 内存版 localStorage mock（供 pluginConfig / 迁移源键使用） */
+/** 内存版 localStorage mock（供 pluginConfig 使用） */
 function createLocalStorageMock(): Storage {
   let store: Record<string, string> = {}
   return {
@@ -32,9 +32,6 @@ const PLUGIN_FILE_KEY = `aidea-plugin-config.${AI_PLUGIN_ID}`
 /** data 段键：方向列表 / 默认方向 id */
 const DIRECTIONS_KEY = 'directions'
 const DEFAULT_DIRECTION_KEY = 'defaultDirectionId'
-/** 旧版主程序 localStorage 键（迁移源） */
-const LEGACY_STORAGE_KEY = 'bb-ai-directions'
-const LEGACY_DEFAULT_DIRECTION_KEY = 'bb-ai-default-direction'
 
 /** 读取插件配置文件 data 段中持久化的方向 JSON（未存/无文件返回 null；须在 nextTick 后调用） */
 function readStored(): AIDivergenceDirection[] | null {
@@ -230,58 +227,5 @@ describe('useAIDirectionsStore', () => {
       data: Record<string, unknown>
     }
     expect(file.data[DEFAULT_DIRECTION_KEY]).toBe('direction-any')
-  })
-
-  it('一次性迁移：旧 localStorage 键（bb-ai-*）→ 插件 config，随后删除旧键', () => {
-    const legacy: AIDivergenceDirection[] = [
-      { id: 'legacy-1', title: '旧方向', prompt: '旧提示词' },
-    ]
-    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(legacy))
-    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'legacy-1')
-
-    const store = useAIDirectionsStore()
-
-    // 方向与默认方向来自旧键
-    expect(store.directionList).toEqual(legacy)
-    expect(store.defaultDirectionId).toBe('legacy-1')
-    // 插件 config 已写入（config.set 同步可见）
-    const pluginConfig = usePluginConfigStore()
-    expect(pluginConfig.getData(AI_PLUGIN_ID, DIRECTIONS_KEY)).toEqual(legacy)
-    expect(pluginConfig.getData(AI_PLUGIN_ID, DEFAULT_DIRECTION_KEY)).toBe('legacy-1')
-    // 旧键已删除
-    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
-    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
-  })
-
-  it('一次性迁移：坏 JSON 旧键直接丢弃走默认初始化，旧键仍被清理', () => {
-    localStorage.setItem(LEGACY_STORAGE_KEY, 'not-valid-json{{{')
-    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'direction-any')
-
-    const store = useAIDirectionsStore()
-
-    // 坏旧数据不进 config，走默认初始化
-    expect(store.directionList.some((d) => d.title === '为什么？')).toBe(true)
-    expect(store.defaultDirectionId).toBe('direction-any')
-    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
-    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
-  })
-
-  it('一次性迁移：插件 config 已有数据时保留 config 数据，仅清理旧键', () => {
-    const pluginConfig = usePluginConfigStore()
-    const configured: AIDivergenceDirection[] = [{ id: 'cfg-1', title: '配置方向', prompt: '配置提示词' }]
-    pluginConfig.setData(AI_PLUGIN_ID, DIRECTIONS_KEY, configured)
-    pluginConfig.setData(AI_PLUGIN_ID, DEFAULT_DIRECTION_KEY, 'cfg-1')
-
-    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify([{ id: 'legacy', title: '旧', prompt: '旧' }]))
-    localStorage.setItem(LEGACY_DEFAULT_DIRECTION_KEY, 'legacy')
-
-    const store = useAIDirectionsStore()
-
-    // 尊重插件已有数据，不覆盖
-    expect(store.directionList).toEqual(configured)
-    expect(store.defaultDirectionId).toBe('cfg-1')
-    // 旧键仍被清理
-    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
-    expect(localStorage.getItem(LEGACY_DEFAULT_DIRECTION_KEY)).toBeNull()
   })
 })

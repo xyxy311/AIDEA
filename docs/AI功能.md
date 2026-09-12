@@ -52,19 +52,9 @@
 - 一次 set = 单条历史（可撤销），随项目文件 `additions` 字段保存 / 打开恢复；
 - 原主程序 `projectStore` 的 `globalPrompt` / `defaultAIConfig` / `nodeAIConfigs` 已删除。
 
-## 旧数据迁移（一次性，均幂等）
+## 旧版兼容
 
-1. **localStorage 旧键**：旧版发散方向（`bb-ai-directions` / `bb-ai-default-direction`）与连接配置
-   （`aidea-ai-config-*`）由插件内各自的启动迁移逻辑搬入 `aidea-plugin-config.ai`；
-2. **旧项目文件 `aiConfig` 字段**：主程序加载项目时（`useProjectFile.loadProjectIntoApp` 的迁移桥）
-   若文件含 `aiConfig` 字段，把 `{ globalPrompt, defaultConfig, nodeConfigs }` 转换为
-   `{ globalPrompt, default, byNode }` 一次性写入 additions `ai:projectConfig`
-   （直调 additions store 底层写，非 undo，仅当字段存在时执行）；
-3. **新保存的项目文件不再写出 `aiConfig` 字段**（`serializeProject` 已去参），AI 项目级数据
-   只经 `additions['ai:projectConfig']` 序列化；
-4. **快捷键覆盖**：旧内置 `aiGenerate` / `aiClear` 的用户改键（`aidea-shortcuts`）由
-   shortcuts store 启动迁移一次性搬入 `aidea-plugin-config.ai` 的 `shortcuts` 段
-   （`generate` / `clear`）并删除旧条目。
+**不做旧版兼容**——迁移前旧版本留存的数据（旧 localStorage AI 键、旧项目文件 `aiConfig` 字段）不再被读取，相关设置需重新配置。
 
 ## 插件内部结构
 

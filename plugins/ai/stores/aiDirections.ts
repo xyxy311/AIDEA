@@ -13,9 +13,8 @@
  * 它们的 id 必须稳定，其余预设（为什么等）用 nanoid 生成。
  *
  * 首次加载执行 initDefaults() 自愈：结构校验（每项含非空 string 的
- * id/title/prompt，id 兼做唯一健），结构不符 → 重置回默认；空列表用默认集合补初始化。
- * 另做一次性迁移：旧 localStorage 键存在且插件 config 无对应数据 → 搬入插件 config
- * 并删除旧键（坏 JSON 旧数据直接丢弃走默认初始化）。
+ * id/title/prompt，id 兼做唯一键），结构不符 → 重置回默认；空列表用默认集合补初始化。
+ * 不做旧版兼容：旧版主程序 localStorage 键（bb-ai-*）不迁移、不读取。
  */
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
@@ -33,11 +32,6 @@ const DIRECTIONS_KEY = 'directions'
 const DEFAULT_DIRECTION_KEY = 'defaultDirectionId'
 /** 默认发散方向 id（任意发散） */
 const DEFAULT_DIRECTION_ID = 'direction-any'
-
-/** 旧版主程序 localStorage 键：方向列表（迁移源） */
-const LEGACY_STORAGE_KEY = 'bb-ai-directions'
-/** 旧版主程序 localStorage 键：默认方向 id（迁移源） */
-const LEGACY_DEFAULT_DIRECTION_KEY = 'bb-ai-default-direction'
 
 /** 构造默认方向初始集：任意/聚焦用固定 id（保持 id 稳定），其余预设用 nanoid 补 id */
 function buildDefaultDirections(): AIDivergenceDirection[] {
@@ -74,58 +68,9 @@ function loadDefaultDirectionId(): string {
 }
 
 /**
- * 一次性迁移：旧 localStorage 键（bb-ai-*）→ 插件 config（data 段）。
- * - 插件 config 已有对应数据时不覆盖（尊重插件数据）；
- * - 旧方向列表经结构校验（坏 JSON / 结构不符直接丢弃走默认初始化）；
- * - 迁移后无条件删除两个旧键。幂等：旧键删除后再次执行直接跳过。
- */
-function migrateLegacy(): void {
-  const readLegacy = (key: string): string | null => {
-    try {
-      return localStorage.getItem(key)
-    } catch {
-      return null
-    }
-  }
-  const rawDirections = readLegacy(LEGACY_STORAGE_KEY)
-  const rawDefault = readLegacy(LEGACY_DEFAULT_DIRECTION_KEY)
-  if (rawDirections === null && rawDefault === null) return
-
-  if (rawDirections !== null && scope.config.get<unknown>(DIRECTIONS_KEY, undefined) === undefined) {
-    try {
-      const parsed: unknown = JSON.parse(rawDirections)
-      if (isValidDirections(parsed)) scope.config.set(DIRECTIONS_KEY, parsed)
-    } catch {
-      /* 坏 JSON：丢弃，走默认初始化 */
-    }
-  }
-  if (
-    rawDefault !== null &&
-    rawDefault.length > 0 &&
-    scope.config.get<unknown>(DEFAULT_DIRECTION_KEY, undefined) === undefined
-  ) {
-    scope.config.set(DEFAULT_DIRECTION_KEY, rawDefault)
-  }
-
-  try {
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
-  } catch {
-    /* 忽略清理失败 */
-  }
-  try {
-    localStorage.removeItem(LEGACY_DEFAULT_DIRECTION_KEY)
-  } catch {
-    /* 忽略清理失败 */
-  }
-}
-
-/**
- * AI 发散方向 store（pinia id 加 `ai:` 前缀，避免与迁移期主程序旧 store 同 id 冲突）。
+ * AI 发散方向 store（pinia id 加 `ai:` 前缀，避免与主程序或其他插件 store 同 id 冲突）。
  */
 export const useAIDirectionsStore = defineStore('ai:aiDirections', () => {
-  // 一次性迁移（旧键删除后不再进入）
-  migrateLegacy()
-
   // ── State（插件 config 持久化：方向有序列表 + 默认方向 id） ──
 
   const directions = ref<AIDivergenceDirection[]>(loadDirections())

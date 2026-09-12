@@ -17,12 +17,8 @@ import { deepClone } from '@/utils/command'
  *     "viewedNodeId", "stageX", "stageY", "stageScale",
  *     "expandedIds", "inlineViews", "selectedNodeIds", "selectedConnectionIds"
  *   },
- *   "aiConfig"?: {                  // ⚠ legacy：旧项目文件残留（仅解析迁移用，新保存不再写出）
- *     "globalPrompt", "defaultConfig", "nodeConfigs"
- *   },
  *   "additions": {                  // 插件项目化数据（键 → 插件原始数据，保存时全量写出）
- *     "stats:counter": { "count": 3 },
- *     "ai:projectConfig": { ... }   // AI 项目级配置（ai 插件命名空间；含旧 aiConfig 迁移产物）
+ *     "stats:counter": { "count": 3 }
  *   }
  * }
  *
@@ -62,27 +58,8 @@ export interface ProjectFileData {
   nodes: WhiteboardNode[]
   tags: Tag[]
   viewState: ProjectViewState
-  /** ⚠ legacy 迁移源：旧项目文件残留的 AI 配置（解析读取用；新保存不再写出该字段） */
-  aiConfig?: ProjectAIConfigData
   /** 插件项目化扩展数据（键须匹配 `pluginId:` 前缀；无键时可为空对象） */
   additions?: Record<string, unknown>
-}
-
-/**
- * AI 配置（legacy 迁移源；结构对齐 ai 插件的 AIConfig：
- * localPrompt / mode / viewTextAlgoId，随插件 AIConfig 增长保持独立冻结副本）
- */
-export interface AIConfig {
-  localPrompt: string
-  mode: 'fast' | 'precise'
-  viewTextAlgoId: string
-}
-
-/** 项目文件中可持久化的 AI 配置数据（legacy 迁移源：仅旧项目文件解析用） */
-export interface ProjectAIConfigData {
-  globalPrompt: string
-  defaultConfig: AIConfig
-  nodeConfigs: Array<{ nodeId: string; config: AIConfig }>
 }
 
 /** 解析后的项目数据（不含 version） */
@@ -91,30 +68,11 @@ export interface ParsedProject {
   nodes: WhiteboardNode[]
   tags: Tag[]
   viewState: ProjectViewState
-  aiConfig: ProjectAIConfigData
-  /**
-   * 原始文件是否携带 aiConfig 字段（legacy 迁移源标记）。
-   * 新保存的文件不再写出 aiConfig；仅旧项目文件为 true，加载方据此执行一次性迁移。
-   */
-  hasAIConfig: boolean
   /** 插件项目化扩展数据（解析缺省 {}；仅保留匹配 `pluginId:` 前缀的键） */
   additions: Record<string, unknown>
 }
 
-/** 默认的 AI 配置数据（与 project store 默认一致） */
-export function defaultProjectAIConfig(): ProjectAIConfigData {
-  return {
-    globalPrompt: '',
-    defaultConfig: {
-      localPrompt: '',
-      mode: 'fast',
-      viewTextAlgoId: 'collectAll',
-    },
-    nodeConfigs: [],
-  }
-}
-
-/** 序列化项目为 JSON 字符串（AI 项目级配置归 ai 插件 additions，不再写出 aiConfig 字段） */
+/** 序列化项目为 JSON 字符串 */
 export function serializeProject(
   nodes: WhiteboardNode[],
   projectName: string,
@@ -143,42 +101,6 @@ function isValidNode(value: unknown): value is WhiteboardNode {
     typeof node.text === 'string' &&
     typeof node.borderColor === 'string'
   )
-}
-
-/** 判断对象是否为合法 AI 配置（结构不符回退默认） */
-function isValidAIConfig(value: unknown): value is AIConfig {
-  if (!value || typeof value !== 'object') return false
-  const cfg = value as Record<string, unknown>
-  return (
-    typeof cfg.localPrompt === 'string' &&
-    (cfg.mode === 'fast' || cfg.mode === 'precise') &&
-    typeof cfg.viewTextAlgoId === 'string'
-  )
-}
-
-/** 解析并自愈 aiConfig 字段（旧文件缺字段 → 默认；逐字段校验；nodeConfigs 过滤悬空引用） */
-function parseAIConfig(raw: unknown, nodeById: ReadonlyMap<string, WhiteboardNode>): ProjectAIConfigData {
-  if (!raw || typeof raw !== 'object') return defaultProjectAIConfig()
-  const o = raw as Record<string, unknown>
-  const globalPrompt = typeof o.globalPrompt === 'string' ? o.globalPrompt : ''
-  const defaultConfig = isValidAIConfig(o.defaultConfig)
-    ? (o.defaultConfig as AIConfig)
-    : defaultProjectAIConfig().defaultConfig
-  const nodeConfigs: Array<{ nodeId: string; config: AIConfig }> = []
-  if (Array.isArray(o.nodeConfigs)) {
-    for (const item of o.nodeConfigs) {
-      if (!item || typeof item !== 'object') continue
-      const it = item as Record<string, unknown>
-      if (
-        typeof it.nodeId === 'string' &&
-        nodeById.has(it.nodeId) &&
-        isValidAIConfig(it.config)
-      ) {
-        nodeConfigs.push({ nodeId: it.nodeId, config: it.config as AIConfig })
-      }
-    }
-  }
-  return { globalPrompt, defaultConfig, nodeConfigs }
 }
 
 /** 解析并校验项目文件 JSON 字符串 */
@@ -307,9 +229,6 @@ export function parseProjectFile(json: string): ParsedProject {
       typeof vs.activeTabId === 'string' && vs.activeTabId ? vs.activeTabId : null,
   }
 
-  // —— 解析并自愈 AI 配置（legacy 迁移源：旧文件缺字段回退默认；nodeConfigs 过滤悬空引用）——
-  const aiConfig = parseAIConfig(raw.aiConfig, nodeById)
-
   // —— 解析插件项目化数据 additions（对象则逐键过滤，值深拷贝；非对象 → {}） ——
   const additions: Record<string, unknown> = {}
   const rawAdd = raw.additions
@@ -321,5 +240,5 @@ export function parseProjectFile(json: string): ParsedProject {
     }
   }
 
-  return { projectName, nodes, tags, viewState, aiConfig, hasAIConfig: raw.aiConfig !== undefined, additions }
+  return { projectName, nodes, tags, viewState, additions }
 }

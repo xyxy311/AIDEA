@@ -37,7 +37,6 @@ import type { ShortcutScope } from '@/types/shortcuts'
  * 1-9                - 应用预设 / 序号修饰键+1-9 打标签（锁定）
  *
  * S/O/N/F/G/A/Q/Tab/R/D   - 可自定义（见 constants/shortcuts.ts）
- *（AI 生成 I / 清除 C 已迁为 ai 插件的插件快捷键动作 ai:generate / ai:clear）
  *
  * 事件顺序契约（与网格层 useGridMode 协作）：Vue 子组件 onMounted 先于父组件触发，
  * CanvasStage（子）的网格监听先于本文件（由 AppShell 父级挂载）的快捷键监听执行。

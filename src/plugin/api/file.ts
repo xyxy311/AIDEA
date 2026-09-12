@@ -30,7 +30,7 @@ import {
 
 export function createFileApi() {
   const api = {
-    /** 序列化当前项目为 JSON 字符串（与保存文件同构；AI 项目级配置归 ai 插件 additions，不写 aiConfig 字段） */
+    /** 序列化当前项目为 JSON 字符串（与保存文件同构） */
     serializeCurrent(): string {
       const nodeStore = useNodeStore()
       const project = useProjectStore()

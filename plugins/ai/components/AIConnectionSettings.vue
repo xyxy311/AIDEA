@@ -1,32 +1,26 @@
 <script setup lang="ts">
 /**
- * AIConnectionSettings —— 插件「AI 连接」设置栏目内容组件（无自带 header）。
+ * AIConnectionSettings — 「AI 设置」栏目的分区①「AI 连接」（子组件，无自带 header）。
  *
- * 演示/职责：
+ * 职责：
+ * - 分区标题行：「AI 连接」+ 说明 + 「恢复默认连接配置」按钮（分区粒度标题，非栏目级
+ *   ——栏目标题「AI 设置」由设置弹窗渲染，避免与 AISettingsPanel 顶层重复）；
  * - 连接配置：直接绑定 useAIConfigStore 的可写字段（baseURL / model / apiKey /
  *   timeoutMs / temperature），改动即时写回插件 config（`aidea-plugin-config.ai` 的
  *   data.connection，即时持久化、不入项目历史），无需本地镜像；
  *   「恢复默认连接配置」经 store.resetToDefaults()（watch 自动写回）。
- * - 快捷键改键 UI：经 `adapter.api.shortcuts.pluginActions(AI_PLUGIN_ID)`（computed 包裹
- *   保持响应，注册 / 回滚联动）动态渲染 SDK 导出的 ShortcutActionRow——
- *   录制改键 / 恢复默认 / 冲突提示在组件内闭环，插件动作的改键入口独占在插件自身设置栏目。
  * - 布局沿用内置 Settings Section 的 .settings-controls/.setting-row 结构
  *   （import 主程序 settings-shared.css，与 AIDirectionsSection 写法一致）。
- * 注意：组件不得 import 插件入口 index.ts（会被入口 import，构成循环依赖）；
- * 插件 id 统一取 AI_PLUGIN_ID 常量，不硬编码 'ai'。
+ * 注意：组件不得 import 插件入口 index.ts（会被入口 import，构成循环依赖）。
+ * 快捷键改键分区已上移 AISettingsPanel（分区②），本组件只负责连接参数。
  */
-import { computed } from 'vue'
 import { NButton, NInput, NInputNumber } from 'naive-ui'
-import { adapter, ShortcutActionRow } from '@/plugin/adapter'
 import { useAIConfigStore } from '../stores/aiConfig'
-import { AI_DEFAULT_CONFIG, AI_PLUGIN_ID } from '../constants'
+import { AI_DEFAULT_CONFIG } from '../constants'
 import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 
 const aiConfig = useAIConfigStore()
-
-/** 本插件登记的快捷键动作（key=完整登记 key，label=成品文案）；computed 保持 uiRegistry 联动 */
-const pluginActions = computed(() => adapter.api.shortcuts.pluginActions(AI_PLUGIN_ID))
 
 /**
  * NInputNumber 清空时 value 为 null：忽略（保留现值），
@@ -45,7 +39,7 @@ function handleReset(): void {
 
 <template>
   <div class="settings-controls">
-    <!-- 栏目说明 + 恢复默认 -->
+    <!-- 分区标题 + 恢复默认 -->
     <div class="setting-row row-stack">
       <div class="setting-cell">
         <div class="setting-label">{{ t('settings.aiConnection') }}</div>
@@ -124,19 +118,5 @@ function handleReset(): void {
         @update:value="(v: number | null) => onNumber('temperature', v)"
       />
     </div>
-
-    <!-- 快捷键改键（本插件注册的动作；点击键帽录制） -->
-    <div class="setting-row row-stack">
-      <div class="setting-cell">
-        <div class="setting-label">{{ t('settings.aiShortcuts') }}</div>
-        <div class="setting-desc">{{ t('settings.aiShortcutsDesc') }}</div>
-      </div>
-    </div>
-    <ShortcutActionRow
-      v-for="row in pluginActions"
-      :key="row.key"
-      :action-key="row.key"
-      :label="row.label"
-    />
   </div>
 </template>

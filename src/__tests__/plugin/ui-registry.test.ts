@@ -136,7 +136,7 @@ describe('插件 UI 注册契约（uiRegistry）', () => {
     expect(useUiRegistryStore().topBarButtons.get('demo2:btn2')!.defaultZone).toBe('right')
   })
 
-  it('registerSettingsCategory：登记进 uiRegistry 设置栏目表', () => {
+  it('registerSettingsCategory：登记进 uiRegistry 设置栏目表，返回 { ok:true }', () => {
     const ui = createPluginRegister('demo')
     ui.registerSettingsCategory({ id: 'cfg', title: '配置', component: Icon })
 
@@ -146,6 +146,35 @@ describe('插件 UI 注册契约（uiRegistry）', () => {
     expect(entry!.pluginId).toBe('demo')
     expect(entry!.title).toBe('配置')
     expect(entry!.component).toBeTruthy()
+  })
+
+  it('设置栏目唯一约束：同插件已有设置栏目 → 换短 id 二次注册被拒 { ok:false, conflict:"id" }（一个插件至多一个设置栏目）', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = useUiRegistryStore()
+
+    expect(
+      registry.registerPluginSettingsCategory('demo', { id: 'cfg', title: '原始配置', component: Icon }),
+    ).toEqual({ ok: true })
+
+    // 同插件换短 id 再开第二个栏目 → 拒绝（唯一性约束；key 并无冲突）
+    expect(
+      registry.registerPluginSettingsCategory('demo', { id: 'cfg2', title: '第二栏目', component: Icon }),
+    ).toEqual({ ok: false, conflict: 'id' })
+    // 同短 id 重复注册 → 同样拒绝（key 冲突）
+    expect(
+      registry.registerPluginSettingsCategory('demo', { id: 'cfg', title: '重复注册', component: Icon }),
+    ).toEqual({ ok: false, conflict: 'id' })
+    // 不同插件同短 id 不受唯一约束影响（约束按 pluginId 归一）
+    expect(
+      registry.registerPluginSettingsCategory('other', { id: 'cfg', title: '其他插件配置', component: Icon }),
+    ).toEqual({ ok: true })
+
+    // 原条目未被覆盖，被拒条目不入表
+    expect(registry.settingsCategories.get('demo:cfg')!.title).toBe('原始配置')
+    expect(registry.settingsCategories.has('demo:cfg2')).toBe(false)
+    expect(registry.settingsCategories.has('other:cfg')).toBe(true)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('短 id 非法（含 : / 空白 / 空）→ console.warn 且不入表', () => {
@@ -437,17 +466,22 @@ describe('uiRegistry 浮动层表：登记 / 冲突 / 清理', () => {
     setActivePinia(createPinia())
   })
 
-  it('registerPluginFloatingLayer：成功返回 true，key 归一 demo:float，条目含 origin/pluginId/component', () => {
+  it('registerPluginFloatingLayer：成功返回 true，key 归一 demo:float，条目含 origin/pluginId/title/component', () => {
     const registry = useUiRegistryStore()
-    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', component: Icon })).toBe(true)
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'float', title: '生成词', component: Icon })).toBe(true)
 
     const entry = registry.floatingLayers.get('demo:float')
     expect(entry).toBeDefined()
     expect(entry!.key).toBe('demo:float')
     expect(entry!.origin).toBe('plugin')
     expect(entry!.pluginId).toBe('demo')
+    expect(entry!.title).toBe('生成词') // 窗口把手条标题透传
     // reactive Map 深响应式会代理组件对象；断言存在性而非同一引用
     expect(entry!.component).toBeTruthy()
+
+    // title 缺省 → 原样保留 undefined（宿主把手条不渲染标题文本）
+    expect(registry.registerPluginFloatingLayer('demo', { id: 'bare', component: Icon })).toBe(true)
+    expect(registry.floatingLayers.get('demo:bare')!.title).toBeUndefined()
   })
 
   it('短 id 非法（空 / 含 : / 含空白）→ warn + false，不入表', () => {

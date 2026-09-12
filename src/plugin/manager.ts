@@ -12,7 +12,7 @@
  */
 import type { AideaPlugin, PluginContext, PluginManifest } from './adapter'
 import { SDK_VERSION } from '@/types/plugin'
-import { createPluginRegister, createPluginModalApi, rollbackPluginUi } from './ui'
+import { createPluginRegister, createPluginModalApi, createPluginFloatingApi, rollbackPluginUi } from './ui'
 
 /** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。这是内部/注入的装载项。 */
 export interface PluginEntry {
@@ -44,7 +44,7 @@ interface InternalPluginContext extends PluginContext {
   dispose(): void
 }
 
-/** 组装 PluginContext：注入注册面 / 模态运行时（plugin/ui.ts）+ manifest，收集 onDispose 清理函数 */
+/** 组装 PluginContext：注入注册面 / 模态与浮动层运行时（plugin/ui.ts）+ manifest，收集 onDispose 清理函数 */
 function createPluginContext(manifest: PluginManifest): InternalPluginContext {
   const disposers: Array<() => void> = []
 
@@ -57,6 +57,9 @@ function createPluginContext(manifest: PluginManifest): InternalPluginContext {
     // 模态运行时：open 收短 id，先查登记表（未登记 → warn + false）再拼 `${pluginId}:${id}`；
     // teardown 后误调无需失效——入口校验直接拒绝（运行期注册表不变，见 createPluginModalApi 注释）
     modal: createPluginModalApi(manifest.id),
+    // 浮动层运行时：open/toggle 同样收短 id 先查登记表（fail fast），close/isVisible 幂等只读；
+    // 与 modal 同工厂模式，语义见 createPluginFloatingApi 注释
+    floating: createPluginFloatingApi(manifest.id),
     dispose(): void {
       for (const fn of disposers.splice(0)) {
         try {

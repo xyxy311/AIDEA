@@ -9,6 +9,9 @@ import type { AIDivergenceDirection } from './types'
 /** 插件命名空间 id（manifest.id；additions/config 自动加 `ai:` 前缀） */
 export const AI_PLUGIN_ID = 'ai'
 
+/** 生成词浮动层短 id（registerFloatingLayer 注册与 floating 运行时 API 共用，避免魔法串） */
+export const AI_WORDS_LAYER_ID = 'words'
+
 /** AI 调用默认配置（不随主题，属数据/配置范畴） */
 export const AI_DEFAULT_CONFIG = {
   baseURL: 'http://localhost:11434/v1',

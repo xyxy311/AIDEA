@@ -3,9 +3,10 @@
  *
  * 功能面（与原主程序版本对齐）：
  * - AI 面板（左侧活动栏面板）：全局提示词 / 视图级 AI 设置 / 上下文预览 / 连词成句 / 生成触发
- * - 发散方向管理（设置栏目）：方向 CRUD / 排序 / 默认方向 / 恢复默认
- * - AI 连接（设置栏目）：连接参数（baseURL / model / apiKey / 超时 / 温度）编辑与快捷键改键
- * - 生成词浮动面板（插件浮动层，常驻渲染、显隐自管）
+ * - AI 设置（设置栏目，单栏目三分区）：① AI 连接（baseURL / model / apiKey / 超时 / 温度 +
+ *   恢复默认）② 快捷键改键（ShortcutActionRow）③ 发散方向管理（CRUD / 排序 / 默认方向）；
+ *   一个插件至多一个设置栏目（SDK 硬约束），三分区收敛在 AISettingsPanel 内
+ * - 生成词浮动面板（插件浮动层，宿主窗口 + 显隐经浮动运行时 API）
  * - 画布右键「发散」子菜单（selection scope，children 按方向展开）与 I / C 快捷键
  *
  * 要点（对齐 hello 插件约定）：
@@ -24,11 +25,10 @@ import { SparklesOutline } from '@vicons/ionicons5'
 import { t } from '@/composables/useT'
 import AIPanel from './components/AIPanel.vue'
 import FloatingAIWordPanel from './components/FloatingAIWordPanel.vue'
-import AIDirectionsSection from './components/AIDirectionsSection.vue'
-import AIConnectionSettings from './components/AIConnectionSettings.vue'
+import AISettingsPanel from './components/AISettingsPanel.vue'
 import { useAIDirectionsStore } from './stores/aiDirections'
 import { useAIWordPanel } from './composables/useAIWordPanel'
-import { AI_PLUGIN_ID } from './constants'
+import { AI_PLUGIN_ID, AI_WORDS_LAYER_ID } from './constants'
 
 /** 插件清单（常量先行：模块顶层用它声明命名空间作用域，避免硬编码重复） */
 const manifest: PluginManifest = {
@@ -68,21 +68,15 @@ const plugin: AideaPlugin = {
       defaultPlacement: 'left',
     })
 
-    // ── ② 设置栏目：发散方向管理 ──
+    // ── ② 设置栏目：「AI 设置」（单栏目三分区 = AI 连接 / 快捷键 / 发散方向，
+    //    见 AISettingsPanel；SDK 硬约束一个插件至多一个设置栏目，二次注册会被拒）──
     ctx.register.registerSettingsCategory({
-      id: 'directions',
-      title: t('settings.aiDirections'),
-      component: AIDirectionsSection,
+      id: 'settings',
+      title: t('settings.aiSettings'),
+      component: AISettingsPanel,
     })
 
-    // ── ③ 设置栏目：AI 连接（连接参数编辑 + 快捷键改键）──
-    ctx.register.registerSettingsCategory({
-      id: 'connection',
-      title: t('settings.aiConnection'),
-      component: AIConnectionSettings,
-    })
-
-    // ── ④ 快捷键：I 直接生成 / C 清除生成词 ──
+    // ── ③ 快捷键：I 直接生成 / C 清除生成词 ──
     //（主程序旧内置绑定 aiGenerate/aiClear 拆除前，默认键可能因占用被拒 → warn 不致命）
     const aiWord = useAIWordPanel()
     const generateRes = ctx.register.registerShortcutAction({
@@ -109,7 +103,7 @@ const plugin: AideaPlugin = {
       console.warn('[ai] 快捷键动作「clear」注册被拒：', clearRes.conflict)
     }
 
-    // ── ⑤ 右键菜单：发散（selection scope，children 子菜单按方向展开；父项不执行）──
+    // ── ④ 右键菜单：发散（selection scope，children 子菜单按方向展开；父项不执行）──
     //（run 为类型必填，children 存在时父项仅作分组入口，故给空实现）
     const menuRes = ctx.register.registerContextMenuItem({
       id: 'divergence',
@@ -129,9 +123,11 @@ const plugin: AideaPlugin = {
       console.warn('[ai] 右键菜单项「divergence」注册被拒：', menuRes.conflict)
     }
 
-    // ── ⑥ 浮动层：AI 生成词浮动面板（宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）──
+    // ── ⑤ 浮动层：AI 生成词浮动面板（宿主 PluginFloatingHost 逐条渲染，窗口壳由通用件
+    //    FloatingWindow（components/common）提供；显隐经 ctx.floating / scope.floating，默认隐藏 open 才可见）──
     ctx.register.registerFloatingLayer({
-      id: 'words',
+      id: AI_WORDS_LAYER_ID,
+      title: t('aiWord.title'),
       component: FloatingAIWordPanel,
     })
 

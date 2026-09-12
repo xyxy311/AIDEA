@@ -68,10 +68,11 @@ describe('PluginManager', () => {
     expect(mgr.getRecords().map((r) => `${r.id}:${r.status}`)).toContain('b:installed')
   })
 
-  it('上下文形状：register / modal / manifest / onDispose（不再携带 adapter）', async () => {
+  it('上下文形状：register / modal / floating / manifest / onDispose（不再携带 adapter）', async () => {
     let keys: string[] = []
     let registerShapeOk = false
     let modalShapeOk = false
+    let floatingShapeOk = false
     let manifestId = ''
     const entry: PluginEntry = {
       id: 'shape',
@@ -89,6 +90,11 @@ describe('PluginManager', () => {
             modalShapeOk =
               typeof ctx.modal?.open === 'function' &&
               typeof ctx.modal?.close === 'function'
+            floatingShapeOk =
+              typeof ctx.floating?.open === 'function' &&
+              typeof ctx.floating?.close === 'function' &&
+              typeof ctx.floating?.toggle === 'function' &&
+              typeof ctx.floating?.isVisible === 'function'
             manifestId = ctx.manifest.id
           },
         },
@@ -99,9 +105,10 @@ describe('PluginManager', () => {
     await mgr.installAll()
 
     // 内部形态额外带 dispose()；不再有 adapter
-    expect(keys).toEqual(['dispose', 'manifest', 'modal', 'onDispose', 'register'])
+    expect(keys).toEqual(['dispose', 'floating', 'manifest', 'modal', 'onDispose', 'register'])
     expect(registerShapeOk).toBe(true)
     expect(modalShapeOk).toBe(true)
+    expect(floatingShapeOk).toBe(true)
     expect(manifestId).toBe('shape')
   })
 

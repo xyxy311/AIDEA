@@ -7,11 +7,13 @@ import { AI_DEFAULT_CONFIG } from '../constants'
 import { t } from '@/composables/useT'
 
 /**
- * 「AI 连接」设置栏目挂载冒烟（参照 src/__tests__/plugin/modal-smoke.test.ts 风格）：
+ * AIConnectionSettings（「AI 设置」栏目分区①「AI 连接」子组件）挂载冒烟
+ * （参照 src/__tests__/plugin/modal-smoke.test.ts 风格）：
  * 真实 pinia（aiConfig → pluginConfig → localStorage 真实链路）+ 挂载，
- * 断言连接参数行 / 快捷键区 / 恢复默认按钮渲染、默认值绑定与编辑即时写回。
+ * 断言连接参数五行 / 分区标题与恢复默认按钮渲染、默认值绑定与编辑即时写回。
+ * 快捷键改键分区已上移 AISettingsPanel（分区②），其覆盖见 AISettingsPanel.test.ts。
  */
-describe('AIConnectionSettings（AI 连接设置栏目）挂载冒烟', () => {
+describe('AIConnectionSettings（AI 连接分区）挂载冒烟', () => {
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
   beforeEach(() => {
@@ -21,19 +23,20 @@ describe('AIConnectionSettings（AI 连接设置栏目）挂载冒烟', () => {
     errorSpy.mockClear()
   })
 
-  it('挂载渲染连接参数行 / 快捷键区 / 恢复默认按钮，无运行时错误', () => {
+  it('挂载渲染分区标题 / 连接参数五行 / 恢复默认按钮，无运行时错误', () => {
     const wrapper = mount(AIConnectionSettings)
 
     const labels = wrapper.findAll('.setting-label').map((w) => w.text())
-    // 连接参数五行
+    // 分区标题
     expect(labels).toContain(t('settings.aiConnection'))
+    // 连接参数五行
     expect(labels).toContain(t('settings.aiBaseURL'))
     expect(labels).toContain(t('settings.aiModel'))
     expect(labels).toContain(t('settings.aiApiKey'))
     expect(labels).toContain(t('settings.aiTimeout'))
     expect(labels).toContain(t('settings.aiTemperature'))
-    // 快捷键改键区
-    expect(labels).toContain(t('settings.aiShortcuts'))
+    // 快捷键分区已上移栏目壳，本组件不再渲染
+    expect(labels).not.toContain(t('settings.aiShortcuts'))
     // 恢复默认按钮
     const buttonTexts = wrapper.findAll('button').map((w) => w.text())
     expect(buttonTexts.join('\n')).toContain(t('settings.aiConnectionReset'))

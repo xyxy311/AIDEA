@@ -128,7 +128,9 @@ export interface UiFloatingLayerEntry {
   key: string
   origin: UiOrigin
   pluginId?: string
-  /** 插件浮动层组件（自管显隐，如 AI 生成词浮动面板） */
+  /** 窗口把手条标题（可选；宿主映射为 FloatingWindow 壳（components/common）的把手条标题，无则不渲染标题文本） */
+  title?: string
+  /** 插件浮动层组件（纯内容组件；显隐经插件浮动运行时 API，窗口壳归宿主） */
   component: Component
 }
 
@@ -189,7 +191,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
   }
   seedBuiltins()
 
-  // ── 插件注册（冲突拒绝：warn + 返回 false，不覆盖）──
+  // ── 插件注册（冲突拒绝：warn + 不覆盖；返回值见各方法签名，设置栏目起为可探测的 UiRegisterResult）──
 
   /** 注册插件面板；key 冲突 / 非法 id → false */
   function registerPluginPanel(pluginId: string, reg: PluginPanelRegistration): boolean {
@@ -236,16 +238,30 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     return true
   }
 
-  /** 注册插件设置栏目；冲突 / 非法 id → false */
-  function registerPluginSettingsCategory(pluginId: string, reg: PluginSettingsCategoryRegistration): boolean {
+  /**
+   * 注册插件设置栏目；非法 id / key 冲突 / **同插件已有设置栏目** → warn + { ok:false, conflict:'id' }。
+   * 硬约束：**一个插件至多一个设置栏目**——同一 pluginId 已登记任意设置栏目（无论短 id
+   * 是否相同）时拒绝再次注册，保证设置弹窗左侧导航中插件条目与插件一一对应；插件的多组
+   * 配置应在同一栏目组件内分区分组呈现（参照 plugins/ai 的 AISettingsPanel）。
+   */
+  function registerPluginSettingsCategory(pluginId: string, reg: PluginSettingsCategoryRegistration): UiRegisterResult {
     if (!isValidId(pluginId) || !isValidId(reg.id)) {
       console.warn(`[uiRegistry] 插件「${pluginId}」设置栏目「${reg.id}」注册失败：id 非法`)
-      return false
+      return { ok: false, conflict: 'id' }
     }
     const key = pluginKey(pluginId, reg.id)
     if (settingsCategories.has(key)) {
       console.warn(`[uiRegistry] 设置栏目注册冲突：${key} 已存在，拒绝覆盖`)
-      return false
+      return { ok: false, conflict: 'id' }
+    }
+    // 唯一性约束：同一 pluginId 已有任意设置栏目（任意 key）→ 拒绝（一个插件至多一个设置栏目）
+    for (const e of settingsCategories.values()) {
+      if (e.pluginId === pluginId) {
+        console.warn(
+          `[uiRegistry] 插件「${pluginId}」注册设置栏目「${reg.id}」被拒：该插件已有设置栏目（一个插件至多一个），请在同一栏目内分区分组呈现`,
+        )
+        return { ok: false, conflict: 'id' }
+      }
     }
     settingsCategories.set(key, {
       key,
@@ -254,7 +270,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
       title: reg.title,
       component: reg.component,
     })
-    return true
+    return { ok: true }
   }
 
   /** 注册插件快捷键动作；非法 id / key 冲突 → warn + { ok:false, conflict:'id' } */
@@ -302,7 +318,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
     return { ok: true }
   }
 
-  /** 注册插件浮动层（component 自管显隐）；非法 id / key 冲突（重复注册）→ warn + false */
+  /** 注册插件浮动层（component 为纯内容，title 可选）；非法 id / key 冲突（重复注册）→ warn + false */
   function registerPluginFloatingLayer(pluginId: string, reg: PluginFloatingLayerRegistration): boolean {
     if (!isValidId(pluginId) || !isValidId(reg.id)) {
       console.warn(`[uiRegistry] 插件「${pluginId}」浮动层「${reg.id}」注册失败：id 非法`)
@@ -313,7 +329,7 @@ export const useUiRegistryStore = defineStore('uiRegistry', () => {
       console.warn(`[uiRegistry] 浮动层注册冲突：${key} 已存在，拒绝覆盖`)
       return false
     }
-    floatingLayers.set(key, { key, origin: 'plugin', pluginId, component: reg.component })
+    floatingLayers.set(key, { key, origin: 'plugin', pluginId, title: reg.title, component: reg.component })
     return true
   }
 

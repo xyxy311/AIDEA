@@ -47,6 +47,7 @@
     "resetLayout": "恢复默认布局",
     "resetLayoutHint": "将左右侧边栏面板恢复为默认排列",
     "resetLayoutConfirm": "确定恢复默认布局？将丢弃当前面板布局设置。",
+    "aiSettings": "AI 设置",
     "aiDirections": "发散方向",
     "aiDirectionsDesc": "管理 AI 发散方向及其默认行为",
     "aiDirectionDefault": "默认发散方向",
@@ -344,5 +345,12 @@
     "addAll": "全部添加",
     "close": "关闭",
     "clear": "清除"
+  },
+  "hello": {
+    "floatTitle": "Hello 演示浮窗",
+    "floatDesc": "示例插件的浮动面板：窗口定位 / 拖拽把手 / 越界钳制 / 转场由通用窗口壳（FloatingWindow）提供，显隐经插件浮动运行时 API。",
+    "floatHint": "快捷键 H 可切换本浮窗；拖动把手条移动（窗口不会拖出程序视口边界）。",
+    "floatClose": "关闭",
+    "floatShortcutLabel": "切换 Hello 演示浮窗"
   }
 }

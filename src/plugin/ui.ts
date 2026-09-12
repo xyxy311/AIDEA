@@ -9,7 +9,9 @@
  * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）；
  * 模态面板同样只收插件条目，且只登记不派生布局（打开/关闭经 ctx.modal 运行时 API 走
  * modal store，应用级宿主 PluginModalHost 按登记条目渲染）。浮动层同只收插件条目且
- * 只登记不派生布局（应用级宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）。
+ * 只登记不派生布局（显隐经 ctx.floating / adapter.for(id).floating 运行时 API 走
+ * pluginFloating store；应用级宿主 PluginFloatingHost 逐条渲染，窗口壳由通用件
+ * FloatingWindow（components/common）提供，插件注册只填内容 + 可选标题）。
  *
  * 本模块负责：
  * - 定义插件注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
@@ -33,6 +35,7 @@ import type { ModalRegistration } from '@/types/modal'
 import TopBarButton from '@/components/common/TopBarButton.vue'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useModalStore } from '@/stores/modal'
+import { usePluginFloatingStore } from '@/stores/pluginFloating'
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { CUSTOM_SHORTCUTS } from '@/constants/shortcuts'
 import { isValidChord } from '@/utils/shortcuts'
@@ -91,7 +94,11 @@ export interface PluginTopBarButtonRegistration {
   menu?: PluginTopBarMenuOption[]
 }
 
-/** 插件设置栏目：与内置 Settings Section 同形态（纯内容，import settings-shared.css） */
+/**
+ * 插件设置栏目：与内置 Settings Section 同形态（纯内容，import settings-shared.css）。
+ * 硬约束：**一个插件至多一个设置栏目**（同插件二次注册被拒——registry 返回
+ * { ok:false, conflict:'id' }；多组配置在同一栏目组件内分区分组呈现，参照 AISettingsPanel）。
+ */
 export interface PluginSettingsCategoryRegistration {
   /** 插件内短 id；归一为 `${pluginId}:${id}` */
   id: string
@@ -150,11 +157,13 @@ export interface PluginContextMenuChildItem {
   action: () => void
 }
 
-/** 插件浮动层：注册进 uiRegistry.floatingLayers，宿主 PluginFloatingHost 常驻应用根级逐条渲染 */
+/** 插件浮动层：注册进 uiRegistry.floatingLayers，宿主 PluginFloatingHost 逐条渲染（通用件 FloatingWindow 提供窗口壳） */
 export interface PluginFloatingLayerRegistration {
   /** 插件内短 id；归一为 `${pluginId}:${id}` */
   id: string
-  /** 全局浮动层组件（自管显隐，如 AI 生成词浮动面板） */
+  /** 窗口把手条标题（可选；宿主窗口顶部拖拽把手条展示，无则把手条不渲染标题文本） */
+  title?: string
+  /** 浮动层内容组件（纯内容组件；显隐经插件浮动运行时 API，窗口 chrome 归宿主） */
   component: Component
 }
 
@@ -164,6 +173,10 @@ export interface PluginFloatingLayerRegistration {
 export interface PluginRegisterApi {
   registerPanel(entry: PluginPanelRegistration): void
   registerTopBarButton(entry: PluginTopBarButtonRegistration): void
+  /**
+   * 注册设置栏目（登记进 uiRegistry.settingsCategories）。**一个插件至多一个设置栏目**：
+   * 同插件二次注册（含换短 id）→ registry 拒绝并 warn（conflict:'id'），本方法仍返回 void。
+   */
   registerSettingsCategory(entry: PluginSettingsCategoryRegistration): void
   /** 注册右键菜单项；短 id 非法 / key 冲突 → { ok:false, conflict:'id' }（同时 console.warn） */
   registerContextMenuItem(entry: PluginContextMenuItemRegistration): { ok: boolean; conflict?: 'id' }
@@ -176,7 +189,7 @@ export interface PluginRegisterApi {
   registerShortcutAction(entry: PluginShortcutActionRegistration): { ok: boolean; conflict?: 'id' | 'chord' | 'reserved' | 'binding' }
   /** 注册模态面板（仅登记；打开/关闭走 ctx.modal 运行时）；短 id 非法 / key 冲突 → { ok:false, conflict:'id' }（同时 console.warn） */
   registerModal(def: ModalRegistration): { ok: boolean; conflict?: 'id' }
-  /** 注册全局浮动层（宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）；返回 void（冲突由 registry warn + 拒绝） */
+  /** 注册全局浮动层（宿主 PluginFloatingHost 逐条渲染，窗口 chrome 归宿主，显隐经 ctx.floating）；返回 void（冲突由 registry warn + 拒绝） */
   registerFloatingLayer(entry: PluginFloatingLayerRegistration): void
 }
 
@@ -196,6 +209,29 @@ export interface PluginModalApi {
   open(id: string): boolean
   /** 关闭当前打开的模态（无模态打开时幂等） */
   close(): void
+}
+
+/**
+ * 插件浮动层运行时面（ctx.floating / adapter.for(id).floating 两个注入位共用，与
+ * PluginModalApi 同构）：收插件内短 id，内部拼 `${pluginId}:${id}` 转发 pluginFloating
+ * store（多实例，逐条目独立显隐；开关只由插件负责——浮动层无主应用关闭路径，关闭按钮
+ * /逻辑由插件内容自备）。
+ */
+export interface PluginFloatingApi {
+  /**
+   * 打开本插件经 registerFloatingLayer 登记的浮动层（id 为插件内短 id）。
+   * 未登记的短 id → console.warn + false（fail fast，对齐 createPluginModalApi.open 的
+   * 措辞：pluginFloating store 本身不校验登记表，若放行会挂上可见窗口却无登记条目，
+   * 宿主窗口仍会渲染（宿主只按 store 显隐渲染），但登记表与状态失配——入口拦截杜绝）。
+   * 已登记 → 拼 key 转发 pluginFloating store：open 幂等 true（多实例无冲突裁决）。
+   */
+  open(id: string): boolean
+  /** 关闭浮动层（幂等：未打开 / 未登记均无副作用，不做登记表校验——close 语义本就允许无害失败） */
+  close(id: string): void
+  /** 切换显隐；未登记 → console.warn + false（fail fast 同 open）；已登记返回切换后的可见性 */
+  toggle(id: string): boolean
+  /** 是否可见（纯查询：未登记 / 从未打开 = false，不做登记表校验、不产生副作用） */
+  isVisible(id: string): boolean
 }
 
 // ── 内部校验与工厂 ──
@@ -265,7 +301,8 @@ export function createPluginRegister(pluginId: string): PluginRegisterApi {
 
     registerSettingsCategory(entry) {
       if (!requireValidId('设置栏目', entry.id)) return
-      if (!registry().registerPluginSettingsCategory(pluginId, entry)) {
+      const res = registry().registerPluginSettingsCategory(pluginId, entry)
+      if (!res.ok) {
         console.warn(`[plugin] ${pluginId} 设置栏目「${entry.id}」注册冲突，已跳过（其余注册项继续生效）`)
       }
     },
@@ -357,6 +394,45 @@ export function createPluginModalApi(pluginId: string): PluginModalApi {
     },
     close(): void {
       useModalStore().close()
+    },
+  }
+}
+
+/**
+ * 按插件作用域组装浮动层运行时 PluginFloatingApi（两个注入位共用同一工厂：
+ * manager 组装 PluginContext 注入 ctx.floating——setup 内逻辑用；
+ * adapter.for(id) 注入 scope.floating——插件 UI 组件 / composables 内用，
+ * 与 createPluginModalApi 同源同构）。方法体内才触碰 pinia（惰性 useStore），
+ * 模块加载期无副作用。
+ * open / toggle 先查登记表：未登记 → warn + false（fail fast，对齐 createPluginModalApi
+ * ——pluginFloating store 本身不校验登记表，入口拦截杜绝「未登记 key 直接挂显隐状态」的
+ * 失配）；close / isVisible 幂等只读，不做校验（无害失败语义天然成立）。
+ * teardown 后误调同理被入口拒绝（运行期注册表不变，同模态的时序论证，见上）。
+ */
+export function createPluginFloatingApi(pluginId: string): PluginFloatingApi {
+  return {
+    open(id: string): boolean {
+      // 惰性取登记表：短 id 拼插件前缀成完整登记 key（与 uiRegistry.floatingLayers 表的 key 规则一致）
+      const key = `${pluginId}:${id}`
+      if (!useUiRegistryStore().floatingLayers.has(key)) {
+        console.warn(`[plugin] 插件「${pluginId}」打开未注册的浮动层「${id}」，已拒绝`)
+        return false
+      }
+      return usePluginFloatingStore().open(key)
+    },
+    close(id: string): void {
+      usePluginFloatingStore().close(`${pluginId}:${id}`)
+    },
+    toggle(id: string): boolean {
+      const key = `${pluginId}:${id}`
+      if (!useUiRegistryStore().floatingLayers.has(key)) {
+        console.warn(`[plugin] 插件「${pluginId}」切换未注册的浮动层「${id}」，已拒绝`)
+        return false
+      }
+      return usePluginFloatingStore().toggle(key)
+    },
+    isVisible(id: string): boolean {
+      return usePluginFloatingStore().isVisible(`${pluginId}:${id}`)
     },
   }
 }

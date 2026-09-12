@@ -1,6 +1,8 @@
 /**
- * 示例插件：hello —— 演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作）、
- * 全局 adapter 数据操作与 additions 项目化数据。
+ * 示例插件：hello —— 演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 /
+ * 模态面板 / 浮动层）、全局 adapter 数据操作与 additions 项目化数据。
+ * 浮动层（Hello 演示浮窗）是 FloatingWindow 窗口壳 + SDK 浮动层 API（ctx.floating /
+ * scope.floating）的测试载体：快捷键 H toggle、面板内「关闭」按钮演示「关闭由插件负责」。
  *
  * 要点：
  * 1. 数据操作经全局单例：`import { adapter } from '@/plugin/adapter'`——
@@ -9,7 +11,7 @@
  *    `scope.config.*` 读写插件自身配置（`aidea-plugin-config.hello` 独立存储，
  *    应用级持久化、不入项目历史，如 greet 的问候语前缀）。
  * 2. UI / 动作注册经 setup(ctx) 的 ctx.register.*（registerShortcutAction /
- *    registerContextMenuItem 可探测注册结果，ok=false 时打印被拒原因）。
+ *    registerContextMenuItem / registerModal 可探测注册结果，ok=false 时打印被拒原因）。
  * 3. 插件自己需要"多步命令"时写成普通函数（本插件内部私有），仅供自身使用，
  *    **无需注册**（命令已并入 api）。
  * 4. 写方法自动入历史（可撤销）；`adapter.api.project.beginBatch/commitBatch` 合并单条历史。
@@ -19,16 +21,19 @@
 import type { AideaPlugin, PluginApi, PluginContext, PluginManifest } from '@/plugin/adapter'
 import { adapter, SDK_VERSION } from '@/plugin/adapter'
 import { StatsChartOutline, ColorWandOutline } from '@vicons/ionicons5'
+import { t } from '@/composables/useT'
 import HelloStatsPanel from './HelloStatsPanel.vue'
 import HelloSettingsPanel from './HelloSettingsPanel.vue'
 import HelloAboutModal from './HelloAboutModal.vue'
+import HelloFloatPanel from './components/HelloFloatPanel.vue'
+import { HELLO_PLUGIN_ID, HELLO_FLOAT_LAYER_ID } from './constants'
 
 /** 插件清单（常量先行：模块顶层用它声明命名空间作用域，避免硬编码重复） */
 const manifest: PluginManifest = {
-  id: 'hello',
+  id: HELLO_PLUGIN_ID,
   name: '示例插件',
-  version: '0.4.0',
-  description: '演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 模态面板）、快捷键动作注册与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
+  version: '0.5.0',
+  description: '演示插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 模态面板 / 浮动层）、快捷键动作注册与 additions 项目化数据（启动只读查询，写动作由 UI 触发）',
   author: 'aidea',
   sdkVersion: SDK_VERSION,
 }
@@ -121,7 +126,31 @@ const plugin: AideaPlugin = {
       component: HelloSettingsPanel,
     })
 
-    // ── ③ 注册快捷键动作（Ctrl/Cmd+Shift+G 问候；mod+shift+g 未占用保留键与内置绑定）──
+    // ── ③ 注册浮动层：Hello 演示浮窗（完整 key `hello:float`；纯内容组件 HelloFloatPanel，
+    //    窗口壳由通用件 FloatingWindow 提供，显隐经 ctx.floating / scope.floating 运行时 API）──
+    ctx.register.registerFloatingLayer({
+      id: HELLO_FLOAT_LAYER_ID,
+      title: t('hello.floatTitle'),
+      component: HelloFloatPanel,
+    })
+
+    // ── ④ 注册快捷键动作：H 切换 Hello 演示浮窗 + mod+shift+g 问候 ──
+    //（H 为未被占用的字母键：内置动作占 a/q/r/d 与 mod 组合、AI 占 i/c、保留键无单字母 h、
+    // 序号修饰键为 t；被拒按既有 warn 模式处理不致命）
+    const floatShortcutRes = ctx.register.registerShortcutAction({
+      id: 'float',
+      label: t('hello.floatShortcutLabel'),
+      scope: 'canvas',
+      defaultChord: 'h',
+      run: () => {
+        // toggle 收插件内短 id（内部拼 `hello:float` 转发 pluginFloating store）
+        ctx.floating.toggle(HELLO_FLOAT_LAYER_ID)
+      },
+    })
+    if (!floatShortcutRes.ok) {
+      console.warn('[hello] 快捷键动作「float」注册被拒：', floatShortcutRes.conflict)
+    }
+
     const shortcutRes = ctx.register.registerShortcutAction({
       id: 'greet',
       label: 'Hello 问候',
@@ -137,7 +166,7 @@ const plugin: AideaPlugin = {
       console.warn('[hello] 快捷键动作注册被拒：', shortcutRes.conflict)
     }
 
-    // ── ④ 注册右键菜单项（有选中节点时出现在菜单末尾）──
+    // ── ⑤ 注册右键菜单项（有选中节点时出现在菜单末尾）──
     const menuRes = ctx.register.registerContextMenuItem({
       id: 'hello-item',
       scope: 'selection',
@@ -150,7 +179,7 @@ const plugin: AideaPlugin = {
       console.warn('[hello] 右键菜单项注册被拒：', menuRes.conflict)
     }
 
-    // ── ⑤ 注册模态面板（完整 key `hello:about`；内容为最小说明组件 HelloAboutModal）──
+    // ── ⑥ 注册模态面板（完整 key `hello:about`；内容为最小说明组件 HelloAboutModal）──
     const modalRes = ctx.register.registerModal({
       id: 'about',
       title: '关于示例插件',
@@ -160,7 +189,7 @@ const plugin: AideaPlugin = {
       console.warn('[hello] 模态面板注册被拒：', modalRes.conflict)
     }
 
-    // ── ⑥ 打开模态入口 a)：右键菜单项（canvas scope，空白画布即可见）→
+    // ── ⑦ 打开模态入口 a)：右键菜单项（canvas scope，空白画布即可见）→
     //    ctx.modal.open 收插件内短 id，内部自动拼 `hello:` 前缀 ──
     const aboutRes = ctx.register.registerContextMenuItem({
       id: 'hello-about-item',

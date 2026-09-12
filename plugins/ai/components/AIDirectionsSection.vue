@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * AIDirectionsSection — 设置面板「发散方向」分区（插件版设置栏目）
+ * AIDirectionsSection — 「AI 设置」栏目的分区③「发散方向」（子组件）
  *
- * 默认方向下拉 + 方向列表 CRUD（新增 / 编辑 / 删除 / 拖拽排序 / 恢复默认），
+ * 分区标题行（「发散方向」+ 说明，分区粒度——栏目标题「AI 设置」由设置弹窗渲染）
+ * + 默认方向下拉 + 方向列表 CRUD（新增 / 编辑 / 删除 / 拖拽排序 / 恢复默认），
  * 以及「新增 / 编辑发散方向」弹窗。所有分歧方向管理逻辑原样保留
  * （持久化已随 aiDirections store 换到插件 config）。
  */
@@ -129,6 +130,14 @@ function handleResetDirections(): void {
 
 <template>
   <div class="settings-controls">
+    <!-- 分区标题行（分区粒度；与 AIConnectionSettings 的分区标题行同构） -->
+    <div class="setting-row row-stack">
+      <div class="setting-cell">
+        <div class="setting-label">{{ t('settings.aiDirections') }}</div>
+        <div class="setting-desc">{{ t('settings.aiDirectionsDesc') }}</div>
+      </div>
+    </div>
+
     <NText depth="2">{{ t('settings.aiDirectionDefault') }}</NText>
     <NSelect
       :value="aiDirections.defaultDirectionId"

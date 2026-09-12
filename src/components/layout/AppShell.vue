@@ -229,7 +229,7 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     <!-- 浮动属性编辑器（全局单实例挂载） -->
     <FloatingPropertyEditor />
 
-    <!-- 插件浮动层宿主（登记即可见，显隐由插件组件自管，如 ai 插件的生成词浮动面板） -->
+    <!-- 插件浮动层宿主（多实例逐条渲染，默认隐藏、显隐经插件浮动运行时 API，窗口拖动归宿主；如 ai 插件的生成词浮动面板） -->
     <PluginFloatingHost />
   </div>
 </template>

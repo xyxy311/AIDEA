@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h } from 'vue'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
+import { useUiRegistryStore } from '@/stores/uiRegistry'
 import {
   useAIWordPanel,
   directGenerate,
@@ -56,6 +58,15 @@ function resetState(): void {
   p.generating.value = false
   p.regenerating.value = false
   p.sentenceLoading.value = false
+  // 显隐已迁浮动层运行时（floating.open/close 收短 id 'words'）：open 前 fail-fast 查
+  // uiRegistry 登记表——真实运行时 setup 已注册，此处对齐登记 ai:words 条目（幂等）
+  const registry = useUiRegistryStore()
+  if (!registry.floatingLayers.has('ai:words')) {
+    registry.registerPluginFloatingLayer('ai', {
+      id: 'words',
+      component: defineComponent(() => () => h('div')),
+    })
+  }
 }
 
 describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）', () => {

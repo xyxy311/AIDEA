@@ -10,7 +10,11 @@
  *
  * 插件化改造（相对原主程序版）：
  * - 删除紧凑模式：displayMode / setMode 与 useStorage('aidea-ai-word-mode') 不再保留，
- *   生成词仅浮动面板一种展示（FloatingAIWordPanel 经插件浮动层常驻渲染，显隐自管）。
+ *   生成词仅浮动面板一种展示（FloatingAIWordPanel 经插件浮动层注册渲染，窗口壳
+ *   由通用件 FloatingWindow（components/common）提供）。
+ * - 显隐归插件浮动运行时 API：本模块经 adapter.for(AI_PLUGIN_ID).floating（短 id
+ *   AI_WORDS_LAYER_ID）open/close；visible 只读暴露 floating.isVisible（宿主窗口按
+ *   pluginFloating store 显隐，本模块不持有显隐状态）。
  * - 项目级 AI 配置（globalPrompt / getAIConfig / setAIMode 写回）改经 stores/aiProject
  *   的 additions `ai:projectConfig` 键；节点数据读取改经 adapter.api.node（不依赖主程序
  *   project store 的 AI 字段）。
@@ -22,7 +26,7 @@
  * - 状态在模块顶层用 reactive 定义，调用方共享同一引用，保证任意组件注入结果后
  *   浮动面板组件能感知到状态变化。
  */
-import { reactive, toRefs } from 'vue'
+import { reactive, toRefs, computed } from 'vue'
 import { adapter } from '@/plugin/adapter'
 import { buildViewText } from '../utils/viewText'
 import { runGenerateIdea, runSentenceMaking } from './useAIGenerate'
@@ -33,12 +37,12 @@ import {
   loadProjectData,
   setNodeAIConfig,
 } from '../stores/aiProject'
+import { AI_PLUGIN_ID, AI_WORDS_LAYER_ID } from '../constants'
 import type { AIDivergenceDirection } from '../types'
 
 /** 模块顶层单例状态 */
 const state = reactive<{
-  // 面板展示
-  visible: boolean
+  // 面板展示（仅内容态：words/error；显隐已归浮动层运行时 store，见下方 visible）
   error: string | null
   words: string[]
   // AI 生成状态
@@ -49,7 +53,6 @@ const state = reactive<{
   regenerating: boolean
   sentenceLoading: boolean
 }>({
-  visible: false,
   error: null,
   words: [],
   mode: 'fast',
@@ -59,6 +62,12 @@ const state = reactive<{
   regenerating: false,
   sentenceLoading: false,
 })
+
+/**
+ * 生成词浮动层运行时（for 有模块级缓存，与 index.ts 的 scope 同一实例）；
+ * for 只创建闭包不触碰 pinia，模块加载期安全，方法体内才 useStore。
+ */
+const floating = adapter.for(AI_PLUGIN_ID).floating
 
 // ───────────────────────────── AI 生成编排 ─────────────────────────────
 
@@ -259,30 +268,35 @@ export function setAIMode(m: 'fast' | 'precise'): void {
 
 // ───────────────────────────── 面板展示状态 ─────────────────────────────
 
-/** 由调用方（AIPanel 等）在 AI 生成完成后传入结果：设置 words 并打开面板 */
+/**
+ * 由调用方（AIPanel / runIdeaAndShow 等）在 AI 生成完成后传入结果：
+ * 设置 words 并经浮动层运行时 API 打开面板（登记 key `ai:words`）。
+ */
 function show(words: string[]): void {
   state.error = null
   state.words = words
-  state.visible = true
+  floating.open(AI_WORDS_LAYER_ID)
 }
 
-/** 关闭面板 */
+/** 关闭面板（经浮动层运行时 API；幂等） */
 function close(): void {
-  state.visible = false
+  floating.close(AI_WORDS_LAYER_ID)
 }
 
 /** 清除状态：隐藏、清空错误与结果 */
 function clear(): void {
-  state.visible = false
+  close()
   state.error = null
   state.words = []
 }
 
 export function useAIWordPanel() {
-  // toRefs 保持响应式：解构出的 visible/error/words/mode/previewText 等均为 ref，
+  // toRefs 保持响应式：解构出的 error/words/mode/previewText 等均为 ref，
   // 组件模板自动解包，script 中需用 .value 访问。
   return {
     ...toRefs(state),
+    // 显隐归宿主浮动层 store（open 才可见）；只读 computed 暴露保持原 API 形状
+    visible: computed(() => floating.isVisible(AI_WORDS_LAYER_ID)),
     show,
     close,
     clear,

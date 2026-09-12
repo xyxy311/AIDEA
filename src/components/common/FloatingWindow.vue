@@ -22,6 +22,9 @@
  *   及 plugin-float-* 转场类兼容（enter-from 的 translateY 位移与 clamp 并存不冲突）；
  *   核心算法抽纯函数 clampFloatingOffset（utils/floatingWindow.ts，可单测穷举边界；
  *   窗口尺寸为 0 的无布局环境自然退化为不限制）；
+ * - 高度兜底：窗口 max-height min(80vh, 640px) + 纵向 flex（把手条固定不收缩、
+ *   body flex 收缩链）——内容再高窗口也不超出视口，越界钳制始终有效；实际滚动
+ *   由使用方内容自备（内容自管布局约定），body 仅以 overflow:auto 兜底保证内容可达；
  * - 转场：plugin-float-* 出入场（迁自原 ai-word-enter/leave 泛化，类名沿用）；
  * - 层级：z-index 1900，低于模态（ModalShell → NModal，naive-ui 默认自 2000 起递增）
  *   ——模态打开 = 独占交互，其遮罩盖住浮动窗口；
@@ -169,6 +172,13 @@ onUnmounted(() => window.removeEventListener('resize', onWindowResize))
   /* 视口中心 + 拖动偏移（变量由 inline style 下发） */
   transform: translate(calc(-50% + var(--float-x, 0px)), calc(-50% + var(--float-y, 0px)));
   transition: opacity 0.18s ease;
+  /* 高度兜底：内容再高窗口也不超出视口（全局 border-box，max-height 含 padding/border）。
+     min(80vh, 640px)：80vh 保证小视口下留 20% 余量可见周边；640px 是大屏绝对上限，
+     防极端内容（超长文本）把窗口撑得过于庞大。实际滚动由使用方内容自备（见 body）。 */
+  max-height: min(80vh, 640px);
+  /* 纵向布局：把手条固定、body 弹性收缩，使内容高度受 max-height 约束 */
+  display: flex;
+  flex-direction: column;
 }
 
 .plugin-float__grip {
@@ -180,6 +190,8 @@ onUnmounted(() => window.removeEventListener('resize', onWindowResize))
   cursor: grab;
   /* 触屏拖动：阻止浏览器手势接管 pointer 事件流 */
   touch-action: none;
+  /* 把手条是窗口 chrome，固定高度不参与收缩（收缩空间全部让给内容区） */
+  flex-shrink: 0;
 }
 
 .plugin-float__grip:active {
@@ -196,7 +208,15 @@ onUnmounted(() => window.removeEventListener('resize', onWindowResize))
 .plugin-float__body {
   display: flex;
   flex-direction: column;
-  /* 布局由使用方内容组件自管（纯内容约定），壳层不做间距/尺寸约束 */
+  /* 布局由使用方内容组件自管（纯内容约定），壳层不做间距约束；
+     但高度受壳 max-height 约束：flex 收缩链打通（min-height: 0 允许收缩到
+     剩余空间），内容组件据此把滚动交给自己的滚动容器 */
+  flex: 1 1 auto;
+  min-height: 0;
+  /* 最后防线：内容组件没有自备滚动容器时壳兜底滚动，保证任何内容可达
+     （不用 hidden——那会裁剪出新的不可达内容）。正常使用方内容自管滚动时
+     内容不溢出 body，此兜底不会出现滚动条、无感。 */
+  overflow: auto;
 }
 
 /* ── 过渡动画（原 ai-word-enter/leave 泛化改名；位移与拖动偏移经变量叠加） ── */

@@ -68,19 +68,28 @@ const { addWord, addAll } = useAIWordAdd()
 </template>
 
 <style scoped>
-/* 根元素只做内容纵向布局；宽度 / 外观容器样式归宿主窗口 */
+/* 根元素只做内容纵向布局；宽度 / 外观容器样式归宿主窗口。
+   收缩链：壳 body 为 flex column 且高度受壳 max-height 约束——本容器作为其
+   flex 子项须允许收缩（min-height: 0），max-height: 100% 兜住父高度，
+   词多时把滚动交给内部 NScrollbar 而不是撑爆窗口 */
 .ai-word {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  max-height: 100%;
 }
 
+/* 错误 / 空态：上限与词列表一致——长错误信息（如 API 大段报错）内部滚动，
+   防止把面板无限撑高（空态矮内容不受影响） */
 .ai-word__state {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   padding: 16px 8px;
+  max-height: 260px;
+  overflow-y: auto;
 }
 
 .ai-word__hint {
@@ -95,7 +104,12 @@ const { addWord, addAll } = useAIWordAdd()
   word-break: break-all;
 }
 
+/* 词列表滚动区：随面板可用空间弹性收缩（flex 收缩链 + min-height: 0），
+   词多时列表内部滚动、底部操作区始终可见；max-height 260px 保留作为
+   无高度约束场景的上限（词少时列表高度=内容高度，不会被拉伸出空白） */
 .ai-word__scroll {
+  flex: 0 1 auto;
+  min-height: 0;
   max-height: 260px;
 }
 
@@ -155,5 +169,7 @@ const { addWord, addAll } = useAIWordAdd()
   gap: 6px;
   border-top: 1px solid var(--color-border);
   padding-top: 8px;
+  /* 操作区（含「关闭」）永不压缩——极端小视口下收缩空间全部让给滚动区 */
+  flex-shrink: 0;
 }
 </style>

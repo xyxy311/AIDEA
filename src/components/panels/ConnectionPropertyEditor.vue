@@ -51,6 +51,11 @@ const lineStyle = computed<LineStyle | undefined>({
   },
 })
 
+/** 线型下拉选项：label 经 t() 实时翻译（computed 内，语言切换热更新） */
+const lineStyleOptions = computed(() =>
+  LINE_STYLE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
+)
+
 const strokeWidth = computed<number | undefined>({
   get: () => conn.value?.strokeWidth,
   set: (val) => {
@@ -124,7 +129,7 @@ const colorPickerMode = 'hex' as const
       <NFormItem :label="t('connectionEditor.lineStyle')" style="margin-top: 8px">
         <NSelect
           v-model:value="lineStyle"
-          :options="LINE_STYLE_OPTIONS"
+          :options="lineStyleOptions"
           size="small"
           :placeholder="t('connectionEditor.lineStylePlaceholder')"
         />

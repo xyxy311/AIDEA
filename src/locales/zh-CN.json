@@ -47,44 +47,11 @@
     "resetLayout": "恢复默认布局",
     "resetLayoutHint": "将左右侧边栏面板恢复为默认排列",
     "resetLayoutConfirm": "确定恢复默认布局？将丢弃当前面板布局设置。",
-    "aiSettings": "AI 设置",
-    "aiDirections": "发散方向",
-    "aiDirectionsDesc": "管理 AI 发散方向及其默认行为",
-    "aiDirectionDefault": "默认发散方向",
-    "aiDirectionsEmpty": "暂无发散方向",
-    "defaultBadge": "默认",
-    "directionAdd": "添加方向",
-    "directionEdit": "编辑方向",
-    "directionDelete": "删除方向",
-    "directionDeleteConfirm": "确定删除方向「{name}」？",
-    "directionTitle": "标题",
-    "directionTitlePlaceholder": "如：为什么？",
-    "directionTitleRequired": "请填写方向标题",
-    "directionPrompt": "提示词",
-    "directionPromptPlaceholder": "该方向的发散指令，可包含 ${from} 引用发散起点",
-    "directionPromptRequired": "请填写提示词",
-    "directionSeparator": "分隔符",
-    "directionSeparatorPlaceholder": "默认空格",
-    "directionSeparatorHint": "多个发散起点合并时的分隔符，选填，默认空格。",
-    "resetDirections": "恢复默认发散方向",
-    "resetDirectionsConfirm": "确定恢复默认发散方向？将清空当前自定义方向并恢复内置默认。",
-    "aiConnection": "AI 连接",
-    "aiConnectionDesc": "配置大模型连接参数，改动即时保存到插件配置并生效，不随项目文件保存",
-    "aiBaseURL": "接口地址",
-    "aiBaseURLDesc": "OpenAI 兼容端点；本地 Ollama 默认 http://localhost:11434/v1",
-    "aiModel": "模型名称",
-    "aiModelDesc": "须与端点侧可用模型名一致，如 qwen2.5-coder:7b",
-    "aiApiKey": "API Key",
-    "aiApiKeyDesc": "可选项；本地 Ollama 通常无需填写",
-    "aiTimeout": "超时（毫秒）",
-    "aiTemperature": "温度",
-    "aiConnectionReset": "恢复默认连接配置",
-    "aiShortcuts": "快捷键",
-    "aiShortcutsDesc": "本插件注册的快捷键动作，点击键帽录制改键",
     "shortcuts": "快捷键",
     "shortcutsDesc": "自定义快捷键与序号修饰键",
     "plugins": "插件",
-    "pluginsDesc": "管理已安装的插件并切换启停"
+    "pluginsDesc": "管理已安装的插件并切换启停",
+    "language": "语言"
   },
   "plugin": {
     "loading": "插件装载中…",
@@ -118,8 +85,6 @@
     "actionEnterParent": "进入父视图",
     "actionToggleInline": "展开 / 收起内联视图",
     "actionFitInline": "内联视图自适应",
-    "actionAIGenerate": "AI 生成词",
-    "actionAIClear": "清除 AI 生成词",
     "actionDelete": "删除所选",
     "seqMod": "标签序号修饰键",
     "seqModHint": "按住此键再按数字 1-9，可对选中节点打标签",
@@ -174,6 +139,11 @@
     "name": "名称",
     "selectConnectionHint": "选中元素以编辑属性"
   },
+  "connection": {
+    "lineStyleSolid": "实线",
+    "lineStyleDashed": "虚线",
+    "lineStyleDotted": "点线"
+  },
   "leftSidebar": {
     "nodeTree": "节点树",
     "references": "可引用节点",
@@ -192,49 +162,7 @@
     "searchScopeView": "当前视图",
     "searchTagPlaceholder": "按标签过滤…",
     "presets": "预设管理",
-    "tags": "标签管理",
-    "ai": "AI"
-  },
-  "aiPanel": {
-    "globalPrompt": "全局提示词",
-    "globalPromptPlaceholder": "为整个项目提供背景上下文，可留空",
-    "sectionView": "当前视图设置",
-    "localPrompt": "局部提示词",
-    "localPromptPlaceholder": "仅当前视图生效的补充指令，可留空",
-    "mode": "处理模式",
-    "modeFast": "快速",
-    "modePrecise": "精确（先连词成句）",
-    "viewTextAlgo": "空间布局算法",
-    "reset": "恢复默认",
-    "preview": "上下文预览",
-    "previewPlaceholder": "点击「生成预览」或直接输入内容",
-    "generatePreview": "生成预览",
-    "copy": "复制",
-    "copied": "已复制",
-    "sentence": "连词成句",
-    "sentenceLoading": "连词成句中…",
-    "sentencePlaceholder": "连词成句的结果，可编辑后作为「直接生成」输入",
-    "directGenerate": "直接生成",
-    "directGenerateLoading": "直接生成中…",
-    "regenerate": "重新生成",
-    "regenerateLoading": "重新生成中…",
-    "directEmpty": "预览内容为空，请先点击「生成预览」或输入内容",
-    "empty": "当前视图暂无节点"
-  },
-  "viewTextPanel": {
-    "paramTolerance": "纵向容差",
-    "paramIncludeCoords": "显示坐标",
-    "paramSeparator": "分隔符",
-    "sepTab": "制表符",
-    "sepComma": "逗号",
-    "sepSemicolon": "分号",
-    "sepPipe": "竖线",
-    "algorithmRow": "行聚类",
-    "algorithmLine": "直线命中",
-    "paramYThreshold": "中心Y阈值",
-    "paramOffset": "线偏移",
-    "paramOverlapRatio": "合并阈值",
-    "algorithmCollectAll": "直接收集"
+    "tags": "标签管理"
   },
   "presetPanel": {
     "nodeTab": "节点",
@@ -268,6 +196,21 @@
     "cancel": "取消",
     "save": "保存",
     "confirm": "确定"
+  },
+  "presets": {
+    "groupBuiltin": "内置",
+    "nodeDefault": "默认",
+    "nodeBlue": "蓝色",
+    "nodeGreen": "绿色",
+    "nodeYellow": "黄色",
+    "nodeRed": "红色",
+    "nodePurple": "紫色",
+    "nodePink": "粉色",
+    "connDefault": "默认灰线",
+    "connBlueArrow": "蓝色箭头",
+    "connRedDashed": "红色虚线",
+    "connGreenPlain": "绿色无箭头",
+    "connGrayDotted": "灰色点线"
   },
   "tagsPanel": {
     "tagName": "标签名称",
@@ -304,7 +247,7 @@
     "copy": "复制",
     "cut": "剪切",
     "paste": "粘贴",
-    "divergence": "发散"
+    "placeholderEdit": "双击编辑"
   },
   "floatingEditor": {
     "nodeTitle": "节点",
@@ -336,21 +279,5 @@
     "path": "路径",
     "tags": "标签",
     "title": "名称"
-  },
-  "aiWord": {
-    "title": "AI 生成词",
-    "error": "生成失败：{message}",
-    "empty": "暂无结果，请重新生成",
-    "add": "添加",
-    "addAll": "全部添加",
-    "close": "关闭",
-    "clear": "清除"
-  },
-  "hello": {
-    "floatTitle": "Hello 演示浮窗",
-    "floatDesc": "示例插件的浮动面板：窗口定位 / 拖拽把手 / 越界钳制 / 转场由通用窗口壳（FloatingWindow）提供，显隐经插件浮动运行时 API。",
-    "floatHint": "快捷键 H 可切换本浮窗；拖动把手条移动（窗口不会拖出程序视口边界）。",
-    "floatClose": "关闭",
-    "floatShortcutLabel": "切换 Hello 演示浮窗"
   }
 }

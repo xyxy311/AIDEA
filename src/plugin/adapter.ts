@@ -19,8 +19,12 @@
  * `adapter.for(id).floating`（本插件登记的浮动层运行时，open/close/toggle/isVisible 收短 id）；
  * UI 注册不在 adapter 上——setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
  *
- * SDK 通用 UI 组件：本文件同时 re-export 少量可复用 UI 组件（当前为
- * ShortcutActionRow——快捷键动作改键行），供插件设置栏目等场景直接使用。
+ * SDK 通用 UI 组件与共享样式：本文件同时 re-export 少量可复用 UI 组件
+ * （ShortcutActionRow——快捷键动作改键行、DraggableSortList——可拖拽排序列表），
+ * 供插件设置栏目等场景直接使用；SDK 组件配套的设置区共享样式
+ * （settings-shared.css）由本文件统一注入，插件无需（也不得）复制或另引样式副本。
+ * 下方「重新导出」区块还 re-export SDK 类型（PluginManifest / WhiteboardNode 等），
+ * 插件统一从本文件导入，不直接依赖 @/types 内部路径。
  */
 import type { PluginManifest } from '@/types'
 import { SDK_VERSION } from '@/types/plugin'
@@ -147,7 +151,12 @@ export type {
   PluginFloatingLayerRegistration,
 } from './ui'
 export { SDK_VERSION } from '@/types/plugin'
-export type { PluginManifest } from '@/types'
+// SDK re-export 类型清单：插件经此处取数据结构，不直接依赖 @/types 内部路径
+export type { PluginManifest, WhiteboardNode } from '@/types'
 
-// ── SDK 通用 UI 组件（供插件复用；首个：快捷键动作改键行）──
+// ── SDK 通用 UI 组件与共享样式（供插件复用）──
+// SDK 组件配套的设置区共享样式由 SDK 入口统一注入：插件 import adapter 即获得，
+// 插件侧不得复制样式副本或另引主应用样式路径
+import '@/components/settings/settings-shared.css'
 export { default as ShortcutActionRow } from '@/components/common/ShortcutActionRow.vue'
+export { default as DraggableSortList } from '@/components/common/DraggableSortList.vue'

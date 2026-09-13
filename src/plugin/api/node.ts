@@ -7,7 +7,7 @@ import type { TreeVisitInfo } from '@/types/plugin'
 import { useNodeStore } from '@/stores/node'
 import { usePresetsStore } from '@/stores/presets'
 import { useCommands } from '@/composables/useCommands'
-import { DEFAULT_NODE_STYLE } from '@/constants'
+import { DEFAULT_NODE_STYLE, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import { walkTree } from './shared'
 
 export function createNodeApi() {
@@ -164,6 +164,10 @@ export function createNodeApi() {
 
     // ── 查询（直接读 node store，返回结构化快照）──
 
+    /** 主应用节点默认尺寸（新建节点的缺省宽高，只读快照） */
+    defaultSize(): { width: number; height: number } {
+      return { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT }
+    },
     /** 节点 ID -> 引用名（无引用则 null）。store 无直接反向索引，经 referenceableNodes 反查。 */
     referenceOf(nodeId: string): string | null {
       const found = useNodeStore()

@@ -9,6 +9,7 @@
 import type { ActiveViewInfo, SelectionInfo, ViewStats } from '@/types/plugin'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
+import { useStageSize } from '@/composables/useStageSize'
 import { extractReferenceName } from '@/utils/reference'
 import { mainView } from './shared'
 
@@ -100,6 +101,16 @@ export function createViewApi() {
     /** 设置画布视口（平移 + 缩放）——视图状态，不入历史 */
     setViewport(x: number, y: number, scale: number): void {
       mainView().setViewport(x, y, scale)
+    },
+    /** 视口中心的世界坐标（左上角定位基准）：world = (screenCenter - offset) / scale */
+    viewportCenterWorld(): { x: number; y: number } {
+      // 与现有方法内 useStore 模式一致：惰性取画布实测尺寸（未注册容器时为窗口回退值）
+      const { stageWidth, stageHeight } = useStageSize()
+      const v = mainView()
+      return {
+        x: (stageWidth.value / 2 - v.stageX) / v.stageScale,
+        y: (stageHeight.value / 2 - v.stageY) / v.stageScale,
+      }
     },
 
     // ── 内联视图（状态仅主视图持有，统一走 mainView）──

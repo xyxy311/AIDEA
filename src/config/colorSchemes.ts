@@ -130,6 +130,7 @@ export const modeSchemes: Record<'light' | 'dark', ModeScheme> = {
 /** 翡翠绿（默认主色调） */
 const emerald: AccentScheme = {
   id: 'emerald',
+  // name 为内部标识（非 UI 文案）：UI 显示走 t('settings.accentEmerald') 等资源 key
   name: '翡翠绿',
   variants: {
     light: {
@@ -198,6 +199,7 @@ const emerald: AccentScheme = {
 /** 经典蓝（从旧 colorSchemes 提取，保持不变） */
 const blue: AccentScheme = {
   id: 'blue',
+  // name 为内部标识（非 UI 文案）：UI 显示走 t('settings.accentBlue') 等资源 key
   name: '经典蓝',
   variants: {
     light: {

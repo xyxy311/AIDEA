@@ -67,6 +67,11 @@ const lineStyle = computed({
   },
 })
 
+/** 线型下拉选项：label 经 t() 实时翻译（computed 内，语言切换热更新） */
+const lineStyleOptions = computed(() =>
+  LINE_STYLE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
+)
+
 const strokeWidth = computed({
   get: () => conn.value?.strokeWidth ?? 2,
   set: (v: number | null) => {
@@ -253,7 +258,7 @@ function onHeaderPointerUp(): void {
             <div class="float-editor__controls">
               <NSelect
                 v-model:value="lineStyle"
-                :options="LINE_STYLE_OPTIONS"
+                :options="lineStyleOptions"
                 size="small"
                 class="float-editor__line"
               />

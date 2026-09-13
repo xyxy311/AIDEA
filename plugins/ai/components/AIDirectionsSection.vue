@@ -26,10 +26,9 @@ import {
 import { ref, computed } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { CreateOutline, TrashOutline } from '@vicons/ionicons5'
-import DraggableSortList from '@/components/common/DraggableSortList.vue'
+import { DraggableSortList } from '@/plugin/adapter'
 import { useAIDirectionsStore } from '../stores/aiDirections'
-import { t } from '@/composables/useT'
-import '@/components/settings/settings-shared.css'
+import { t } from '../i18n'
 
 const dialog = useDialog()
 const aiDirections = useAIDirectionsStore()

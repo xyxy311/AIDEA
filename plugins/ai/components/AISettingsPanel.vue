@@ -10,15 +10,14 @@
  * 不做成巨石单文件：连接 / 方向两个既有 Section 保留为子组件原样复用，分区标题行
  * 归各自子组件持有，本组件只补分区②与分区间隔样式。
  * 布局沿用内置 Settings Section 的 .settings-controls/.setting-row 结构
- * （import 主程序 settings-shared.css，与内置分区序列视觉一致）。
+ * （SDK 共享样式 settings-shared.css 经 adapter 统一注入，与内置分区序列视觉一致）。
  */
 import { computed } from 'vue'
 import { adapter, ShortcutActionRow } from '@/plugin/adapter'
 import AIConnectionSettings from './AIConnectionSettings.vue'
 import AIDirectionsSection from './AIDirectionsSection.vue'
 import { AI_PLUGIN_ID } from '../constants'
-import { t } from '@/composables/useT'
-import '@/components/settings/settings-shared.css'
+import { t } from '../i18n'
 
 /** 本插件登记的快捷键动作（key=完整登记 key，label=成品文案）；computed 保持 uiRegistry 联动 */
 const pluginActions = computed(() => adapter.api.shortcuts.pluginActions(AI_PLUGIN_ID))

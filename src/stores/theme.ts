@@ -9,11 +9,14 @@
  * 持久化：
  *   - mode：useColorMode 内置 localStorage（key: 'aidea-theme'），仅 light/dark 两态手动切换
  *   - accentId：useStorage 持久化到 localStorage（key: 'aidea-accent'），默认 'emerald'
+ *   - locale：useStorage 持久化到 localStorage（key: 'aidea-locale'），默认 'zh-CN'，
+ *     界面语言偏好；文案经 useT 响应式读取该值，切换语言即热更新
  */
 import { computed, watchEffect } from 'vue'
 import { defineStore } from 'pinia'
 import { useColorMode, useStorage } from '@vueuse/core'
 import { modeSchemes, accentSchemes, combineScheme, type ColorScheme, type AccentSchemeId } from '@/config/colorSchemes'
+import type { LocaleId } from '@/types/locale'
 
 export const useThemeStore = defineStore('theme', () => {
   // useColorMode: 持久化到 localStorage('aidea-theme')，attribute 设到 <html data-theme="...">
@@ -29,6 +32,9 @@ export const useThemeStore = defineStore('theme', () => {
 
   /** 主色调 ID，持久化到 localStorage('aidea-accent')，默认 'emerald' */
   const accentId = useStorage<AccentSchemeId>('aidea-accent', 'emerald')
+
+  /** 界面语言，持久化到 localStorage('aidea-locale')，默认中文；useT 读取该值决定文案来源 */
+  const locale = useStorage<LocaleId>('aidea-locale', 'zh-CN')
 
   const scheme = computed<ColorScheme>(() =>
     combineScheme(mode.value === 'dark' ? 'dark' : 'light', accentId.value),
@@ -59,14 +65,21 @@ export const useThemeStore = defineStore('theme', () => {
     accentId.value = id
   }
 
+  /** 设置界面语言（仅赋值，无副作用；文案热更新由 useT 对 locale 的响应式读取驱动） */
+  function setLocale(id: LocaleId): void {
+    locale.value = id
+  }
+
   return {
     mode,
     accentId,
+    locale,
     isDark,
     scheme,
     schemeId,
     toggle,
     setMode,
     setAccent,
+    setLocale,
   }
 })

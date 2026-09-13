@@ -37,6 +37,11 @@ const emit = defineEmits<{
 
 const presetsStore = usePresetsStore()
 
+/** 线型下拉选项：label 经 t() 实时翻译（computed 内，语言切换热更新） */
+const lineStyleOptions = computed(() =>
+  LINE_STYLE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
+)
+
 const formName = ref('')
 const formBorderColor = ref('#d1d5db')
 const formLineStyle = ref<LineStyle>('solid')
@@ -138,7 +143,7 @@ function handleSave(): void {
           <NColorPicker v-model:value="formStrokeColor" :show-alpha="false" />
         </NFormItem>
         <NFormItem :label="t('floatingEditor.lineStyle')">
-          <NSelect v-model:value="formLineStyle" :options="LINE_STYLE_OPTIONS" />
+          <NSelect v-model:value="formLineStyle" :options="lineStyleOptions" />
         </NFormItem>
         <NFormItem :label="t('floatingEditor.width')">
           <NInputNumber

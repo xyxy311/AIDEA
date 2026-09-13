@@ -12,7 +12,7 @@ const DummyComp = defineComponent(() => () => null)
 
 /**
  * 适配层单例契约 + 分类 api 测试（node / connection / tag / project / view）。
- * 单例契约：九域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离、
+ * 单例契约：十域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离、
  * scope.modal 与 ctx.modal 同工厂（短 id 拼前缀，随 for 缓存同一实例）。
  * 只读方法如实反映 store；写方法产生可撤销历史（undo/redo）；batch 合并单条历史。
  */
@@ -37,6 +37,7 @@ describe('adapter 单例契约', () => {
       'theme',
       'file',
       'shortcuts',
+      'i18n',
     ]
     for (const key of domains) {
       expect(adapter.api).toHaveProperty(key)
@@ -150,6 +151,19 @@ describe('adapter 分类 api', () => {
     expect(api.shortcuts.isReserved('delete')).toEqual({ reserved: true })
     expect(api.shortcuts.listActions().length).toBeGreaterThan(0)
     expect(api.shortcuts.findActionByChord('mod+s')).toBe('save')
+  })
+
+  it('i18n: exposes getLocale / host t / createT factory for plugin-owned bundles', () => {
+    const api = makeApi()
+    expect(typeof api.i18n.getLocale).toBe('function')
+    expect(typeof api.i18n.t).toBe('function')
+    // createT 工厂：传插件自有语言包得到独立 t（文案归插件文件夹，宿主 locales 不托管）
+    expect(typeof api.i18n.createT).toBe('function')
+    const tr = api.i18n.createT({ 'zh-CN': { greet: '你好 {name}' } })
+    // 当前语言或回退链命中插件包 zh-CN 表 + {name} 插值
+    expect(tr('greet', { name: '插件' })).toBe('你好 插件')
+    // 回退链末端：两级均未命中返回 key 本身
+    expect(tr('no.such.key')).toBe('no.such.key')
   })
 
   it('node query: root exists, empty initially', () => {

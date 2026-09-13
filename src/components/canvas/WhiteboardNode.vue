@@ -27,11 +27,12 @@ import {
   type Segment,
 } from '@/utils/reference'
 import { measureLineWidth } from '@/utils/geometry'
+import { t } from '@/composables/useT'
 import {
   DEFAULT_NODE_STYLE,
   NODE_PADDING,
   NODE_LINE_HEIGHT,
-  PLACEHOLDER_TEXT,
+  PLACEHOLDER_TEXT_KEY,
   PLACEHOLDER_TEXT_COLOR,
   TAG_CAPSULE_HEIGHT,
   TAG_CAPSULE_FONT_SIZE,
@@ -105,9 +106,9 @@ const layoutLines = computed(() => {
   const n = node.value
   if (!n) return []
   const isPlaceholder = !n.text
-  // 占位符不解析引用（整体作为普通文本）
+  // 占位符不解析引用（整体作为普通文本）；文案经 t() 实时翻译（computed 内，切语言热更新）
   const paragraphs = isPlaceholder
-    ? [[{ type: 'text' as const, text: PLACEHOLDER_TEXT }]]
+    ? [[{ type: 'text' as const, text: t(PLACEHOLDER_TEXT_KEY) }]]
     : parseReferenceSegments(n.text)
   const contentWidth = n.width - NODE_PADDING * 2
   const fontSize = DEFAULT_NODE_STYLE.fontSize

@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 import AIConnectionSettings from '../components/AIConnectionSettings.vue'
 import { useAIConfigStore } from '../stores/aiConfig'
 import { AI_DEFAULT_CONFIG } from '../constants'
-import { t } from '@/composables/useT'
+// 插件 t：断言文案与组件同源（组件已统一走插件语言包）
+import { t } from '../i18n'
 
 /**
  * AIConnectionSettings（「AI 设置」栏目分区①「AI 连接」子组件）挂载冒烟

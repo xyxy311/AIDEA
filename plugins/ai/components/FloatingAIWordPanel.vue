@@ -15,11 +15,17 @@
  * 经 adapter.api.node.create 创建并入历史栈；批量操作用
  * adapter.api.project.beginBatch/commitBatch 合并为单条历史。
  * 添加逻辑已抽取到 useAIWordAdd，此处直接复用。
+ *
+ * 词列表滚动刻意用原生滚动（不用 NScrollbar）：浮窗内容高度是 auto（收缩适应），
+ * NScrollbar 内部 container 靠 height:100% 百分比链取高，在「auto + max-height 钳制」
+ * 场景下百分比解析失败，溢出内容被其根 overflow:hidden 静默裁剪、无法滚动（词列表
+ * 在上限处截断的根因）；原生滚动把 max-height 与 overflow-y 放在同一元素上，
+ * 自包含可靠，无此依赖。
  */
-import { NScrollbar, NButton } from 'naive-ui'
+import { NButton } from 'naive-ui'
 import { useAIWordPanel } from '../composables/useAIWordPanel'
 import { useAIWordAdd } from '../composables/useAIWordAdd'
-import { t } from '@/composables/useT'
+import { t } from '../i18n' // 插件自有语言包（aiWord.* 等插件命名空间 key，见 ../i18n.ts 分流说明）
 
 const { error, words, close } = useAIWordPanel()
 const { addWord, addAll } = useAIWordAdd()
@@ -38,25 +44,24 @@ const { addWord, addAll } = useAIWordAdd()
       <div v-if="words.length === 0" class="ai-word__state">
         <span class="ai-word__hint">{{ t('aiWord.empty') }}</span>
       </div>
-      <NScrollbar v-else class="ai-word__scroll">
-        <ul class="ai-word__list">
-          <li
-            v-for="(word, idx) in words"
-            :key="idx"
-            class="ai-word__item"
-            @click="addWord(word)"
+      <!-- 词列表：滚动容器即列表本体（原生滚动，见样式区说明） -->
+      <ul v-else class="ai-word__list">
+        <li
+          v-for="(word, idx) in words"
+          :key="idx"
+          class="ai-word__item"
+          @click="addWord(word)"
+        >
+          <span class="ai-word__word">{{ word }}</span>
+          <button
+            class="ai-word__add"
+            :title="t('aiWord.add')"
+            @click.stop="addWord(word)"
           >
-            <span class="ai-word__word">{{ word }}</span>
-            <button
-              class="ai-word__add"
-              :title="t('aiWord.add')"
-              @click.stop="addWord(word)"
-            >
-              ＋
-            </button>
-          </li>
-        </ul>
-      </NScrollbar>
+            ＋
+          </button>
+        </li>
+      </ul>
 
       <!-- 底部操作区 -->
       <div class="ai-word__actions">
@@ -71,7 +76,7 @@ const { addWord, addAll } = useAIWordAdd()
 /* 根元素只做内容纵向布局；宽度 / 外观容器样式归宿主窗口。
    收缩链：壳 body 为 flex column 且高度受壳 max-height 约束——本容器作为其
    flex 子项须允许收缩（min-height: 0），max-height: 100% 兜住父高度，
-   词多时把滚动交给内部 NScrollbar 而不是撑爆窗口 */
+   词多时把滚动交给词列表本体（原生滚动）而不是撑爆窗口 */
 .ai-word {
   display: flex;
   flex-direction: column;
@@ -104,22 +109,45 @@ const { addWord, addAll } = useAIWordAdd()
   word-break: break-all;
 }
 
-/* 词列表滚动区：随面板可用空间弹性收缩（flex 收缩链 + min-height: 0），
-   词多时列表内部滚动、底部操作区始终可见；max-height 260px 保留作为
-   无高度约束场景的上限（词少时列表高度=内容高度，不会被拉伸出空白） */
-.ai-word__scroll {
+/* 词列表 = 滚动容器本体：max-height 与 overflow-y 在持有内容的同一元素上，
+   是 CSS 规范保证的自包含滚动行为（无百分比高度链、无 JS 测量依赖），不可能截断。
+   ——刻意不用 NScrollbar：其内部 container 靠 height:100% 百分比链取高，在
+   「auto 高度 + max-height 钳制」（浮窗内容收缩场景）下百分比解析失败，
+   溢出内容被根 overflow:hidden 静默裁剪、无法滚动（前两轮修复的截断根因）。
+   flex 收缩链适配壳层小视口；max-height 260px 是无约束场景的上限
+   （词少时列表高度=内容高度，不会被拉伸出空白） */
+.ai-word__list {
   flex: 0 1 auto;
   min-height: 0;
   max-height: 260px;
-}
-
-.ai-word__list {
+  overflow-y: auto;
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Firefox：细滚动条，thumb 用中性色 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+/* Chrome / Safari / Edge：6px 细滚动条（圆角胶囊形，hover 加深一档） */
+.ai-word__list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-word__list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-word__list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.ai-word__list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
 }
 
 .ai-word__item {

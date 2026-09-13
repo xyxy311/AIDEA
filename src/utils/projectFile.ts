@@ -3,6 +3,7 @@ import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
 import { ROOT_NODE_ID } from '@/stores/node'
 import { deepClone } from '@/utils/command'
+import { t } from '@/composables/useT'
 
 /**
  * projectFile - 项目文件序列化 / 解析（纯函数，不依赖 store 实例）
@@ -157,10 +158,11 @@ export function parseProjectFile(json: string): ParsedProject {
   // —— 确保根节点存在 ——
   let projectName = typeof raw.projectName === 'string' ? raw.projectName.trim() : ''
   if (!nodeById.has(ROOT_NODE_ID)) {
+    // 回退文案经 t()（useT 占位层对纯函数友好：pinia 未就绪时自动回退中文表）
     const root = createNode({
       id: ROOT_NODE_ID,
       parentId: null,
-      text: projectName || '未命名项目',
+      text: projectName || t('common.untitledProject'),
     })
     nodes.push(root)
     nodeById.set(ROOT_NODE_ID, root)

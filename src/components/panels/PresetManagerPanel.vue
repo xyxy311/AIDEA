@@ -84,6 +84,11 @@ function handleFilterChange(value: string): void {
   else presetsStore.setConnectionGroupFilter(value)
 }
 
+/** 线型下拉选项：label 经 t() 实时翻译（computed 内，语言切换热更新） */
+const lineStyleOptions = computed(() =>
+  LINE_STYLE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
+)
+
 // ── 选中项（用于应用预设 / 保存当前为预设） ──
 
 const selectedNode = computed(() => {
@@ -480,7 +485,7 @@ function handleDeleteGroup(id: string): void {
         <!-- 连线字段 -->
         <template v-else>
           <NFormItem :label="t('connectionEditor.lineStyle')">
-            <NSelect v-model:value="formLineStyle" :options="LINE_STYLE_OPTIONS" />
+            <NSelect v-model:value="formLineStyle" :options="lineStyleOptions" />
           </NFormItem>
           <NFormItem :label="t('connectionEditor.width')">
             <NSlider v-model:value="formStrokeWidth" :min="1" :max="CONNECTION_MAX_STROKE_WIDTH" />

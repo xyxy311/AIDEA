@@ -13,10 +13,12 @@ import { createPresetsApi } from './presets'
 import { createThemeApi } from './theme'
 import { createFileApi } from './file'
 import { createShortcutsApi } from './shortcuts'
+import { createI18nApi } from './i18n'
 
 /**
  * 构造分类好的应用 api。已有域：node / connection / tag / project / view；
- * 新增域：presets / theme / file / shortcuts（仅只读查询）。
+ * 新增域：presets / theme / file / shortcuts / i18n（仅只读查询；
+ * i18n 为语言只读 + 文案翻译，语言切换是用户设置，对插件不可写）。
  * additions 已移出共享 api：插件命名空间数据仅经 adapter.for(pluginId) 的
  * PluginScope.additions 提供（`pluginId:` 前缀桶，见 api/additions.ts）；
  * shortcuts 的动作注册已移至注册面（ctx.register.registerShortcutAction）。
@@ -33,6 +35,7 @@ export function createPluginApi() {
     theme: createThemeApi(),
     file: createFileApi(),
     shortcuts: createShortcutsApi(),
+    i18n: createI18nApi(),
   }
 }
 
@@ -48,6 +51,7 @@ export { createPresetsApi } from './presets'
 export { createThemeApi } from './theme'
 export { createFileApi } from './file'
 export { createShortcutsApi } from './shortcuts'
+export { createI18nApi } from './i18n'
 export type { NodeApi } from './node'
 export type { ConnectionApi } from './connection'
 export type { TagApi } from './tag'
@@ -58,3 +62,4 @@ export type { PresetsApi } from './presets'
 export type { ThemeApi } from './theme'
 export type { FileApi } from './file'
 export type { ShortcutsApi } from './shortcuts'
+export type { I18nApi } from './i18n'

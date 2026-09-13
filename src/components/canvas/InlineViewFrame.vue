@@ -19,11 +19,12 @@ import type { KonvaEventObject } from 'konva/lib/Node'
 import { useNodeStore } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useThemeStore } from '@/stores/theme'
+import { t } from '@/composables/useT'
 import { deriveBackgroundColor } from '@/utils/color'
 import {
   DEFAULT_NODE_STYLE,
   INLINE_VIEW_TITLE_HEIGHT,
-  PLACEHOLDER_TEXT,
+  PLACEHOLDER_TEXT_KEY,
 } from '@/constants'
 
 const props = defineProps<{
@@ -84,7 +85,8 @@ const titleTextConfig = computed(() => {
   const r = inlineRect.value
   if (!n || !r) return {}
   return {
-    text: n.text || PLACEHOLDER_TEXT,
+    // 空文本占位文案经 t() 实时翻译（computed 内，切语言热更新）
+    text: n.text || t(PLACEHOLDER_TEXT_KEY),
     width: r.width,
     height: INLINE_VIEW_TITLE_HEIGHT,
     align: 'left' as const,

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { isReactive } from 'vue'
 import { createPluginAdapter } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
-import { DEFAULT_NODE_STYLE } from '@/constants'
+import { DEFAULT_NODE_STYLE, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
 /**
  * 节点域新增 API 测试（命令层写 + 查询扩展）。
@@ -125,6 +126,14 @@ describe('node api 扩展（resize / move / reparent / align / tags / style / re
     // undo 回退整段合并历史 → 回到改动前的原始色
     api.project.undo()
     expect(api.node.get(id)!.borderColor).toBe(original)
+  })
+
+  it('defaultSize: 返回主应用节点默认尺寸的普通对象快照', () => {
+    const api = makeApi()
+    const size = api.node.defaultSize()
+    expect(size).toEqual({ width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT })
+    // 只读快照：新构造的普通对象，非 store 内部 reactive 引用
+    expect(isReactive(size)).toBe(false)
   })
 
   it('reference 查询：getReferenceNodeId / referenceableNodes / referenceOf / isReferenceNameTaken', () => {

@@ -3,11 +3,12 @@ import { defineStore } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useStorage } from '@vueuse/core'
 import type { NodePresetStyle, ConnectionPresetStyle, PresetGroup } from '@/types'
+import { t } from '@/composables/useT'
 import {
   DEFAULT_NODE_PRESETS,
   DEFAULT_CONNECTION_PRESETS,
   BUILTIN_PRESET_GROUP_ID,
-  BUILTIN_PRESET_GROUP_NAME,
+  BUILTIN_PRESET_GROUP_KEY,
 } from '@/constants'
 
 /**
@@ -105,8 +106,10 @@ export const usePresetsStore = defineStore('presets', () => {
   function ensureBuiltinGroup(type: PresetKind): void {
     const ref = groupsRef(type)
     if (ref.value.some((g) => g.id === BUILTIN_PRESET_GROUP_ID)) return
+    // 有意行为：分组名仅在初始化建组时机经 t() 固化为当前语言文本写入数据，
+    // 已存 localStorage 的旧数据不追溯重译
     ref.value = [
-      { id: BUILTIN_PRESET_GROUP_ID, name: BUILTIN_PRESET_GROUP_NAME, builtin: true },
+      { id: BUILTIN_PRESET_GROUP_ID, name: t(BUILTIN_PRESET_GROUP_KEY), builtin: true },
       ...ref.value,
     ]
   }
@@ -126,8 +129,11 @@ export const usePresetsStore = defineStore('presets', () => {
     sanitizeFilters()
 
     if (nodePresets.value.length === 0) {
+      // 有意行为：默认预设名仅在初始化时机经 t() 固化为当前语言文本写入数据，
+      // 已存 localStorage 的旧数据不追溯重译；nameKey 不写入持久化数据
       nodePresets.value = DEFAULT_NODE_PRESETS.map((p) => ({
-        ...p,
+        name: t(p.nameKey),
+        borderColor: p.borderColor,
         id: nanoid(),
         type: 'node' as const,
         groupId: BUILTIN_PRESET_GROUP_ID,
@@ -135,8 +141,14 @@ export const usePresetsStore = defineStore('presets', () => {
     }
 
     if (connectionPresets.value.length === 0) {
+      // 有意行为：同上，名称经 t(nameKey) 固化，nameKey 不写入持久化数据
       connectionPresets.value = DEFAULT_CONNECTION_PRESETS.map((p) => ({
-        ...p,
+        name: t(p.nameKey),
+        lineStyle: p.lineStyle,
+        strokeWidth: p.strokeWidth,
+        strokeColor: p.strokeColor,
+        directed: p.directed,
+        applyText: p.applyText,
         id: nanoid(),
         type: 'connection' as const,
         groupId: BUILTIN_PRESET_GROUP_ID,

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createPluginAdapter } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
+import { useStageSize } from '@/composables/useStageSize'
 
 /**
  * 插件视图域扩展 API 测试（视口 / 选中 / 编辑态 / 内联视图 / 网格）。
@@ -35,6 +36,26 @@ describe('插件视图域扩展 API', () => {
     expect(view.stageX()).toBe(120)
     expect(view.stageY()).toBe(80)
     expect(view.stageScale()).toBe(2)
+  })
+
+  it('viewportCenterWorld: 视口中心换算为世界坐标', () => {
+    const view = makeView()
+    // 测试环境未注册画布容器，stageWidth/Height 走 useStageSize 的窗口回退值
+    //（happy-dom 固定窗口 1024x768 - 顶部条常量），从同一来源读取实测值反推期望，
+    // 断言换算公式：world = (screenCenter - offset) / scale（等价于
+    // stageX=100, scale=2, stageWidth=800 时 x=(400-100)/2=150 的装配思路）。
+    const { stageWidth, stageHeight } = useStageSize()
+    view.setViewport(100, 50, 2)
+    expect(view.viewportCenterWorld()).toEqual({
+      x: (stageWidth.value / 2 - 100) / 2,
+      y: (stageHeight.value / 2 - 50) / 2,
+    })
+    // 默认视口（无偏移 + 缩放 1）时中心即画布正中
+    view.setViewport(0, 0, 1)
+    expect(view.viewportCenterWorld()).toEqual({
+      x: stageWidth.value / 2,
+      y: stageHeight.value / 2,
+    })
   })
 
   // ── 选中 ──

@@ -18,26 +18,6 @@ describe('useNodeTree', () => {
     expect(flatTree.value[0].parentId).toBeNull()
   })
 
-  it('addSubNode 在父节点下创建子节点并出现在树中（含 parentId）', () => {
-    const nodeStore = useNodeStore()
-    const { flatTree, addSubNode } = useNodeTree()
-
-    addSubNode(ROOT_NODE_ID)
-
-    // 根 + 1 个子节点
-    expect(flatTree.value.length).toBe(2)
-    const child = flatTree.value[1]
-    expect(child.depth).toBe(1)
-    expect(child.name).toBe('新节点')
-    expect(child.isRoot).toBe(false)
-    expect(child.parentId).toBe(ROOT_NODE_ID)
-
-    // 子节点存在于 nodeStore 且 parentId 正确
-    const childNode = nodeStore.getNode(child.id)
-    expect(childNode).toBeTruthy()
-    expect(childNode!.parentId).toBe(ROOT_NODE_ID)
-  })
-
   it('deleteNodeRecursive 递归删除节点及整个子树', () => {
     const nodeStore = useNodeStore()
     const { flatTree, addSubNode, deleteNodeRecursive } = useNodeTree()

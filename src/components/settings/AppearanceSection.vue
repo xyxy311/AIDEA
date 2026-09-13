@@ -2,12 +2,16 @@
 /**
  * AppearanceSection — 设置面板「外观」分区
  *
- * 深色模式开关 + 内置主色（内置色）单选。
+ * 深色模式开关 + 内置主色（内置色）单选 + 界面语言下拉框。
+ * 语言切换写 themeStore（locale 持久化到 localStorage('aidea-locale')），
+ * 界面文案（useT）与 naive-ui 自带文案（NConfigProvider locale）随切换热更新。
  */
-import { NSwitch, NRadioGroup, NRadioButton } from 'naive-ui'
+import { NSwitch, NRadioGroup, NRadioButton, NSelect } from 'naive-ui'
 import { computed } from 'vue'
 import type { AccentSchemeId } from '@/config/colorSchemes'
+import type { LocaleId } from '@/types/locale'
 import { accentSchemes } from '@/config/colorSchemes'
+import { LOCALE_OPTIONS } from '@/constants/locale'
 import { useThemeStore } from '@/stores/theme'
 import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
@@ -22,6 +26,9 @@ const dotColors = computed(() => {
     blue: accentSchemes.blue.variants[mode].cssVars['--color-primary'],
   }
 })
+
+/** 语言选择器选项：label 为语言自名（不可翻译，见 constants/locale.ts） */
+const localeOptions = computed(() => LOCALE_OPTIONS.map((o) => ({ label: o.label, value: o.id })))
 </script>
 
 <template>
@@ -56,5 +63,25 @@ const dotColors = computed(() => {
         </NRadioButton>
       </NRadioGroup>
     </div>
+
+    <div class="setting-row row-stack">
+      <div class="setting-cell">
+        <div class="setting-label">{{ t('settings.language') }}</div>
+      </div>
+      <NSelect
+        class="lang-select"
+        :value="theme.locale"
+        :options="localeOptions"
+        :consistent-menu-width="false"
+        @update:value="(v: LocaleId) => theme.setLocale(v)"
+      />
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* 语言下拉框：与该行控件区右对齐，固定宽度保持行内布局紧凑 */
+.lang-select {
+  width: 160px;
+}
+</style>

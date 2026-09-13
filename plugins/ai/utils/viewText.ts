@@ -15,7 +15,7 @@
  *   重叠（含 tolerance 容差）则并入该行并扩展区间，否则新建行；行内按 x 排序。
  *   每个节点恰好出现一次，无去重歧义、无步长魔法参数。
  */
-import type { WhiteboardNode } from '@/types'
+import type { WhiteboardNode } from '@/plugin/adapter'
 
 /** 算法输入节点：仅需几何与首行/文本，隔离 store 依赖 */
 export type ViewTextNode = Pick<WhiteboardNode, 'id' | 'x' | 'y' | 'width' | 'height' | 'text'>

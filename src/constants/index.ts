@@ -62,7 +62,8 @@ export const MARQUEE_ACTIVATE_THRESHOLD: number = 5
 export const NODE_DRAG_THRESHOLD: number = 5
 
 // ── 占位文本 ──
-export const PLACEHOLDER_TEXT: string = '双击编辑'
+/** 节点空文本占位文案的 i18n key（消费处经 t() 翻译，禁止直接落中文常量） */
+export const PLACEHOLDER_TEXT_KEY: string = 'canvas.placeholderEdit'
 export const PLACEHOLDER_TEXT_COLOR: string = '#9ca3af'
 
 // ── 画布缩放 ──
@@ -71,7 +72,7 @@ export const MAX_SCALE: number = 5
 export const ZOOM_STEP: number = 1.1
 
 // ── 默认节点文本 ──
-export const DEFAULT_NODE_TEXT: string = '新节点'
+export const DEFAULT_NODE_TEXT: string = 'New Node'
 
 // ── 连线样式 ──
 
@@ -90,11 +91,15 @@ export const DEFAULT_CONNECTION_DIRECTED = true
 /** 连线最大描边宽度 */
 export const CONNECTION_MAX_STROKE_WIDTH = 10
 
-/** 线型选项（用于 UI 下拉） */
-export const LINE_STYLE_OPTIONS: { label: string; value: LineStyle }[] = [
-  { label: '实线', value: 'solid' },
-  { label: '虚线', value: 'dashed' },
-  { label: '点线', value: 'dotted' },
+/**
+ * 线型选项（用于 UI 下拉）。
+ * labelKey 为 i18n key：消费处经 t() 翻译（须包一层 computed 保证切语言热更新），
+ * 常量本身不落中文文案。
+ */
+export const LINE_STYLE_OPTIONS: { labelKey: string; value: LineStyle }[] = [
+  { labelKey: 'connection.lineStyleSolid', value: 'solid' },
+  { labelKey: 'connection.lineStyleDashed', value: 'dashed' },
+  { labelKey: 'connection.lineStyleDotted', value: 'dotted' },
 ]
 
 /** 线型 → Konva dash 数组映射 */
@@ -136,27 +141,34 @@ export const CONNECTION_LABEL_RADIUS: number = 4
 /** 内置保留分组 id（内置预设默认归入此分组，不可删除/改名） */
 export const BUILTIN_PRESET_GROUP_ID: string = 'builtin'
 
-/** 内置保留分组名称 */
-export const BUILTIN_PRESET_GROUP_NAME: string = '内置'
+/** 内置保留分组名称的 i18n key（仅 store 初始化建组时经 t() 固化为数据文本） */
+export const BUILTIN_PRESET_GROUP_KEY: string = 'presets.groupBuiltin'
 
-/** 默认节点预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
-export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type' | 'groupId'>[] = [
-  { name: '默认', borderColor: '#7d7d7dff' },
-  { name: '蓝色', borderColor: '#3b82f6' },
-  { name: '绿色', borderColor: '#22c55e' },
-  { name: '黄色', borderColor: '#eab308' },
-  { name: '红色', borderColor: '#ef4444' },
-  { name: '紫色', borderColor: '#a855f7' },
-  { name: '粉色', borderColor: '#ec4899' },
+/**
+ * 默认节点预设（不含 id/type/groupId/name，由 store 初始化时分配 id 并归入内置分组）。
+ * nameKey 为 i18n key：仅初始化时机经 t(nameKey) 固化为当前语言文本写入数据，
+ * 已持久化的旧数据不追溯重译（有意行为）。
+ */
+export const DEFAULT_NODE_PRESETS: (Omit<NodePresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
+  { nameKey: 'presets.nodeDefault', borderColor: '#7d7d7dff' },
+  { nameKey: 'presets.nodeBlue', borderColor: '#3b82f6' },
+  { nameKey: 'presets.nodeGreen', borderColor: '#22c55e' },
+  { nameKey: 'presets.nodeYellow', borderColor: '#eab308' },
+  { nameKey: 'presets.nodeRed', borderColor: '#ef4444' },
+  { nameKey: 'presets.nodePurple', borderColor: '#a855f7' },
+  { nameKey: 'presets.nodePink', borderColor: '#ec4899' },
 ]
 
-/** 默认连线预设（不含 id/type/groupId，由 store 初始化时分配 id 并归入内置分组） */
-export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId'>[] = [
-  { name: '默认灰线', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
-  { name: '蓝色箭头', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },
-  { name: '红色虚线', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true, applyText: false },
-  { name: '绿色无箭头', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false, applyText: false },
-  { name: '灰色点线', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false, applyText: false },
+/**
+ * 默认连线预设（不含 id/type/groupId/name，由 store 初始化时分配 id 并归入内置分组）。
+ * nameKey 语义同 DEFAULT_NODE_PRESETS。
+ */
+export const DEFAULT_CONNECTION_PRESETS: (Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
+  { nameKey: 'presets.connDefault', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
+  { nameKey: 'presets.connBlueArrow', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },
+  { nameKey: 'presets.connRedDashed', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true, applyText: false },
+  { nameKey: 'presets.connGreenPlain', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false, applyText: false },
+  { nameKey: 'presets.connGrayDotted', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false, applyText: false },
 ]
 
 // ── 内联视图 ──

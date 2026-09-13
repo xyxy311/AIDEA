@@ -282,7 +282,7 @@ app mount
 
 ## 十四、示例与测试
 
-- `plugins/hello/` 扩展：新增 `StatsPanel.vue`（面板，读 `api.view/project.stats`）、一个顶栏按钮（`summarize` 私有命令触发）、一个设置栏目（读写 `aidea-plugin-config.hello`）——三管齐下演示注册面。
+- 内置插件 `plugins/ai/`：面板（`AIPanel`，读视图数据）+ 设置栏目（`AISettingsPanel`，读写 `aidea-plugin-config.ai`）——演示注册面（顶栏按钮注册当前无内置插件消费者，机制见 §六）。
 - **契约测试**（`src/__tests__/plugin/ui-registry.test.ts`）：
   - 注册 id 归一为 `pluginId:key`；重复 key 拒注册返回 `false` + error 态。
   - `unregisterByPlugin` 批量清除。
@@ -301,7 +301,7 @@ app mount
 | **2b** | **registerTopBarButton** + `wrapTopBarButton` 工厂 + mergedTopBar + `ensureTop` + onClick 隔离 | 顶栏按钮可注册、可换位 |
 | **2c** | **registerSettingsCategory** + `useSettingsCategories`（分隔线分组） + 合并视图 + `PluginErrorBoundary` | 设置栏目可注册、分隔线隔离 |
 
-每步遵循主文档 §二.8 的节奏：**只增不改 + hello 示例 + 契约测试**。
+每步遵循主文档 §二.8 的节奏：**只增不改 + 插件示例验证 + 契约测试**。
 
 ---
 
@@ -331,7 +331,7 @@ app mount
 - **测试**：`ui-registry.test.ts`、`stores/additions.test.ts`、`utils/dock.test.ts`/`topbar.test.ts` 的 isExtraValid 用例；全量 `type-check` 零错误 + `test` 408 全绿。
 
 ### 17.2 已确认的搁置项 / 偏差
-- **provide('aidea-plugin-adapter') 未实现（后续增量）**：插件面板/设置组件暂时拿不到 per-plugin 的 scoped adapter；示例插件经 `createAdditionsApi('hello')` 变通（同作用域手动构造，与 manager 内部同款机制）。真实插件如需在 UI 组件内写 additions，待补 provide 后统一经 `ctx.adapter` 能力，避免直调内部工厂。
+- **provide('aidea-plugin-adapter') 未实现（后续增量）**：插件 UI 组件拿不到注入的 scoped adapter；现状插件直接 `import { adapter }`（全局单例）并在模块顶层 `adapter.for(pluginId)` 取作用域实例（先例：ai 插件各 store），组件内读写 additions/config 统一经该实例进行，不直调内部工厂。
 - **布局归一化的 discovered 插件 id 依赖编译期同步读取**：当前取 `collectPluginEntries()`。若未来迁运行时加载，`layout.store` 的 `isPluginKeyValid` 需改为异步注入来源。
 - **UI 注册 id 冲突仅为"拒注册 + console.warn"**，不置插件 error（不影响其余注册项）。
 
@@ -394,4 +394,4 @@ layout  delta 排布 + 派生实时目录               [stores/layout.ts 重写
 - **第四类 UI 注册**：`ctx.adapter.ui.registerContextMenuItem({ id, scope: 'canvas'|'selection', label, icon?, danger?, when?, run })` → `{ ok, conflict? }`，登记进 uiRegistry 新表 `contextMenuItems`（key=`${pluginId}:${id}`，冲突拒注册）；`removePlugin` 回滚覆盖。渲染在 `useCanvasEvents.handleStageContextMenu` 构建处追加：无选中 = canvas 项、有选中 = selection 项（「发散」之后），`when({selectedNodeIds})` 过滤、`run` 收到展开拷贝；**不加分隔线**，`ContextMenu.vue` 渲染组件零改动。
 - **插件快捷键动作**：`api.shortcuts.registerAction({ id, label, scope, defaultChord?, run })` → `{ ok, conflict? }`，登记进 uiRegistry 新表 `shortcutActions`。shortcuts 域 per-plugin 化：`createShortcutsApi(pluginId | null)`——共享实例传 `null`（`registerAction` 抛错拒绝），scoped 实例由 manager `createPluginContext` 注入 `manifest.id`（与 additions ownerId 同模式）。进自定义快捷键全链：shortcuts store `bindings`/`assign`/`validate`（插件命名空间覆盖不清理）、`useKeyboardShortcuts.runtimeMap` 合并、`ShortcutsSection` 列表合并可录制改键。详见 `docs/自定义快捷键.md`「插件注册的动作」。
 - **冲突返回值规范化（部分）**：新两类注册定义可探测返回值 `{ ok, conflict: 'id' | 'chord' }`（uiRegistry 现有三类 `registerPlugin*` 仍返回 boolean）；面板/顶栏/设置栏目 api 层注册仍为「拒注册 + warn」。
-- **测试**：新增 `__tests__/plugin/api-shortcuts.test.ts`（15 用例）、`__tests__/composables/useCanvasEvents.pluginMenu.test.ts`（6 用例），ui-registry / shortcuts store / useKeyboardShortcuts 扩展共 24 用例；hello 插件演示两组注册。
+- **测试**：新增 `__tests__/plugin/api-shortcuts.test.ts`（15 用例）、`__tests__/composables/useCanvasEvents.pluginMenu.test.ts`（6 用例），ui-registry / shortcuts store / useKeyboardShortcuts 扩展共 24 用例；ai 插件演示两类注册（`generate`/`clear` 快捷键动作 + `divergence` 右键项）。

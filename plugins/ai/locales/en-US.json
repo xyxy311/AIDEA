@@ -1,0 +1,102 @@
+{
+  "aiPanel": {
+    "globalPrompt": "Global Prompt",
+    "globalPromptPlaceholder": "Background context for the whole project; optional",
+    "sectionView": "Current View Settings",
+    "localPrompt": "Local Prompt",
+    "localPromptPlaceholder": "Extra instructions applied to the current view only; optional",
+    "mode": "Mode",
+    "modeFast": "Fast",
+    "modePrecise": "Precise (join words into sentences first)",
+    "viewTextAlgo": "Spatial layout algorithm",
+    "reset": "Reset",
+    "preview": "Context Preview",
+    "previewPlaceholder": "Click \"Generate Preview\" or type content directly",
+    "generatePreview": "Generate Preview",
+    "copy": "Copy",
+    "copied": "Copied",
+    "sentence": "Join into sentences",
+    "sentenceLoading": "Joining into sentences…",
+    "sentencePlaceholder": "Sentence result; edit it and use it as input for \"Generate\"",
+    "directGenerate": "Generate",
+    "directGenerateLoading": "Generating…",
+    "regenerate": "Regenerate",
+    "regenerateLoading": "Regenerating…",
+    "directEmpty": "Preview is empty. Click \"Generate Preview\" or type content first",
+    "empty": "No nodes in the current view"
+  },
+  "aiWord": {
+    "title": "AI Generated Words",
+    "error": "Generation failed: {message}",
+    "empty": "No results. Try again",
+    "add": "Add",
+    "addAll": "Add All",
+    "close": "Close",
+    "clear": "Clear"
+  },
+  "leftSidebar": {
+    "ai": "AI"
+  },
+  "settings": {
+    "aiSettings": "AI Settings",
+    "aiConnection": "AI Connection",
+    "aiConnectionDesc": "Configure LLM connection parameters. Changes take effect immediately and are saved to the plugin config, not to project files",
+    "aiBaseURL": "Base URL",
+    "aiBaseURLDesc": "OpenAI-compatible endpoint; local Ollama defaults to http://localhost:11434/v1",
+    "aiModel": "Model Name",
+    "aiModelDesc": "Must match a model name available on the endpoint, e.g. qwen2.5-coder:7b",
+    "aiApiKey": "API Key",
+    "aiApiKeyDesc": "Optional; usually not needed for local Ollama",
+    "aiTimeout": "Timeout (ms)",
+    "aiTemperature": "Temperature",
+    "aiConnectionReset": "Reset connection settings",
+    "aiShortcuts": "Shortcuts",
+    "aiShortcutsDesc": "Shortcut actions registered by this plugin; click a keycap to rebind",
+    "aiDirections": "Divergence Directions",
+    "aiDirectionsDesc": "Manage AI divergence directions and their default behavior",
+    "aiDirectionDefault": "Default direction",
+    "aiDirectionsEmpty": "No directions yet",
+    "defaultBadge": "Default",
+    "directionAdd": "Add Direction",
+    "directionEdit": "Edit Direction",
+    "directionDelete": "Delete Direction",
+    "directionDeleteConfirm": "Delete direction \"{name}\"?",
+    "directionTitle": "Title",
+    "directionTitlePlaceholder": "e.g. Why?",
+    "directionTitleRequired": "Direction title is required",
+    "directionPrompt": "Prompt",
+    "directionPromptPlaceholder": "Divergence instruction for this direction; may reference the divergence start with ${from}",
+    "directionPromptRequired": "Prompt is required",
+    "directionSeparator": "Separator",
+    "directionSeparatorPlaceholder": "Space by default",
+    "directionSeparatorHint": "Separator used when merging multiple divergence starts; optional, defaults to a space.",
+    "resetDirections": "Reset Directions",
+    "resetDirectionsConfirm": "Reset to default divergence directions? Custom directions will be cleared and built-in defaults restored."
+  },
+  "shortcuts": {
+    "actionAIGenerate": "AI generate words",
+    "actionAIClear": "Clear AI generated words"
+  },
+  "canvas": {
+    "divergence": "Diverge"
+  },
+  "viewTextPanel": {
+    "paramTolerance": "Vertical tolerance",
+    "paramIncludeCoords": "Show coordinates",
+    "paramSeparator": "Separator",
+    "sepTab": "Tab",
+    "sepComma": "Comma",
+    "sepSemicolon": "Semicolon",
+    "sepPipe": "Pipe",
+    "algorithmRow": "Row clustering",
+    "algorithmLine": "Straight-line hit",
+    "paramYThreshold": "Center Y threshold",
+    "paramOffset": "Line offset",
+    "paramOverlapRatio": "Merge threshold",
+    "algorithmCollectAll": "Collect all"
+  },
+  "common": {
+    "confirm": "OK",
+    "cancel": "Cancel"
+  }
+}

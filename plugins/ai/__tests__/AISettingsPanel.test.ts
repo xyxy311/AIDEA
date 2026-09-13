@@ -7,7 +7,8 @@ import AISettingsPanel from '../components/AISettingsPanel.vue'
 import { useAIConfigStore } from '../stores/aiConfig'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { AI_DEFAULT_CONFIG } from '../constants'
-import { t } from '@/composables/useT'
+// 插件 t：断言文案与组件同源（组件已统一走插件语言包）
+import { t } from '../i18n'
 
 /**
  * AISettingsPanel（「AI 设置」栏目壳：单栏目三分区）挂载冒烟：

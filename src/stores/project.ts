@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore, getActivePinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
+import { t } from '@/composables/useT'
 import { generateId } from '@/utils/id'
 import type { InlineViewItem } from '@/stores/view'
 
@@ -98,8 +99,8 @@ export const useProjectStore = defineStore('project', () => {
 
   // ── 项目名（根节点 text 单一数据源）──
 
-  /** 项目名 = 根节点 text */
-  const projectName = computed(() => nodeStore.rootNode?.text ?? '未命名项目')
+  /** 项目名 = 根节点 text（无根节点时回退文案经 t() 取当前语言资源） */
+  const projectName = computed(() => nodeStore.rootNode?.text ?? t('common.untitledProject'))
 
   /** 设置项目名 = 修改根节点 text */
   function setProjectName(name: string): void {

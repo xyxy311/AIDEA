@@ -22,7 +22,7 @@
 import type { AideaPlugin, PluginContext, PluginManifest } from '@/plugin/adapter'
 import { adapter, SDK_VERSION } from '@/plugin/adapter'
 import { SparklesOutline } from '@vicons/ionicons5'
-import { t } from '@/composables/useT'
+import { t } from './i18n' // 插件自有语言包：本插件全部文案（含 leftSidebar./settings./shortcuts./canvas. 分区）的唯一解析入口
 import AIPanel from './components/AIPanel.vue'
 import FloatingAIWordPanel from './components/FloatingAIWordPanel.vue'
 import AISettingsPanel from './components/AISettingsPanel.vue'

@@ -10,15 +10,14 @@
  *   data.connection，即时持久化、不入项目历史），无需本地镜像；
  *   「恢复默认连接配置」经 store.resetToDefaults()（watch 自动写回）。
  * - 布局沿用内置 Settings Section 的 .settings-controls/.setting-row 结构
- *   （import 主程序 settings-shared.css，与 AIDirectionsSection 写法一致）。
+ *   （SDK 共享样式 settings-shared.css 经 adapter 统一注入，与 AIDirectionsSection 写法一致）。
  * 注意：组件不得 import 插件入口 index.ts（会被入口 import，构成循环依赖）。
  * 快捷键改键分区已上移 AISettingsPanel（分区②），本组件只负责连接参数。
  */
 import { NButton, NInput, NInputNumber } from 'naive-ui'
 import { useAIConfigStore } from '../stores/aiConfig'
 import { AI_DEFAULT_CONFIG } from '../constants'
-import { t } from '@/composables/useT'
-import '@/components/settings/settings-shared.css'
+import { t } from '../i18n'
 
 const aiConfig = useAIConfigStore()
 

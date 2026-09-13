@@ -13,7 +13,6 @@ import {
 import { parseTopDelta, deriveTopLayout, type TopDelta } from '@/utils/topbar'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import type { UiPanelEntry, UiTopBarEntry } from '@/stores/uiRegistry'
-import { collectPluginEntries } from '@/plugin/manager'
 
 /**
  * 布局 Store —— 排布层（delta 模型）
@@ -27,8 +26,10 @@ import { collectPluginEntries } from '@/plugin/manager'
  * 目录里，无需归一化补齐与 ensure* 落位；「恢复默认布局」= 清空 delta。
  * 旧版完整列表数据按 delta 读取语义等价，无需迁移（沿用旧 key）。
  *
- * 插件布局保留：delta 清洗时「未登记但 pluginId 前缀 ∈ 已发现插件（编译期收集）」
- * 的键保留——禁用→启用循环不丢位置；彻底移除插件才清除。
+ * 插件布局保留：delta 清洗分两段——初始 parse 用「不依赖插件发现集」的谓词（插件
+ * 前缀键一律保留，插件装载是异步的，setup 时发现集尚为空）；发现集经
+ * setDiscoveredPluginIds 回填（plugin store 在注册 UI 前调用）后再用完整谓词重清洗
+ * 并持久化——禁用→启用循环不丢位置；彻底移除插件才清除残留键。
  *
  * 纯状态转换在 utils/dock.ts / utils/topbar.ts（可单测）。
  */
@@ -36,16 +37,23 @@ export const useLayoutStore = defineStore('layout', () => {
   // ── 登记总表（内置已 seed；插件注册后派生目录自动更新）──
   const registry = useUiRegistryStore()
 
-  // ── 插件 key 合法性（delta 清洗用；已发现插件集合编译期同步可得）──
-  const discoveredPluginIds = new Set(collectPluginEntries().map((e) => e.id))
+  // ── 插件 key 合法性（delta 清洗用；发现集由 plugin store 装载完成前异步回填）──
+  const discoveredPluginIds = ref(new Set<string>())
   /** 插件布局 key：`${pluginId}:${id}` 的 pluginId 前缀 ∈ 已发现插件集合 */
   const pluginPrefixKnown = (key: string): boolean => {
     const i = key.indexOf(':')
-    return i > 0 && discoveredPluginIds.has(key.slice(0, i))
+    return i > 0 && discoveredPluginIds.value.has(key.slice(0, i))
   }
-  /** delta 键合法性：当前已登记 ∪ 已发现插件前缀（禁用→启用保留布局记录） */
+  /** delta 键合法性（完整谓词）：当前已登记 ∪ 已发现插件前缀（禁用→启用保留布局记录） */
   const isKnown = (key: string): boolean =>
     registry.panels.has(key) || registry.topBarButtons.has(key) || pluginPrefixKnown(key)
+  /**
+   * delta 初始清洗谓词：不依赖插件发现集（回填是异步的，setup 时集合尚为空）。
+   * 插件前缀键（含 ':'）初始一律保留——窗口期宁可多保留（派生层 filter(!!e) 与
+   * 渲染层天然忽略未登记键），回填后经 setDiscoveredPluginIds 重清洗修正。
+   */
+  const isKnownInitial = (key: string): boolean =>
+    registry.panels.has(key) || registry.topBarButtons.has(key) || key.includes(':')
 
   // ── localStorage 读写 ──
   /** 左侧用户顺序 delta */
@@ -74,6 +82,7 @@ export const useLayoutStore = defineStore('layout', () => {
   }
 
   // ── delta 状态（内存 ref；变更即持久化）──
+  // 初始 parse 用 isKnownInitial：插件前缀键一律保留（发现集未回填，宁可多保留）
   const dockDelta = parseDockDelta(
     {
       leftOrder: readJson(STORAGE_LEFT),
@@ -81,7 +90,7 @@ export const useLayoutStore = defineStore('layout', () => {
       removed: readJson(STORAGE_REMOVED),
       rightSizes: readJson(STORAGE_SIZES),
     },
-    isKnown,
+    isKnownInitial,
   )
   /** 左侧用户顺序（空 = 默认顺序） */
   const leftOrder = ref<PanelKey[]>(dockDelta.leftOrder ?? [])
@@ -94,7 +103,7 @@ export const useLayoutStore = defineStore('layout', () => {
 
   const topDelta = parseTopDelta(
     { leftOrder: readJson(STORAGE_TOP_LEFT), rightOrder: readJson(STORAGE_TOP_RIGHT) },
-    isKnown,
+    isKnownInitial,
   )
   /** 左顶部条用户顺序（空 = 默认顺序） */
   const leftTopOrder = ref<TopBarKey[]>(topDelta.leftOrder ?? [])
@@ -110,6 +119,39 @@ export const useLayoutStore = defineStore('layout', () => {
   function persistTop(): void {
     writeJson(STORAGE_TOP_LEFT, leftTopOrder.value)
     writeJson(STORAGE_TOP_RIGHT, rightTopOrder.value)
+  }
+
+  /**
+   * 回填已发现插件 id（plugin store 在 installAll 之前、注册 UI 之前调用：
+   * 面板 / 顶栏按钮 delta 在注册前即已正确）。
+   * 回填后用完整谓词（内置键 ∪ 插件前缀 ∈ 发现集）重清洗五组 delta（dock 左右
+   * 顺序 / removed / sizes + top 左右顺序）并各 persist 一次：初始 parse 阶段插件
+   * 前缀键一律保留（isKnownInitial），此处剔除「发现集不含」的残留键——禁用→启用
+   * 循环不丢布局，彻底移除的插件 delta 不滞留。
+   */
+  function setDiscoveredPluginIds(ids: string[]): void {
+    discoveredPluginIds.value = new Set(ids)
+    const dock = parseDockDelta(
+      {
+        leftOrder: leftOrder.value,
+        rightOrder: rightOrder.value,
+        removed: removedPanels.value,
+        rightSizes: rightSizes.value,
+      },
+      isKnown,
+    )
+    leftOrder.value = dock.leftOrder ?? []
+    rightOrder.value = dock.rightOrder ?? []
+    removedPanels.value = dock.removed ?? []
+    rightSizes.value = dock.rightSizes ?? {}
+    const top = parseTopDelta(
+      { leftOrder: leftTopOrder.value, rightOrder: rightTopOrder.value },
+      isKnown,
+    )
+    leftTopOrder.value = top.leftOrder ?? []
+    rightTopOrder.value = top.rightOrder ?? []
+    persistDock()
+    persistTop()
   }
 
   // ── 派生实时目录（下游渲染组件的渲染参考）──
@@ -352,5 +394,7 @@ export const useLayoutStore = defineStore('layout', () => {
     reorderTop,
     moveTopZone,
     resetTopBar,
+    // 插件发现集回填（plugin store init 装载前调用，触发 delta 重清洗）
+    setDiscoveredPluginIds,
   }
 })

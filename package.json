@@ -3,12 +3,15 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
     "build": "vue-tsc --noEmit && vite build",
+    "build:desktop": "npm run build && node scripts/build-electron.mjs",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit && tsc -p tsconfig.electron.json"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
@@ -21,8 +24,12 @@
     "vue-konva": "^3"
   },
   "devDependencies": {
+    "@types/node": "^24",
     "@vitejs/plugin-vue": "^5",
     "@vue/test-utils": "^2",
+    "chokidar": "^4",
+    "electron": "^38",
+    "esbuild": "^0.25",
     "happy-dom": "^15",
     "typescript": "~5.7",
     "vite": "^6",

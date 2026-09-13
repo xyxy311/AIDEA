@@ -65,7 +65,9 @@
     "enableHint": "启用此插件（重启应用生效）",
     "disableHint": "禁用此插件（重启应用生效）",
     "componentError": "该插件组件渲染失败",
-    "retry": "重试"
+    "retry": "重试",
+    "sourceBuiltin": "内置",
+    "sourceLocal": "本地"
   },
   "shortcuts": {
     "recording": "请按键…",

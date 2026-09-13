@@ -2,8 +2,9 @@
  * manager.ts —— 插件「加载 + 生命周期」单一模块
  *
  * 合并原 source.ts（静态 glob 收集）与 context.ts（上下文组装），收敛过度抽象的接口：
- * - 踩点收集（`collectPluginEntries`）在模块内完成并产出 `PluginEntry[]`；
- *   测试可注入假 entries，不依赖 Vite glob。
+ * - 插件收集收口在 sources/（builtin 编译期 glob + desktop 桥扫描），本模块经
+ *   `export { collectPluginEntries } from './sources'` 暴露 Promise 形式聚合；
+ *   装载本身测试可注入假 entries，不依赖 Vite glob。
  * - 启停意愿经 `getEnabled` 回调只读进入（持久化写入是 store 专属职责）。
  * - 启停**不卸载代码文件**，而是不调 setup（禁用状态）；setup 抛错走 onDispose → dispose() 回滚（活路径）。
  *
@@ -18,25 +19,15 @@ import { createPluginRegister, createPluginModalApi, createPluginFloatingApi, ro
 export interface PluginEntry {
   id: string
   loader: () => Promise<{ default?: AideaPlugin; [k: string]: unknown }>
+  /** 来源标记：builtin=随包内置（聚合层填充）；local=桌面本地目录（desktop 源填充） */
+  source?: 'builtin' | 'local'
 }
 
-/** 从编译期路径推断插件 id：取 `…/<name>/index.ts` 中的 <name> */
-export function pluginIdFromPath(path: string): string {
-  const match = /([^/]+)\/index\.(ts|js|vue)$/.exec(path)
-  return match ? match[1] : path
-}
+// 内置源提供 pluginIdFromPath 的唯一定义（本模块 re-export 保持既有测试引用不变）
+export { pluginIdFromPath } from './sources/builtin'
 
-/**
- * 编译期 glob 收集 `../../plugins/**` 各插件入口，产出 `PluginEntry[]`。
- * loader 惰性 `import` 对应模块，与 Vue 组件一样受 dev HMR 监看。
- */
-export function collectPluginEntries(): PluginEntry[] {
-  const modules = import.meta.glob('../../plugins/**/index.{ts,js}')
-  return Object.entries(modules).map(([path, loader]) => ({
-    id: pluginIdFromPath(path),
-    loader: loader as PluginEntry['loader'],
-  }))
-}
+// 插件收集的聚合收口：内置源 ∪ 桌面本地源（id 冲突内置优先），见 sources/index.ts
+export { collectPluginEntries } from './sources'
 
 /** PluginContext 内部形态：额外携带触发全部 onDispose 回调的 dispose() */
 interface InternalPluginContext extends PluginContext {
@@ -88,6 +79,8 @@ export interface PluginRecord {
   status: PluginStatus
   /** 持久化"启用意愿"；active 需要 enabled=true（启停经重启应用生效） */
   enabled: boolean
+  /** 来源：builtin=随包内置；local=桌面本地目录（plugins 目录扫描） */
+  source: 'builtin' | 'local'
   /** 错误态下的单插件错误信息 */
   error?: string
   /** 源提供的装载入口 */
@@ -158,6 +151,8 @@ export class PluginManager {
       status: 'installed',
       enabled,
       entry,
+      // source 由装载入口透传；未经聚合层注入的条目（测试直构）按内置兜底
+      source: entry.source ?? 'builtin',
     }
     try {
       const mod = await entry.loader()

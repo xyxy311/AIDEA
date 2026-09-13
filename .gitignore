@@ -1,5 +1,8 @@
 node_modules
 dist
+dist-electron
+public/vendor
+plugins-local
 .env
 .env.local
 .env.*.local

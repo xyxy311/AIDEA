@@ -19,6 +19,12 @@
     },
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "env.d.ts", "plugins/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "env.d.ts",
+    "plugins/**/*.ts",
+    "electron/shared/bridge.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

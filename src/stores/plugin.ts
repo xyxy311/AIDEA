@@ -12,6 +12,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { PluginManager, collectPluginEntries } from '@/plugin/manager'
 import type { PluginRecord } from '@/plugin/manager'
+import { useLayoutStore } from '@/stores/layout'
 
 const STORAGE_KEY = 'aidea-plugins'
 
@@ -32,11 +33,16 @@ export const usePluginStore = defineStore('plugin', () => {
   const records = ref<PluginRecord[]>([])
   const ready = ref(false)
 
-  /** 引导装载插件（应用启动后调用一次） */
+  /** 引导装载插件（应用启动后调用一次；收集为 async：内置 glob + 桌面桥扫描） */
   async function init(): Promise<void> {
     if (manager.value) return
+    // 收集聚合条目（无桌面桥 = web → 桌面源空集，只装内置）
+    const entries = await collectPluginEntries()
+    // 先回填布局发现集（重清洗 delta），再构造 manager 装载注册 UI——
+    // 面板 / 顶栏按钮的位置 delta 在注册前即已正确（禁用→启用不丢布局）
+    useLayoutStore().setDiscoveredPluginIds(entries.map((e) => e.id))
     const mgr = new PluginManager({
-      entries: collectPluginEntries(),
+      entries,
       getEnabled: readEnabled,
     })
     mgr.onChange((snapshot) => {

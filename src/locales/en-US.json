@@ -65,7 +65,9 @@
     "enableHint": "Enable this plugin (takes effect after restart)",
     "disableHint": "Disable this plugin (takes effect after restart)",
     "componentError": "This plugin component failed to render",
-    "retry": "Retry"
+    "retry": "Retry",
+    "sourceBuiltin": "Built-in",
+    "sourceLocal": "Local"
   },
   "shortcuts": {
     "recording": "Press keys…",

@@ -210,4 +210,45 @@ describe('useLayoutStore（delta 模型）', () => {
       ).toBe(false)
     })
   })
+
+  describe('插件发现集回填（setDiscoveredPluginIds）', () => {
+    /** 预置禁用插件 delta：leftOrder 首位是插件面板键、top 左序首位是插件按钮键 */
+    function seedPluginDelta(): void {
+      localStorage.setItem('aidea-dock-left', JSON.stringify(['demo:p', ...DEFAULT_LEFT]))
+      localStorage.setItem('aidea-top-left', JSON.stringify(['demo:btn', ...DEFAULT_LEFT_TOP]))
+    }
+
+    it('回填发现集不含该插件 → 初始保留的插件 delta 键被重清洗掉（persist 落盘）', () => {
+      seedPluginDelta()
+      const layout = useLayoutStore()
+
+      // 回填不含 demo 的发现集 → 五组 delta 用完整谓词重清洗并持久化
+      layout.setDiscoveredPluginIds(['other'])
+
+      const leftAfter = JSON.parse(localStorage.getItem('aidea-dock-left')!) as string[]
+      expect(leftAfter).toEqual(DEFAULT_LEFT) // 插件键剔除，内置键原样保留
+      const topAfter = JSON.parse(localStorage.getItem('aidea-top-left')!) as string[]
+      expect(topAfter).toEqual(DEFAULT_LEFT_TOP)
+    })
+
+    it('回填发现集含该插件 → delta 保留；注册面板后布局位置恢复（禁用→启用不丢）', () => {
+      seedPluginDelta()
+      const layout = useLayoutStore()
+      const registry = useUiRegistryStore()
+
+      // 回填含 demo 的发现集 → delta（含插件键）保留
+      layout.setDiscoveredPluginIds(['demo'])
+      expect(JSON.parse(localStorage.getItem('aidea-dock-left')!) as string[]).toContain('demo:p')
+      expect(JSON.parse(localStorage.getItem('aidea-top-left')!) as string[]).toContain('demo:btn')
+
+      // 注册面板 → 派生目录按 delta 记录的位置恢复（leftOrder 首位）
+      registry.registerPluginPanel('demo', {
+        id: 'p',
+        title: '演示面板',
+        icon: {} as never,
+        component: {} as never,
+      })
+      expect(keysOf(layout.leftPanels)[0]).toBe('demo:p')
+    })
+  })
 })

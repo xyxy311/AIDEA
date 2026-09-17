@@ -24,7 +24,11 @@
       "grid": "网格",
       "gridActive": "网格已开启",
       "debug": "调试",
-      "nodeCount": "节点：{count}"
+      "nodeCount": "节点：{count}",
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "还原",
+      "close": "关闭"
     },
   "viewTab": {
     "placeholder": "未命名",

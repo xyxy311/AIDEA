@@ -163,6 +163,9 @@ function onContainerDragLeave(): void {
   position: relative;
   display: flex;
   align-items: center;
+  /* draggable=true 的可拖拽条目：no-drag 退出顶部条窗口拖动区（AppShell .top-bar 为 drag），
+   * 保证按钮点击与 HTML5 拖拽排序不被窗口拖动抢占 */
+  -webkit-app-region: no-drag;
 }
 
 /* 从另一侧拖入时的容器高亮：整段描边提示可投放 */

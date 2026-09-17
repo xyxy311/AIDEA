@@ -431,5 +431,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     recentFiles,
     dirty: fileStore.dirty,
     suggestedName: fileStore.suggestedName,
+    // 统一未保存确认（干净直接过、脏则弹确认对话框）：
+    // 供关闭窗口（WindowControls）等新消费方复用，避免各处重写 dirty 分支
+    confirmDiscard,
   }
 }

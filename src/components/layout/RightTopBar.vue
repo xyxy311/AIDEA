@@ -7,11 +7,15 @@
  * 顺序与拖拽由通用容器 TopBarZone 承担，本组件只是固定 zone='right' 的薄封装。
  *
  * 节点计数保留为右顶部条末端的纯文字弱显示（纯信息，不属于可拖拽按钮）。
+ * 其后的 WindowControls 是固定窗口 chrome（Electron 无边框窗口的最小化/最大化-还原/
+ * 关闭按钮组）：不参与品类表注册与拖拽排序（被拖走/移除会导致窗口失控），
+ * 由本组件直接固定渲染在最右端。
  */
 import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
 import { t } from '@/composables/useT'
 import TopBarZone from '@/components/common/TopBarZone.vue'
+import WindowControls from '@/components/topbar/WindowControls.vue'
 
 const active = useActiveView()
 
@@ -20,12 +24,14 @@ const nodes = computed(() => active.nodeStore.childrenOf(active.project.currentN
 </script>
 
 <template>
-  <!-- 图标按钮（可拖拽）+ 尾部节点计数，整体在顶部条内右对齐 -->
+  <!-- 图标按钮（可拖拽）+ 尾部节点计数 + 固定窗口控制组，整体在顶部条内右对齐 -->
   <div class="right-top-bar">
     <TopBarZone zone="right" />
     <span class="node-count">
       {{ t('toolbar.nodeCount', { count: nodes.length }) }}
     </span>
+    <!-- 固定窗口 chrome：最右端的窗口控制按钮组（不参与品类表与拖拽排序） -->
+    <WindowControls />
   </div>
 </template>
 

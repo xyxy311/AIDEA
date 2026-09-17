@@ -236,6 +236,9 @@ watch(
   height: 100%;
   padding: 0;
   user-select: none;
+  /* no-drag 退出顶部条窗口拖动区（AppShell .top-bar 为 drag）：
+   * 标签可点击 / 双击改名 / HTML5 拖拽排序不被窗口拖动抢占 */
+  -webkit-app-region: no-drag;
 }
 
 /* 滚轮滚动区（WheelScroll 隐藏滚动条），占满中段，仅标签带在其中横向滚动 */

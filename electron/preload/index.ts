@@ -1,10 +1,13 @@
 /**
- * preload/index.ts —— contextBridge 窄桥：window.aideaDesktop。
+ * preload/index.ts —— contextBridge 窄桥：window.aideaDesktop + window.aideaWindow。
  *
- * 设计依据：docs/Electron桌面化实施蓝图.md §3 与 electron/shared/bridge.ts 的 DesktopBridge 契约。
+ * 设计依据：docs/Electron桌面化实施蓝图.md §3 与 electron/shared/bridge.ts 的
+ * DesktopBridge / WindowBridge 契约。两座桥职责分离：
+ * - aideaDesktop 插件桥：插件系统（扫描/订阅插件目录）；
+ * - aideaWindow 窗口控制桥：窗口 chrome（最小化/最大化切换/关闭/最大化状态推送）。
  *
- * 安全边界（红线 2）：只暴露契约白名单内的两个方法；绝不暴露 fs/path/shell/dialog、
- * 任何携带路径参数的通道、ipcRenderer 本体。形状用 satisfies 对齐 DesktopBridge，
+ * 安全边界（红线 2）：只暴露契约白名单内的方法；绝不暴露 fs/path/shell/dialog、
+ * 任何携带路径参数的通道、ipcRenderer 本体。形状用类型标注对齐两个 Bridge 接口，
  * 契约漂移（字段改名/签名变化）会在 type-check 期暴露。
  *
  * sandbox: true 下 preload 以受限 CJS 运行，只能 require('electron') 的白名单模块
@@ -13,7 +16,7 @@
  */
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { DesktopBridge } from '../shared/bridge'
+import type { DesktopBridge, WindowBridge } from '../shared/bridge'
 import { IPC } from '../shared/bridge'
 
 const bridge: DesktopBridge = {
@@ -32,4 +35,26 @@ const bridge: DesktopBridge = {
   },
 }
 
+const windowBridge: WindowBridge = {
+  /** renderer → main send（fire-and-forget）：最小化 */
+  minimize: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
+  /** renderer → main send（fire-and-forget）：切换最大化/还原（toggle 语义在 main 侧判定） */
+  toggleMaximize: () => ipcRenderer.send(IPC.WINDOW_TOGGLE_MAXIMIZE),
+  /** renderer → main send（fire-and-forget）：关闭窗口 */
+  close: () => ipcRenderer.send(IPC.WINDOW_CLOSE),
+  /** renderer → main invoke：查询是否最大化（main 用 fromWebContents(sender) 取目标窗口） */
+  isMaximized: () => ipcRenderer.invoke(IPC.WINDOW_IS_MAXIMIZED),
+  /** main → renderer 订阅转发：最大化状态变更（载荷 boolean），返回取消订阅函数 */
+  onMaximizedChange: (cb: (maximized: boolean) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, maximized: boolean): void => {
+      cb(maximized)
+    }
+    ipcRenderer.on(IPC.WINDOW_MAXIMIZED_CHANGED, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.WINDOW_MAXIMIZED_CHANGED, listener)
+    }
+  },
+}
+
 contextBridge.exposeInMainWorld('aideaDesktop', bridge)
+contextBridge.exposeInMainWorld('aideaWindow', windowBridge)

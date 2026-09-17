@@ -258,6 +258,14 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   user-select: none;
+  /* Electron 无边框窗口的标题栏拖动区：本条空白处（含分隔条、node-count 等纯显示元素）
+   * 拖动即移动窗口，系统双击最大化也走 drag 区默认行为；
+   * 可交互元素（TopBarButton/TopBarZone 条目/TabBar/WindowControls）各自 -webkit-app-region:
+   * no-drag 显式退出，点击与 HTML5 拖拽排序不被窗口拖动抢占。
+   * 已知上游限制（electron#27528 / #52063）：drag 区按静态矩形命中，不随滚动容器内容更新——
+   * 滚轮横滚本身不受影响（WM_MOUSEWHEEL 走焦点窗口路由），但按钮极多溢出滚动态下
+   * no-drag 矩形可能错位，需真机验证；no-drag 一律只标在矩形固定的元素上。 */
+  -webkit-app-region: drag;
 }
 
 /* 三区共通：撑满高度、允许内容横向溢出（交给 WheelScroll 滚轮滚动） */

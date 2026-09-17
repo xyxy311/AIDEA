@@ -24,7 +24,11 @@
     "grid": "Grid",
     "gridActive": "Grid enabled",
     "debug": "Debug",
-    "nodeCount": "Nodes: {count}"
+    "nodeCount": "Nodes: {count}",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
   },
   "viewTab": {
     "placeholder": "Untitled",

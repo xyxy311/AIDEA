@@ -114,6 +114,9 @@ function handleMenuSelect(menu: TopBarMenuOption[] | undefined, key: string | nu
   transition: background 0.15s, opacity 0.15s, color 0.15s;
   position: relative;
   flex-shrink: 0;
+  /* 退出顶部条窗口拖动区（AppShell .top-bar 为 drag）：按钮可点击、
+   * HTML5 拖拽排序不被窗口拖动抢占 */
+  -webkit-app-region: no-drag;
 }
 
 /* 含下拉菜单的按钮：主图标占据主体，右下角为小三角触发区 */
@@ -125,6 +128,8 @@ function handleMenuSelect(menu: TopBarMenuOption[] | undefined, key: string | nu
   height: 32px;
   flex-shrink: 0;
   border-radius: 8px;
+  /* 同 .top-btn：退出窗口拖动区（no-drag 覆盖内部主按钮与小三角触发区） */
+  -webkit-app-region: no-drag;
 }
 
 .top-btn-main {

@@ -236,9 +236,10 @@ watch(
   height: 100%;
   padding: 0;
   user-select: none;
-  /* no-drag 退出顶部条窗口拖动区（AppShell .top-bar 为 drag）：
-   * 标签可点击 / 双击改名 / HTML5 拖拽排序不被窗口拖动抢占 */
-  -webkit-app-region: no-drag;
+  /* 窗口拖动区策略（AppShell .top-bar 为 drag）：本容器不整体 no-drag——
+   * 标签带之外的空白（标签右侧至中段右缘）保持继承 drag：
+   * 按住拖动 = 移动窗口，双击 = 系统默认最大化/还原，右键 = 系统窗口菜单；
+   * 可交互元素（.tab / .tab-add）各自 no-drag 显式退出，交互不被窗口拖动抢占 */
 }
 
 /* 滚轮滚动区（WheelScroll 隐藏滚动条），占满中段，仅标签带在其中横向滚动 */
@@ -273,6 +274,10 @@ watch(
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, opacity 0.15s;
+  /* no-drag 退出顶部条窗口拖动区：单击切换 / 双击改名 / HTML5 拖拽排序不被窗口拖动抢占
+   * （已知上游限制 electron#27528：drag 区按静态矩形命中，标签过多滚动态下 no-drag
+   * 矩形可能错位——与 TopBarZone .top-item 同一取舍） */
+  -webkit-app-region: no-drag;
 }
 
 /* 活动标签：主色淡背景 + 底部主色指示条（与 TopBarButton 激活态同体系） */
@@ -400,6 +405,8 @@ watch(
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  /* no-drag 退出窗口拖动区：点击新增标签不被窗口拖动抢占 */
+  -webkit-app-region: no-drag;
 }
 
 .tab-add:hover {

@@ -2,7 +2,9 @@ node_modules
 dist
 dist-electron
 public/vendor
-plugins-local
+plugins/*/plugin.js
+plugins/*/plugin.css
+plugins/index.json
 .env
 .env.local
 .env.*.local

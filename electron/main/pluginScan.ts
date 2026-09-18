@@ -68,7 +68,7 @@ export interface ScanOutcome {
 
 /**
  * 扫描插件根目录。纯函数（IO 注入），不做任何代码执行。
- * @param root 插件根目录绝对路径（dev: <仓库根>/plugins-local；prod: userData/plugins）
+ * @param root 插件根目录绝对路径（dev: <仓库根>/plugins；prod: userData/plugins）
  */
 export function scanPluginDirectories(root: string, io: ScanIO = nodeScanIO): ScanOutcome {
   const infos: DesktopPluginInfo[] = []

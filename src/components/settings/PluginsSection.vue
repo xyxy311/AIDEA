@@ -5,6 +5,9 @@
  * 展示已发现插件清单：名称 / 版本 / 作者 / 描述 / 运行时状态（运行中·已安装·错误），
  * 每项提供「启用」开关。启停**仅持久化 → 重启应用生效**（不做动态卸载注册），
  * 开关反映持久化意愿即可。records 随 init 异步逐步填充，直接响应式遍历。
+ *
+ * M2：目录变更徽标（dirDirty）——由桌面桥推送置位（main watch 检测插件目录），
+ * web 形态无桥 → dirDirty 恒 false，徽标永不出现。
  */
 import { NEmpty, NSwitch, NTag } from 'naive-ui'
 import { storeToRefs } from 'pinia'
@@ -14,7 +17,7 @@ import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 
 const plugin = usePluginStore()
-const { records, ready } = storeToRefs(plugin)
+const { records, ready, dirDirty } = storeToRefs(plugin)
 
 /** 状态 → 徽标类型与 i18n 标签 key（运行态展示；错误态再补充红字文案） */
 const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'default'; labelKey: string }> = {
@@ -26,7 +29,13 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
 
 <template>
   <div class="plugin-manager">
-    <p class="settings-hint plugin-hint">{{ t('plugin.reloadHint') }}</p>
+    <!-- 提示行：重启提示文案左、目录变更徽标右（dirDirty 仅桌面桥推送置位，web 恒 false） -->
+    <div class="plugin-hint-row">
+      <p class="settings-hint plugin-hint">{{ t('plugin.reloadHint') }}</p>
+      <NTag v-if="dirDirty" type="warning" size="tiny" :bordered="false" class="plugin-dirty">
+        {{ t('plugin.dirDirty') }}
+      </NTag>
+    </div>
 
     <template v-if="ready">
       <NEmpty v-if="records.length === 0" :description="t('plugin.empty')" size="small" />
@@ -75,9 +84,23 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
   min-width: 0;
 }
 
-.plugin-hint {
+.plugin-hint-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 8px;
+}
+
+.plugin-hint {
+  margin: 0;
   color: var(--color-text-muted);
+}
+
+/* 目录变更徽标（M2）：风格对齐 .plugin-source 小徽标 */
+.plugin-dirty {
+  --n-font-size: 11px;
+  flex-shrink: 0;
 }
 
 .plugin-item {

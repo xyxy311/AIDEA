@@ -1,36 +1,42 @@
 # Electron 桌面化实施蓝图
 
-> 决策结论：最终发布形态采用 **Electron 桌面壳 + 运行时插件加载**，web 形态保留为持续验收基线。
+> 决策结论：最终发布形态采用 **Electron 桌面壳 + 运行时插件加载**。
 > 选型分析（Electron vs Tauri vs 本地 companion 服务 vs 纯 Web 各方案）见本次会话决策记录；本文只写实施依据。
 > 核心约束来自 `docs/插件系统设计.md` 横切原则 A：**加载收集是唯一可变点**，本文是它的兑现方案。
+>
+> **版本定位（M2 起生效）：桌面端为正式版本**——后续里程碑（M2/M3/M4）的实现与验收只面向桌面运行态；
+> **web 端（`dev:web`）为开发辅助形态**，仅用于快速迭代与 vitest 测试环境，不再作为验收面：
+> 其行为承诺冻结在 M1 状态（可启动 + 插件静态清单装载可用），桌面专属能力（M2 watch 提示、
+> M3 编译、M4 打包/更新等）在 web 下静默降级不报错（互斥聚合 + 无桥 no-op 天然保证）。
 
 ## 1. 目标与最终形态
 
-- **web 版**：完全不变（`dev:web` / `build` 保留为持续验收入口）。无桌面桥时，桌面插件源返回空集，行为与改造前逐字节等价。
 - **桌面版**：Electron 壳（main 进程负责扫描/watch/协议/编译，preload 暴露窄桥）+ renderer 原封不动。用户往插件目录放入**单文件 ESM bundle** → 启动静默扫描 → `aidea-plugin://` 协议动态 `import()` → 插件经 `ctx.register` 注册面板/顶栏按钮/设置栏目/右键菜单/快捷键/模态/浮动层 → uiRegistry 派生渲染自动生效。
-- **插件目录**：dev 为 `<仓库根>/plugins-local/`（与内置 `plugins/` 物理隔离，避免 glob 双收），生产为 `userData/plugins/`。
+- **插件目录**：dev 与生产同构——dev 为 `<仓库根>/plugins/`（插件源码与 plugin.js 装载产物同根，宿主构建零接触，见 §6），生产为 `userData/plugins/`。两形态装载统一为**应用启动时扫描/清单装载**（见 §4）：桌面 = 桥扫描 + 按 `location.protocol` 分支装载（dev 经 dev-server URL transform、生产经 `aidea-plugin://` 协议）；web = 静态清单。
+- **版本定位**：桌面端 = **正式版本**（唯一验收面，见卷首声明）；web 端 = 开发辅助形态，M1 能力冻结，不为 web 补齐桌面能力。
 - **目录变更**：watch 检测 + 提示"重启后生效"，**不做真热重载**（见 §8）。
 - **可选增强（M3）**：目录直接放 `index.ts`，main 进程 esbuild 免构建编译后透明装载，对 renderer 与分发契约不可见。
 
 ## 2. 侵入面总览（一句话）
 
-对既有架构的全部改动 = **一个函数签名 async 化（`collectPluginEntries`）+ 一个字段 ref 化（`layout.ts:40`）+ 一处 await（`plugin.ts init`）**；其余 100% 是新增文件（electron/ 壳、src/plugin/sources/、scripts/、import map）。
+对既有架构的全部改动 = **一个函数签名 async 化（`collectPluginEntries`）+ 一个字段 ref 化（`layout.ts:40`）+ 一处 await（`plugin.ts init`）+ `vite.config.ts` 的 mode 分流（dev alias/exclude、build external）**；其余为新增文件（electron/ 壳、src/plugin/sources/、scripts/、import map、build-web.mjs）。
 
 ### 改动清单（精确到函数）
 
 | 文件 | 改动 |
 |---|---|
-| `src/plugin/manager.ts` | `collectPluginEntries()` 签名 `PluginEntry[]` → `Promise<PluginEntry[]>`，函数体收敛为调 `sources/index.ts` 聚合；原 glob 实现迁移至 `sources/builtin.ts`；`pluginIdFromPath` 保留在 manager 导出（测试引用不动）；**PluginManager 主体零改动** |
+| `src/plugin/manager.ts` | `collectPluginEntries()` 签名 `PluginEntry[]` → `Promise<PluginEntry[]>`，函数体收敛为调 `sources/index.ts` 聚合（编译期 glob 源已废除）；`pluginIdFromPath` 迁入本文件定义（保留导出，测试引用不动）；**PluginManager 主体零改动** |
 | `src/stores/plugin.ts` | `init()`：`entries: await collectPluginEntries()`；装载完成前回调 layout 回填（§5）；`PluginRecord` 增 `source: 'builtin' \| 'local'` 字段（插件管理面板展示来源） |
 | `src/stores/layout.ts:40-48` | `discoveredPluginIds` 改 ref；delta 初始 parse 改为"插件前缀键一律保留"；新增 `setDiscoveredPluginIds()` 回填后重清洗（§5） |
+| `vite.config.ts` | mode 分流（§6/§9）：dev = SDK_VENDOR alias → `/vendor/*.js` + `optimizeDeps.exclude`；build = `rollupOptions.external`（bare import 留给 import map）——宿主与插件共享同一 SDK 实例 |
 | `index.html` | 注入 import map（§6）+ CSP `script-src` 放行 `aidea-plugin:` |
 | `package.json` | scripts 最终形态（§9）+ devDeps（electron、esbuild、chokidar；electron-builder 属 M4） |
 | `tsconfig.json` | include 增加 `electron/shared/bridge.ts`（renderer type-only import 契约文件） |
-| 测试 | source.test 改 await；新增：sources 聚合与 id 冲突、协议 traversal 用例、layout 回填清洗保留禁用插件 delta、无桥空集 |
+| 测试 | source.test 改 await；新增：sources 聚合与互斥裁决（桌面桥扫描 / web 清单）、协议 traversal 用例、layout 回填清洗保留禁用插件 delta、清单获取失败空集 |
 
 ### 明确不碰（红线资产）
 
-`adapter.ts` / `plugin/ui.ts` / `uiRegistry` / `dock.ts` / `topbar.ts` / layout 派生目录与全部 action（§5 指名三行除外）；`PluginManager` 主体（`installAll`/`loadRecord`/错误隔离——`loadRecord` 的 `manifest.id !== entry.id` 校验正好兜住目录名与内联 id 不符）；`plugins/ai/` 全部内置品类表；DataPatch/history/useCommands 全链路；`main.ts`（`void init()` 已异步）；`vite.config.ts`（renderer 构建零改动）。
+`adapter.ts` / `plugin/ui.ts` / `uiRegistry` / `dock.ts` / `topbar.ts` / layout 派生目录与全部 action（§5 指名三行除外）；`PluginManager` 主体（`installAll`/`loadRecord`/错误隔离——`loadRecord` 的 `manifest.id !== entry.id` 校验正好兜住目录名与内联 id 不符）；`plugins/ai/` 全部源码与品类表（唯一例外：构建脚本产出的 `plugin.js` 产物，见 §9）；DataPatch/history/useCommands 全链路；`main.ts`（`void init()` 已异步）。
 
 ## 3. 进程边界与 IPC 契约
 
@@ -71,26 +77,32 @@ export interface DesktopBridge {
 ### renderer 特性检测注入点（唯一）
 
 - `src/plugin/sources/desktop.ts` 顶部 `const bridge = window.aideaDesktop ?? null`——全 renderer 唯一桥访问点，`window.aideaDesktop` 的全局类型声明也在 `bridge.ts` 内（`declare global`）。
-- 桥为 null（web）→ 桌面源返回空集；IPC 失败 → try/catch 空集 + console.error，**不阻塞内置插件装载**。
+- 桥为 null（web）→ 走 web 静态清单源；桥在但 IPC 失败 → try/catch 空集 + console.error，互斥两源不互相回退。
 
 ## 4. 唯一可变点的结构化落地（sources/）
 
 仓库曾刻意删掉过度抽象的接口壳（manager.ts 头注释），因此**不再引入 PluginSource 接口**——两个具名源函数 + 一个聚合函数，`PluginEntry` 形状（`{ id, loader }`）不变：
 
 ```ts
-// src/plugin/sources/builtin.ts —— 现有 glob 逻辑原样搬家（web 与桌面共用）
-export function collectBuiltinEntries(): PluginEntry[]
+// src/plugin/sources/web.ts —— web 静态清单源（web 形态的「启动时扫描」等价物）
+export async function collectWebEntries(): Promise<PluginEntry[]>
+// fetch('/plugins/index.json') → loader = () => import(/* @vite-ignore */ `/plugins/${id}/${entry}`)
 
 // src/plugin/sources/desktop.ts —— 全 renderer 唯一桥访问点
 export async function collectDesktopEntries(): Promise<PluginEntry[]>
-// loader = () => import(/* @vite-ignore */ `aidea-plugin://${info.id}/${info.entry}`)
-// @vite-ignore 必须：阻止 Vite静态分析协议 URL
+// loader 按 location.protocol 分支（http/https = dev server 伺服）：dev → dev-server URL
+// /plugins/<id>/<entry>（vite transform 装载，与宿主共享预打包 SDK）；生产（app://）→
+// aidea-plugin:// 协议（bare 由 import map 解析）。⚠ 判据勿用 import.meta.env.DEV：
+// vite 6 dev 下它是模块顶部注入的运行时对象（非编译期替换），真机 Electron dev
+// renderer 里求值不可靠（实测落到 false → 协议分支 → vendor 双 SDK 实例 → useStore 崩）
 
-// src/plugin/sources/index.ts —— 聚合与 id 冲突裁决（内置优先，随包分发视为官方）
+// src/plugin/sources/index.ts —— 聚合与互斥裁决：有桥 → 仅桌面源；无桥 → 仅 web 源；未来多源冲突时内置优先
 export async function collectPluginEntries(): Promise<PluginEntry[]>
 ```
 
 防泄漏规则：`if (electron)` 类分支**只允许存在于 `sources/` 内**；manager.ts 只调聚合函数，对源数量无感知——未来加"远程插件源" = 聚合里加第三项，其他零改动。
+
+**编译期 glob 源废除的动机**：① **装载唯一路径**——宿主构建不碰 `plugins/` 内容，一切插件（含官方 AI 插件）在应用启动时经扫描/清单装载；② **SDK 单实例**——glob/预打包路径会产生第二份 vue/pinia 模块实例（插件组件上下文断裂），统一经 import map 解析 vendor 产物后，宿主与插件、vendor 四包之间共享同一实例。
 
 ## 5. layout 异步化（保持"禁用→启用不丢布局"）
 
@@ -119,7 +131,9 @@ function setDiscoveredPluginIds(ids: string[]): void {
 ### 目录插件规格（M1）
 
 ```
-<plugins-local>/              # dev；prod 为 userData/plugins/
+<仓库根>/plugins/             # dev；prod 为 userData/plugins/（两形态目录同构）
+  ai/                         # 官方 AI 插件：index.ts 源码（类型检查面）+ plugin.js 产物（两形态装载入口，构建脚本产出、gitignored）
+  index.json                  # web 形态清单 [{id, entry}]（package-plugin.mjs 维护、build-web.mjs 分发到 dist）
   <plugin-id>/                # 目录名 = pluginId，强制 ^[a-z0-9_-]+$（协议 host 小写化约束）
     plugin.js                 # 必须：单文件 ESM bundle，default export AideaPlugin（manifest 可内联）
     manifest.json             # 可选：与 PluginManifest 同构；供扫描期零代码执行列清单
@@ -127,6 +141,7 @@ function setDiscoveredPluginIds(ids: string[]): void {
 ```
 
 - 入口判定优先级 `plugin.js > index.js > index.mjs`（main 扫描决定，renderer 拿到的 `entry` 已是结果）。
+- **清单与扫描**：目录插件入口一律 `.js/.mjs`（桌面运行时扫描收集）；web 形态以 `plugins/index.json` 为扫描等价物（打包脚本全量重写，插件删除自动收敛）。`plugins/ai/` 在产物缺失时被扫描器天然跳过（无 entry）。
 - `manifest.json` 缺省合法：扫描返回占位条目，真实 manifest 由装载时 `loadRecord` 读内联并校验（id 匹配校验兜住目录名与内联 id 不符）。
 
 ### 插件侧禁令（写入插件开发手册）
@@ -147,7 +162,7 @@ function setDiscoveredPluginIds(ids: string[]): void {
 </script>
 ```
 
-**vendor 产物方案（实现细化）**：不逐包复制 ESM build（naive-ui 依赖树 vueuc/vooks 等太深），改用 esbuild 把每个包 bundle 成单文件 ESM（入口 `export * from 'pkg'` + namespace default），产物落 `public/vendor/*.js`（gitignored；dev.mjs 与 build-electron.mjs 都产出，vite dev/build 自动带上）。external 清单收敛为常量 `SDK_VENDOR = ['vue', 'pinia', 'naive-ui', 'konva']`（`electron/shared/vendor.ts`）——M3 esbuild external 参数与插件打包模板共用，**一处定义三处使用，只增不减**。
+**vendor 产物方案（实现细化）**：不逐包复制 ESM build（naive-ui 依赖树 vueuc/vooks 等太深），改用 esbuild 把每个包 bundle 成单文件 ESM（入口 `export * from 'pkg'` + namespace default），**四包互相 external（自身除外）**——naive-ui/pinia 内部的 import 'vue' 保留 bare，由 import map 网状解析，杜绝 vendor 内嵌第二份 vue；并注入 vue esm-bundler feature flags（`__VUE_OPTIONS_API__` 等，vendor 产物不经 vite 编译，缺 flag 直接 ReferenceError）。产物落 `public/vendor/*.js`（gitignored；**仅生产链路需要**：`build` / `build:desktop` 产到 dist/vendor，dev 下 import map 闲置）。SDK 单实例归一：**dev 走 vite 原生模块图**——插件经 dev-server URL（`/plugins/<id>/plugin.js`）transform 装载，bare import 重写为预打包产物，与宿主同一实例（`sources/desktop.ts` 的 loader 按 `location.protocol` 分支——http(s)=dev server 伺服；⚠判据勿用 `import.meta.env.DEV`：vite 6 dev 下是运行时注入对象，真机 Electron dev renderer 实测落到 false）；**生产**宿主 build external + 插件协议原生加载，bare import 统一经 import map → dist/vendor。external 清单收敛为常量 `SDK_VENDOR = ['vue', 'pinia', 'naive-ui', 'konva']`（`electron/shared/vendor.ts`）——M1 AI 插件打包、M3 编译、插件作者打包模板共用，**一处定义多处使用（当前四处，含 vendor 产物构建），只增不减**。
 
 ## 7. 自定义协议设计
 
@@ -166,18 +181,36 @@ function setDiscoveredPluginIds(ids: string[]): void {
 
 通道（M2）：`chokidar(插件根) → debounce 300ms → 重扫比对 → webContents.send('plugins:changed', ids) → preload → sources/desktop.ts 包装 → plugin store dirDirty ref → 插件管理面板徽标 + toast`。
 
+**M2 main 侧已实现（`electron/main/pluginWatch.ts`，纯逻辑与接线分层）**：
+- 纯逻辑三导出（可单测，不触 electron/chokidar）：`fingerprintInfo`（单插件指纹 = entry 文件名 + manifest 可见字段 + error + **入口文件内容 sha1 hash**）、`diffPluginSnapshots`（增/删/指纹变，输出按 id 字典序稳定）、`createDebouncer`（ms 窗口重置式）。
+- `startPluginWatching()`（main/index.ts 在 app ready 后调用）：先 `mkdirSync(pluginsRoot(), { recursive: true })` 保证根存在（生产首跑 userData/plugins 可能不存在）→ `rescan()` + `getPluginDir` 建基准快照 → `chokidar.watch(root, { ignoreInitial: true, depth: 1, awaitWriteFinish: { 150, 50 } })` 五类事件共用 300ms debouncer → 触发时重扫（`rescan()` 同步刷新协议白名单）重建快照 → diff → **ids 非空才** `webContents.send(IPC.CHANGED, ids)`（getAllWindows 过滤 destroyed）。
+- 指纹含入口内容 hash 的原因：纯 ids/manifest 快照看不出**同 id 的 plugin.js 内容修改**；hash 让「改」可检测。代价是 touch 后内容未变的噪音不推送——这正是「重扫比对」防误报的意义。
+- chokidar 是 ESM-only 包，esbuild `bundle: true`（dev watch 与 build-electron 同构）自动打进 main.cjs，无需 runtime 依赖。
+
+**M2 renderer 侧已实现（消费链路）**：
+- `sources/desktop.ts` 追加 `subscribePluginChanges(cb)` 导出（无桥 no-op；有桥转发 `bridge.onPluginsChanged`），经 `sources/index.ts` re-export——**桥访问唯一性不变**（红线 1，store 只 import sources 聚合层）。
+- `stores/plugin.ts`：`dirDirty`/`changedIds` ref；`init()` 开头（桌面运行态）订阅推送**仅置脏**（不做热重扫/热卸载，与"重启生效"语义一致；应用生命周期不退订）。
+- 全局轻提示：`AppShell.vue`（NMessageProvider 后代常驻组件）watch `dirDirty` → `message.info(t('plugin.dirChanged'), { duration: 5000, closable: true })`——非阻塞 toast，不打断进行中编辑（验收项）。
+- 面板徽标：`PluginsSection.vue` 提示行右侧 `NTag warning`「目录有变更」（`dirDirty` 为 false 时永不渲染，web 全程无感知——验收项）。
+- 文案 `plugin.dirChanged`/`plugin.dirDirty` 双语同构（zh-CN/en-US）。
+
+**真机验收注记（M2 收尾，agent 无法验证渲染，须人工）**：重启 `npm run dev` 后依次验证——
+① **改**：编辑 `plugins/ai/plugin.js`（或 manifest.json）内容保存 → 约 0.5s（300ms debounce + awaitWriteFinish 稳定窗）后出现 toast「检测到插件目录变更，重启应用后生效」+ 设置面板「目录有变更」warning 徽标；
+② **增/删**：`plugins/` 下复制出一个完整插件目录或删除一个 → 同样提示（空目录无入口文件不产生条目，不提示属预期）；重启应用后变更生效（新插件出现在列表，删除的消失）；
+③ **web 无感知**：`npm run dev:web` 下任意改 `plugins/` 均无任何提示（无桥 no-op，`dirDirty` 恒 false）。
+
 **只做提示的理由**：真热卸载需要运行期下线链路（回滚 UI 注册 + additions 键处置 + undo 栈中插件写入语义 + 快捷键回收 + 浮动层状态），每项都是状态残留风险源，与既有"启停仅意愿 → 重启生效"的收敛决策冲突；提示式覆盖 80% 价值，剩余 20%（插件作者迭代）由"重启 2 秒"兜底，dev 下内置插件仍有 Vite HMR。通道先就位，未来做真热重载只换 `dirDirty` 的消费动作，无返工。UI 态不入 undo、不持久化。
 
 ## 9. 构建与脚本
 
-**取舍：vite 手工多配置，不用 electron-vite。** electron-vite 强制 renderer 迁入 `src/renderer/`，会击穿现有全部路径约定（`import.meta.glob('../../plugins/**')` 相对路径、tsconfig include、AGENTS.md 目录表）；现有 `vite.config.ts` 极简且零改动保留为 renderer 配置。main/preload 用 esbuild 直出 `.cjs`（`"type": "module"` 下规避 ESM 兼容噪音；preload CJS + contextBridge 兼容 sandbox）。
+**取舍：vite 手工多配置，不用 electron-vite。** electron-vite 强制 renderer 迁入 `src/renderer/`，会击穿现有全部路径约定（tsconfig include、AGENTS.md 目录表）；`vite.config.ts` 改为 mode 分流的函数式配置（§6 SDK 单实例：dev alias/exclude、build external），renderer 构建语义不变。main/preload 用 esbuild 直出 `.cjs`（`"type": "module"` 下规避 ESM 兼容噪音；preload CJS + contextBridge 兼容 sandbox）。
 
 ```jsonc
 // package.json scripts 最终形态
 {
-  "dev": "node scripts/dev.mjs",                    // vite + esbuild watch main/preload + spawn electron
-  "dev:web": "vite",                                // 原 dev 原样保留（红线验收入口）
-  "build": "vue-tsc --noEmit && vite build",        // 语义不变 = web 构建
+  "dev": "node scripts/dev.mjs",                    // AI 插件打包 + vite + esbuild watch main/preload + spawn electron
+  "dev:web": "vite",                                // 原生 vite dev（插件 transform 装载，无需 vendor 前置）
+  "build": "vue-tsc --noEmit && vite build && node scripts/build-web.mjs",  // web 构建 + vendor/插件分发到 dist
   "build:desktop": "npm run build && node scripts/build-electron.mjs",
   "preview": "vite preview",
   "test": "vitest run --passWithNoTests",           // 不变
@@ -185,8 +218,8 @@ function setDiscoveredPluginIds(ids: string[]): void {
 }
 ```
 
-- 产物：renderer `dist/`（vite 不动）；main/preload `dist-electron/main.cjs`、`preload.cjs`。
-- dev 协同（`scripts/dev.mjs`）：① 产 vendor 到 `public/vendor/` → ② spawn vite → ③ esbuild watch `electron/main` + `electron/preload` → ④ `VITE_DEV_SERVER_URL=…` spawn `electron .`。main 改动 → esbuild 重建 → M1 手动重启 electron 进程（main 热重启自动化列 M4）；renderer 改动走 vite HMR。
+- 产物：renderer `dist/`（宿主 chunk 含 SDK bare import、零插件内容）；main/preload `dist-electron/main.cjs`、`preload.cjs`；AI 插件产物 `plugins/ai/plugin.js` 与清单 `plugins/index.json`（gitignored，`package-plugin.mjs` 产出）；web 分发 `dist/vendor/` + `dist/plugins/<id>/plugin.js` + `dist/plugins/index.json`（`build-web.mjs`）。
+- dev 协同（`scripts/dev.mjs`）：① vite lib build 打包 AI 插件 → `plugins/ai/plugin.js` 并重写 `plugins/index.json`（external=SDK_VENDOR；独立 lib 配置文件，复用 `@vitejs/plugin-vue` 支持 SFC；产物 gitignored；每次 dev 启动重打一次、不做 watch——桌面验收重启即得新产物）→ ② spawn vite → ③ 等就绪 → ④ esbuild watch `electron/main` + `electron/preload` → ⑤ `VITE_DEV_SERVER_URL=…` spawn `electron .`。main 改动 → esbuild 重建 → M1 手动重启 electron 进程（main 热重启自动化列 M4）；renderer 改动走 vite HMR。
 - devDeps 增量：`electron`、`esbuild`、`chokidar`（electron-builder 属 M4）。不引入 concurrently/wait-on。
 - `tsconfig.electron.json`（新）：node 风格 + `types: ["node"]` + lib 含 DOM（bridge.ts 的 `declare global` 引用 Window）+ include `electron/**`、`scripts/**`。
 
@@ -195,22 +228,24 @@ function setDiscoveredPluginIds(ids: string[]): void {
 1. **`window.aideaDesktop` 全 renderer 仅 `src/plugin/sources/desktop.ts` 一处**——验收：`rg "aideaDesktop" src/` 只允许 1 个文件命中（含类型 import）。
 2. **IPC 契约窄化**：通道白名单 = `plugins:list` / `plugins:changed`（M3 加 `plugins:compile`）；preload 永不暴露 fs/path/任意路径参数；新增通道须在 `electron/shared/bridge.ts` 集中评审。
 3. **插件 SDK 零 Node**：`adapter.ts` 及其 re-export 面不得出现任何 Node/electron import；`SDK_VENDOR` 只增不减。
-4. **web 版始终可构建且功能不降级（持续验收标准）**：每阶段结束跑 `npm run build && npm run test && npm run dev:web` 人工冒烟——无桥时桌面源返回空集，行为与今天等价。
+4. **web 版始终可构建且功能不降级（持续验收标准）**：每阶段结束跑 `npm run build && npm run test && npm run dev:web` 人工冒烟——无桥时走 web 清单源，插件功能不降级；清单缺失/获取失败时空集兜底。
 5. **插件代码不感知宿主形态**：`AideaPlugin` 契约不动；同一 bundle 在桌面协议与未来 web 远程源下行为一致；禁探测桥分叉（红线 1 的镜像约束）。
 6. **`manager.ts`/`adapter.ts` 不 import 桥**：跨界形状只有 `PluginEntry[]`——`rg "shared/bridge" src/` 只允许 `sources/desktop.ts` 命中。
 7. **协议 handler 是唯一文件读取面**：traversal 测试用例 M1 必须存在且永在。
+8. **装载唯一路径（宿主构建零插件）**：编译期 glob 内置源已废除——桌面运行态仅桌面源（桥扫描 + 协议装载），web 运行态仅 web 源（清单装载）。验收：`rg "import.meta.glob" src/` 零命中；`dist/` 无插件 chunk；插件记录不存在 `source: 'builtin'`。
+9. **SDK 单实例**：`SDK_VENDOR` 四包全仓库共享同一模块实例——dev 走 vite 原生模块图（插件 transform 装载，不经 import map）；生产宿主 build external、vendor 四包互相 external（自身除外）+ vue feature flags，bare import 统一经 import map。验收：宿主产物保留 bare import 且不含 SDK 源码；vendor 产物内无嵌套 SDK 副本。
 
 ## 11. 阶段划分与验收
 
 | 阶段 | 内容 | 验收（type-check 零错 + test 全绿 + 真机人工验证） | 发布度 |
 |---|---|---|---|
-| **M1** | 壳（main/preload/窗口/双环境加载）+ 协议 + traversal 防护 + vendor/import map + sources 拆分/async 聚合/id 冲突裁决 + layout 回填重清洗 + 契约 v1 + `PluginRecord.source` 展示 | ① `dev:web` 与 electron dev 双跑，**内置 ai 插件（plugins/ai）行为一致**；② 临时创建一个本地示例插件（如 `plugins-local/hello/`，h() 渲染函数注册一个面板，验证后可删）→ 重启 → 活动栏出现、可拖拽、重启后布局位置保留（禁用→启用循环再验一次） | 内部 dogfood，功能完备性达决策目标 |
-| **M2** | chokidar watch + 变更提示 | 增/删/改插件目录均触发提示；提示不打断进行中编辑；web 全程无感知 | 可独立发布 |
+| **M1** | 壳（main/preload/窗口/双环境加载）+ 协议 + traversal 防护 + vendor/import map + sources 拆分/async 聚合/运行时装载（web 清单 + 桌面扫描）+ SDK 单实例构建分流 + layout 回填重清洗 + 契约 v1 + AI 插件打包管线 + `PluginRecord.source` 展示 | ① `dev:web` 与 electron dev 双跑，**AI 插件双形态行为一致**（web = 清单 import `/plugins/ai/plugin.js`；桌面 = 扫描 + 按 `location.protocol` 分支装载——dev 经 dev-server URL transform、生产经 `aidea-plugin://` 协议，见 §6）；② 以 AI 插件为对象验证装载全链路：活动栏出现、可拖拽、重启后布局位置保留（禁用→启用循环再验一次）；③ 插件管理面板显示 `source: local` | 内部 dogfood，功能完备性达决策目标 |
+| **M2** | chokidar watch + 变更提示 | 增/删/改插件目录均触发提示；提示不打断进行中编辑；web 全程无感知 | ✅ 已实现（agent 侧双绿：62 文件 661 用例；真机验收待进行——见 §8 验收注记） |
 | **M3** | TS 源直载（main esbuild，external=SDK_VENDOR，产物缓存 by mtime，`DesktopPluginInfo.error` 透出） | 手写 `index.ts` 免构建装载；编译错误显示在插件管理面板；web 契约文档标注"TS 直载为桌面独有" | 实验特性，可无限期推迟 |
 | **M4** | electron-builder（NSIS + dmg，asar）+ 插件根迁移 userData + main 热重启打磨 +（后置）electron-updater / mac 签名（个人工具可宣布跳过并文档化绕过） | 双平台安装包实测；asar 与路径相关行为实测；`dev:web` 回归冒烟 | 正式分发 |
 
-> 说明：项目当前唯一的内置插件是 `plugins/ai/`（AI 画词/生成/连线设置等）。M1 验收中的"本地示例插件"是**验证时临时创建的示例**（如上表 `hello`），不是仓库既有资产，验证后可删除。
+> 说明：项目唯一的官方插件是 `plugins/ai/`（AI 画词/生成/连线设置等），"官方"指"随仓库分发"，与第三方插件地位相同。统一到 `plugins/` 后 AI 插件是目录装载机制的首个真实验证载体：`index.ts` 源码（类型检查与测试面）+ `plugin.js` 产物（两形态装载入口，构建脚本产出、gitignored）——M1 不再需要任何临时示例插件（原 hello 方案废除）。
 
 ## 12. 与既有架构的接缝总结
 
-本次实施对既有架构的全部侵入 = 一个函数签名 async 化 + 一个 store 字段 ref 化 + 一处 await；其余 100% 新增文件。实施纪律的核心：**别让壳层知识漏进 `sources/` 以外的任何文件**。
+本次实施对既有架构的全部侵入 = 一个函数签名 async 化 + 一个 store 字段 ref 化 + 一处 await + `vite.config.ts` 的 mode 分流；其余为新增文件。实施纪律的核心：**别让壳层知识漏进 `sources/` 以外的任何文件**；宿主构建永不接触 `plugins/` 内容，插件装载只有"启动时扫描/清单"一条路径。

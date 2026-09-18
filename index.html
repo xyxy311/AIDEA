@@ -10,6 +10,12 @@
       的 SDK_VENDOR，只增不减），bare import 由本表解析。vendor 产物由脚本落 public/vendor/
       （gitignored）；web 形态无桌面插件，不加载 vendor 也不受影响。
     -->
+    <!--
+      CSP（M1 宽松版，蓝图 §2）：script 放行 aidea-plugin:/app:（插件协议模块与生产 renderer 载体）、
+      unsafe-inline（import map 与 vite dev 注入）、wasm-unsafe-eval；connect-src 放行 ws:/http(s):
+      （vite HMR + AI 插件用户自配端点）。M4 发布前收紧为白名单。
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' aidea-plugin: app:; script-src 'self' aidea-plugin: app: 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: aidea-plugin: app:; font-src 'self' data:; connect-src 'self' ws: wss: http: https: aidea-plugin: app:;">
     <script type="importmap">
       {
         "imports": {

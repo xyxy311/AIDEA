@@ -21,6 +21,17 @@ import { decodeProtocolPath, resolveSafeFile } from './fsGuard'
 import { pickMimeType } from './mime'
 import { getPluginDir } from './plugins'
 
+/**
+ * 跨 origin 模块加载的 CORS 放行（蓝图 §7）：
+ * privileged 的 corsEnabled 只是让协议"参与 CORS"，而 ES module 的动态 import 是 CORS
+ * 模式请求——响应必须带 Access-Control-Allow-Origin 才能被 renderer 装载。dev 下 renderer
+ * origin 是 vite dev server、生产是 app://，与 aidea-plugin:// 均跨 origin。统一放行 *：
+ * 协议访问面已有插件白名单守卫（getPluginDir），且 renderer origin 永远是本应用自身，
+ * 不存在可达此 handler 的第三方 origin。所有响应（含 403/404/405）统一携带，让 renderer
+ * 看到真实状态码而非被 CORS 掩盖成笼统网络错误。
+ */
+const CORS_HEADERS: Record<string, string> = { 'Access-Control-Allow-Origin': '*' }
+
 /** privileged schemes：必须在 app ready 前调用（index.ts 顶层） */
 export function registerPrivilegedSchemes(): void {
   protocol.registerSchemesAsPrivileged([
@@ -52,9 +63,9 @@ export function registerPrivilegedSchemes(): void {
 /** URL 守卫结果：pass = 已解析出的安全物理路径；fail = 直接以此状态码响应 */
 type GuardResult = { pass: true; filePath: string } | { pass: false; status: number }
 
-/** 空响应（无 body，只带状态码；不回内省信息） */
+/** 空响应（无 body，只带状态码；不回内省信息；统一携带 CORS 头） */
 function emptyResponse(status: number, extraHeaders?: HeadersInit): Response {
-  return new Response(null, { status, headers: extraHeaders })
+  return new Response(null, { status, headers: { ...CORS_HEADERS, ...extraHeaders } })
 }
 
 /**
@@ -90,6 +101,7 @@ async function serveFile(filePath: string, request: Request): Promise<Response> 
       'Content-Type': pickMimeType(filePath),
       'Cache-Control': 'no-store',
       ETag: etag,
+      ...CORS_HEADERS,
     },
   })
 }

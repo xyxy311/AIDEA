@@ -1,8 +1,10 @@
 /**
- * sources/ 聚合与 id 冲突裁决测试
+ * sources/ 聚合与互斥裁决测试（桌面=桥扫描协议装载 / web=静态清单装载）
  *
  * desktop.ts 在模块加载时读取 preload 注入到 window 的桌面桥（顶部 const 固化），
  * 因此每个用例先 vi.resetModules() 清模块缓存，再设置桥状态后动态 import 被测模块。
+ * web 形态（无桥）→ 聚合走 web 静态清单源（fetch /plugins/index.json），测试环境
+ * 无 dev server，用 vi.stubGlobal('fetch') 提供清单响应。
  * 桥 stub 用字面量对象 + any（测试不得 import 契约文件——契约 import 面只允许
  * sources/desktop.ts 命中）。
  */
@@ -25,51 +27,68 @@ function unstubBridge(): void {
   delete (window as any)[BRIDGE_KEY]
 }
 
-describe('collectPluginEntries（sources 聚合与 id 冲突裁决）', () => {
+/** stub web 静态清单 fetch：/plugins/index.json 返回给定清单 */
+function stubManifest(list: unknown): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, status: 200, json: async () => list })),
+  )
+}
+
+describe('collectPluginEntries（sources 聚合与互斥裁决）', () => {
   beforeEach(() => {
     vi.resetModules()
     unstubBridge()
+    // 默认空清单（空集路径）；web 清单用例自行覆盖
+    stubManifest([])
   })
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
     unstubBridge()
   })
 
-  it('无桥（web 形态）→ 桌面源空集，返回只含内置条目且不炸', async () => {
+  it('无桥（web 形态）→ fetch 静态清单装载，条目均为 local（内置 glob 源已废除）', async () => {
+    stubManifest([
+      { id: 'ai', entry: 'plugin.js' },
+      { id: 'other', entry: 'plugin.js' },
+    ])
     const { collectPluginEntries } = await import('@/plugin/sources')
     const entries = await collectPluginEntries()
-    expect(entries.length).toBeGreaterThan(0)
-    expect(entries.every((e) => e.source === 'builtin')).toBe(true)
-    expect(entries.some((e) => e.id === 'ai')).toBe(true)
+    expect(entries).toHaveLength(2)
+    expect(entries.every((e) => e.source === 'local')).toBe(true)
+    expect(new Set(entries.map((e) => e.id))).toEqual(new Set(['ai', 'other']))
   })
 
-  it('id 冲突：本地条目与内置同 id → 丢弃本地（内置优先）+ console.warn', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('无桥 + 清单获取失败（fetch reject）→ console.error + 空集', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))))
+    const { collectPluginEntries } = await import('@/plugin/sources')
+    const entries = await collectPluginEntries()
+    // 清单获取失败 → web 源空集兜底（不炸应用）
+    expect(entries).toEqual([])
+    expect(error).toHaveBeenCalledTimes(1)
+  })
+
+  it('有桥 → 仅桌面源（互斥红线）：web 清单装载通道必须关闭', async () => {
     stubBridge({
       kind: 'desktop',
       listPlugins: async () => [
         { id: 'ai', entry: 'plugin.js', manifest: null },
-        { id: 'hello', entry: 'plugin.js', manifest: null },
+        { id: 'other', entry: 'plugin.js', manifest: null },
       ],
       onPluginsChanged: () => () => {},
     })
     const { collectPluginEntries } = await import('@/plugin/sources')
     const entries = await collectPluginEntries()
 
-    // 与内置同 id 的本地条目被滤，内置原样保留
-    const ais = entries.filter((e) => e.id === 'ai')
-    expect(ais).toHaveLength(1)
-    expect(ais[0]!.source).toBe('builtin')
-
-    // 无冲突的本地条目正常并入
-    const hello = entries.find((e) => e.id === 'hello')
-    expect(hello).toBeDefined()
-    expect(hello!.source).toBe('local')
-
-    expect(warn).toHaveBeenCalledTimes(1)
+    // 互斥：全部条目来自桌面源（beforeEach 的 fetch stub 即便返回任何清单也不被消费）
+    expect(entries.length).toBeGreaterThan(0)
+    expect(entries.every((e) => e.source === 'local')).toBe(true)
+    expect(new Set(entries.map((e) => e.id))).toEqual(new Set(['ai', 'other']))
   })
 
-  it('listPlugins reject → console.error + 桌面源空集，返回内置条目不炸', async () => {
+  it('有桥但 listPlugins reject → console.error + 空集（不回退 web 清单）', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     stubBridge({
       kind: 'desktop',
@@ -78,8 +97,8 @@ describe('collectPluginEntries（sources 聚合与 id 冲突裁决）', () => {
     })
     const { collectPluginEntries } = await import('@/plugin/sources')
     const entries = await collectPluginEntries()
-    expect(entries.length).toBeGreaterThan(0)
-    expect(entries.every((e) => e.source === 'builtin')).toBe(true)
+    // 互斥语义：桌面下 IPC 失败 → 桌面源空集，绝不回退 web 清单源
+    expect(entries).toEqual([])
     expect(error).toHaveBeenCalledTimes(1)
   })
 })
@@ -112,5 +131,47 @@ describe('collectDesktopEntries（桌面源单测）', () => {
     const entries = await collectDesktopEntries()
     expect(entries.map((e) => e.id)).toEqual(['good'])
     expect(entries[0]!.source).toBe('local')
+  })
+})
+
+describe('subscribePluginChanges（桥推送订阅转发）', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    unstubBridge()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    unstubBridge()
+  })
+
+  it('无桥（web 形态）→ 返回退订函数，调用为 no-op 不抛错', async () => {
+    const { subscribePluginChanges } = await import('@/plugin/sources/desktop')
+    const unsub = subscribePluginChanges(() => {})
+    expect(typeof unsub).toBe('function')
+    expect(() => unsub()).not.toThrow()
+  })
+
+  it('有桥 → cb 注册到桥、推送 id 透传、退订函数转发桥的退订', async () => {
+    const unsubSpy = vi.fn()
+    const registered: Array<(ids: string[]) => void> = []
+    stubBridge({
+      kind: 'desktop',
+      onPluginsChanged: (cb: (ids: string[]) => void) => {
+        registered.push(cb)
+        return unsubSpy
+      },
+    })
+    const { subscribePluginChanges } = await import('@/plugin/sources/desktop')
+    const cb = vi.fn()
+    const unsub = subscribePluginChanges(cb)
+    // cb 被注册到桥（订阅转发）
+    expect(registered).toEqual([cb])
+    // 桥推送 → id 列表透传给订阅方
+    registered[0]!(['ai'])
+    expect(cb).toHaveBeenCalledTimes(1)
+    expect(cb).toHaveBeenCalledWith(['ai'])
+    // 返回的退订函数 → 转发桥的退订
+    unsub()
+    expect(unsubSpy).toHaveBeenCalledTimes(1)
   })
 })

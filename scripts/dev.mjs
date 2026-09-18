@@ -1,10 +1,13 @@
 /**
  * dev.mjs —— Electron 开发编排（package.json "dev"）：
- *   ① 产 vendor 到 public/vendor/（vite dev server 直接伺服，供 index.html import map 解析）
+ *   ① 打包 AI 插件 → plugins/ai/plugin.js（dev 经 dev-server URL transform 装载、生产经协议装载，蓝图 §4/§6/§9）
  *   ② spawn vite（--strictPort 固定 5173；继承 stdio）
  *   ③ 轮询 dev server 就绪
  *   ④ esbuild watch electron/main/** + electron/preload/**（产 dist-electron/*.cjs）
  *   ⑤ 首次构建成功后 spawn electron（env 携带 VITE_DEV_SERVER_URL）
+ *
+ * 注：vendor 产物仅生产链路需要（import map 解析 SDK bare import），dev 下 SDK 归一走
+ * vite 原生预打包/模块图（sources/desktop.ts 的 loader 分支），本编排不再产 vendor。
  *
  * 端口等待策略：vite 以 --strictPort 启动，端口被占时 vite 直接失败退出
  * （不静默漂移到 5174），编排轮询 http://localhost:5173 直至响应（60s 超时报错），
@@ -19,7 +22,8 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import fs from 'node:fs'
 import esbuild from 'esbuild'
-import { ROOT, generateVendor } from './vendor.mjs'
+import { ROOT } from './vendor.mjs'
+import { packagePlugin } from './package-plugin.mjs'
 
 const require = createRequire(import.meta.url)
 const DEV_SERVER_URL = 'http://localhost:5173'
@@ -85,8 +89,9 @@ const rebuildNotifyPlugin = {
 }
 
 async function main() {
-  // ① vendor：vite dev 需要在 public/vendor 下找到 import map 指向的文件
-  await generateVendor(path.join(ROOT, 'public', 'vendor'))
+  // ① 内置插件打包：dev 下插件经 dev-server URL transform 装载、生产经协议装载，
+  //    两形态都以 plugins/<id>/plugin.js 产物为入口（蓝图 §4/§6/§9）
+  await packagePlugin('ai')
 
   // ② vite：--strictPort 保证端口固定 5173（被占则失败退出，端口不漂移）
   const vite = spawn(process.execPath, [resolveViteEntry(), '--strictPort'], {

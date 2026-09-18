@@ -1,9 +1,10 @@
 /**
  * plugins.ts —— main 进程的插件扫描壳（electron 依赖只在本文件；纯逻辑在 pluginScan.ts）。
  *
- * 设计依据：docs/Electron桌面化实施蓝图.md §3 / §7。
- * - 插件根：dev 为 <仓库根>/plugins-local/（与内置 plugins/ 物理隔离，避免 glob 双收）；
- *   打包后为 userData/plugins/。
+ * 设计依据：docs/Electron桌面化实施蓝图.md §3 / §6 / §7。
+ * - 插件根：dev 为 <仓库根>/plugins/（统一插件目录——内置 AI 插件的 plugin.js 打包产物
+ *   也在这里，由 scripts/package-plugin.mjs 产出、gitignored，桌面运行态一切插件经协议
+ *   从此装载）；打包后为 userData/plugins/。
  * - 白名单 Map（id → 插件目录绝对路径）由 rescan() 全量刷新；协议 handler 经 getPluginDir()
  *   做访问控制——不在白名单中的 id 一律 403，杜绝任意目录读（蓝图红线 7）。
  * - M1 零代码执行：扫描只读目录名 / manifest.json / 入口存在性。
@@ -13,8 +14,8 @@ import path from 'node:path'
 import type { DesktopPluginInfo } from '../shared/bridge'
 import { scanPluginDirectories } from './pluginScan'
 
-/** dev 插件根目录名（位于仓库根；已被 .gitignore 排除） */
-const DEV_PLUGINS_DIR = 'plugins-local'
+/** dev 插件根目录名（位于仓库根；与内置插件源码同根，产物 plugin.js 已 gitignore） */
+const DEV_PLUGINS_DIR = 'plugins'
 
 /** 打包后插件根目录名（位于 userData） */
 const PROD_PLUGINS_DIR = 'plugins'

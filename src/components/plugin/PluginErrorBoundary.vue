@@ -25,25 +25,37 @@ defineProps<{
 /** 是否发生渲染错误（true 时展示占位而非插槽内容） */
 const error = ref(false)
 
-function onCapture(): boolean {
+/** 错误摘要（展示在占位内，截图即可排障，无需翻 console） */
+const message = ref('')
+
+/**
+ * 捕获渲染错误并落 console（真机排障唯一入口——插件产物的渲染错误
+ * 之前仅置占位不打印，用户与开发者都拿不到堆栈）。
+ * 返回 false 阻断错误继续向上冒泡（true/不返回则继续传播）。
+ */
+function onCapture(err: unknown, _instance: unknown, info: string): boolean {
+  message.value = err instanceof Error ? err.message : String(err)
+  console.error(`[plugin] 组件渲染错误（${info}）`, err)
   error.value = true
-  return false // false：阻断错误继续向上冒泡（true/不返回则继续传播）
+  return false
 }
 onErrorCaptured(onCapture)
 
 /** 「重试」复位错误标记 → 重挂子树（错误组件已被卸载，重挂即重试） */
 function reset(): void {
   error.value = false
+  message.value = ''
 }
 </script>
 
 <template>
   <!-- 正常状态：渲染插件内容 -->
   <slot v-if="!error" />
-  <!-- 出错状态：最小占位 -->
+  <!-- 出错状态：最小占位（附错误摘要，排障无需翻 console） -->
   <div v-else class="plugin-error-boundary">
     <span v-if="name" class="p-eb-name">{{ name }}</span>
     <p class="p-eb-text">{{ t('plugin.componentError') }}</p>
+    <code v-if="message" class="p-eb-message">{{ message }}</code>
     <button type="button" class="p-eb-retry" @click="reset">
       {{ t('plugin.retry') }}
     </button>
@@ -73,6 +85,19 @@ function reset(): void {
 .p-eb-text {
   margin: 0;
   font-size: 12px;
+}
+
+.p-eb-message {
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-bg-muted, transparent);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: text;
 }
 
 .p-eb-retry {

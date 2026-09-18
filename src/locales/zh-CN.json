@@ -71,7 +71,9 @@
     "componentError": "该插件组件渲染失败",
     "retry": "重试",
     "sourceBuiltin": "内置",
-    "sourceLocal": "本地"
+    "sourceLocal": "本地",
+    "dirChanged": "检测到插件目录变更，重启应用后生效",
+    "dirDirty": "目录有变更"
   },
   "shortcuts": {
     "recording": "请按键…",

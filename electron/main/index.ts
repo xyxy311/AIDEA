@@ -19,6 +19,7 @@ import { app, BrowserWindow, Menu, dialog } from 'electron'
 import path from 'node:path'
 import { IPC } from '../shared/bridge'
 import { registerIpc } from './ipc'
+import { startPluginWatching } from './pluginWatch'
 import { registerPrivilegedSchemes, registerProtocolHandlers } from './protocol'
 import { attachWindowShortcuts } from './shortcuts'
 
@@ -101,6 +102,9 @@ void app.whenReady().then(() => {
   registerProtocolHandlers()
   registerIpc()
   createMainWindow()
+
+  // M2 插件目录 watch：插件目录增删改经 IPC.CHANGED 推送给 renderer（变更 id 列表）
+  startPluginWatching()
 
   // macOS 惯例：Dock 图标点击重新创建窗口（window-all-closed 已 quit，此分支只在窗口被关但 app 未退时兜底）
   app.on('activate', () => {

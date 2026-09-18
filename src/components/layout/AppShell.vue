@@ -18,13 +18,14 @@
  * - 宽度范围：180px ~ 440px
  * - 收起态下 handle 隐藏
  */
-import { ref, computed, provide } from 'vue'
+import { ref, computed, provide, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
-import { useDialog } from 'naive-ui'
+import { useDialog, useMessage } from 'naive-ui'
 import { useLayoutStore } from '@/stores/layout'
 import { useFileStore } from '@/stores/file'
 import { useViewStore } from '@/stores/view'
 import { useModalStore, SETTINGS_MODAL_KEY } from '@/stores/modal'
+import { usePluginStore } from '@/stores/plugin'
 import { useProjectFile } from '@/composables/useProjectFile'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { t } from '@/composables/useT'
@@ -143,6 +144,19 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
     e.returnValue = ''
   }
 })
+
+// ── 插件目录变更全局轻提示（M2）──
+// 插件 store 的 dirDirty 由桌面桥推送置位（web 无桥恒 false，此 watch 不触发）。
+// 用 message.info 轻提示而非 dialog/notification：不打断进行中的编辑；
+// 语义为「重启应用后生效」，与插件面板的启停重启提示一致。
+const pluginStore = usePluginStore()
+const message = useMessage()
+watch(
+  () => pluginStore.dirDirty,
+  (v) => {
+    if (v) message.info(t('plugin.dirChanged'), { duration: 5000, closable: true })
+  },
+)
 </script>
 
 <template>

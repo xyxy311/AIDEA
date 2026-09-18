@@ -71,7 +71,9 @@
     "componentError": "This plugin component failed to render",
     "retry": "Retry",
     "sourceBuiltin": "Built-in",
-    "sourceLocal": "Local"
+    "sourceLocal": "Local",
+    "dirChanged": "Plugin directory changed. Restart the app to apply.",
+    "dirDirty": "Directory changed"
   },
   "shortcuts": {
     "recording": "Press keys…",

@@ -17,7 +17,7 @@
  * SDK_VENDOR / VENDOR_FILE 来自 electron/shared/vendor.ts（契约冻结：一处定义三处使用）。
  * .mjs 不能直接 import .ts——先经 esbuild 把契约文件转成临时 .mjs 再动态 import。
  *
- * CLI 直跑：node scripts/vendor.mjs [outDir]（默认 public/vendor，dev:web 前置步骤）。
+ * CLI 直跑：node scripts/vendor.mjs [outDir]（默认 public/vendor，生产构建经 build-electron.mjs 产 dist/vendor）。
  */
 import path from 'node:path'
 import os from 'node:os'

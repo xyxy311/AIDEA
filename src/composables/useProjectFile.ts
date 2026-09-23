@@ -8,6 +8,7 @@ import { useRecentFilesStore } from '@/stores/recentFiles'
 import { useTagsStore } from '@/stores/tags'
 import { useAdditionsStore } from '@/stores/additions'
 import { useCommands } from '@/composables/useCommands'
+import { nativeFile } from '@/composables/useNativeFile'
 import { useMessage } from 'naive-ui'
 import { t } from '@/composables/useT'
 import {
@@ -23,7 +24,8 @@ import type { WhiteboardNode, Tag } from '@/types'
  * useProjectFile - 项目文件编排层（新建 / 保存 / 打开）
  *
  * 核心是 collectViewState（收集主视图状态）与 loadProjectIntoApp（载入数据）。
- * 目录选择 / 保存 / 下载均为浏览器行为，本层只负责正确分支与提示。
+ * 文件选择 / 读写为 Electron 原生行为（main 进程 dialog + fs，经 aideaFile 桥），
+ * 本层只负责正确分支与提示。
  */
 
 /** 确认回调：返回 true 表示确认放弃，false 表示取消 */
@@ -31,24 +33,6 @@ export type ProjectConfirmFn = (message: string) => Promise<boolean>
 
 /** useProjectFile 返回的 API 类型 */
 export type ProjectFileApi = ReturnType<typeof useProjectFile>
-
-/** File System Access API 能力检测：两类 picker 都可用才认为支持 */
-function isFileSystemAccessSupported(): boolean {
-  if (typeof window === 'undefined') return false
-  const w = window as unknown as {
-    showSaveFilePicker?: unknown
-    showOpenFilePicker?: unknown
-  }
-  return (
-    typeof w.showSaveFilePicker === 'function' &&
-    typeof w.showOpenFilePicker === 'function'
-  )
-}
-
-/** 取消选择的哨兵（用于区分「用户取消」与真实错误） */
-interface CancelSignal {
-  cancelled: true
-}
 
 export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   const nodeStore = useNodeStore()
@@ -226,72 +210,6 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     return `${name}.aidea.json`
   }
 
-  /** 下载兜底：Blob + <a download> 触发下载 */
-  function downloadProject(json: string, fileName: string): void {
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
-  /** 读取项目文件内容（优先 showOpenFilePicker，否则 input[type=file] 兜底） */
-  function readProjectFile(): Promise<{
-    text: string
-    name: string
-    handle: FileSystemFileHandle | null
-  }> {
-    return new Promise((resolve, reject) => {
-      if (isFileSystemAccessSupported()) {
-        const w = window as unknown as {
-          showOpenFilePicker: (opts: unknown) => Promise<FileSystemFileHandle[]>
-        }
-        w.showOpenFilePicker({
-          multiple: false,
-          types: [
-            {
-              description: '头脑风暴白板项目',
-              accept: { 'application/json': ['.aidea.json', '.json'] },
-            },
-          ],
-        })
-          .then(async (handles) => {
-            const handle = handles[0]
-            const text = await handle.getFile().then((file) => file.text())
-            resolve({ text, name: handle.name, handle })
-          })
-          .catch((err) => {
-            if (err && err.name === 'AbortError') {
-              reject({ cancelled: true } satisfies CancelSignal)
-            } else {
-              reject(err)
-            }
-          })
-        return
-      }
-      // 兜底：input[type=file]
-      const input = document.createElement('input')
-      input.type = 'file'
-      input.accept = '.aidea.json,.json,application/json'
-      input.onchange = () => {
-        const file = input.files?.[0]
-        if (!file) {
-          reject({ cancelled: true } satisfies CancelSignal)
-          return
-        }
-        file
-          .text()
-          .then((text) => resolve({ text, name: file.name, handle: null }))
-          .catch(reject)
-      }
-      input.click()
-    })
-  }
-
   /** 新建项目 */
   async function newProject(): Promise<void> {
     if (!(await confirmDiscard())) return
@@ -318,38 +236,39 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     message.success(t('menuBar.newProjectDone'))
   }
 
-  /** 打开项目 */
+  /** 打开项目（main showOpenDialog + readFile） */
   async function openProject(): Promise<void> {
     if (!(await confirmDiscard())) return
     try {
-      const { text, name, handle } = await readProjectFile()
-      const data = parseProjectFile(text)
+      const res = await nativeFile.openProject()
+      if (res.canceled || !res.content || !res.path) return // 用户取消不提示
+      const data = parseProjectFile(res.content)
       loadProjectIntoApp(data)
-      // 记住打开的文件句柄，后续保存直接覆盖该文件；仅清 dirty，不清句柄
+      // 记住打开路径，后续保存直接覆盖该文件；仅清 dirty，不清路径
       fileStore.markClean()
-      fileStore.setSavedHandle(handle)
-      recentFilesStore.add(name, text)
+      fileStore.setSavedPath(res.path)
+      recentFilesStore.add(res.name ?? '', res.path)
       message.success(t('menuBar.opened'))
     } catch (e) {
-      // 用户取消文件选择对话框不提示错误
-      if (e && typeof e === 'object' && (e as CancelSignal).cancelled) return
       const msg = e instanceof Error ? e.message : String(e)
       message.error(t('menuBar.openFailed', { message: msg }))
     }
   }
 
-  /** 打开最近文件（从 localStorage 内联内容载入） */
+  /** 打开最近文件（按持久化路径经桥重新读盘载入） */
   async function openRecentFile(name: string): Promise<void> {
     const entry = recentFilesStore.list.find((f) => f.name === name)
     if (!entry) return
     if (!(await confirmDiscard())) return
     try {
-      const data = parseProjectFile(entry.content)
+      const { content } = await nativeFile.readFile({ path: entry.path })
+      const data = parseProjectFile(content)
       loadProjectIntoApp(data)
-      // 最近文件无持久化句柄：清 dirty、清句柄，后续保存走另存为
-      fileStore.resetFileState()
+      // 最近文件可经持久化路径直接覆盖保存：记录路径，清 dirty
+      fileStore.markClean()
+      fileStore.setSavedPath(entry.path)
       // 刷新为最近（置顶 + 更新时间）
-      recentFilesStore.add(name, entry.content)
+      recentFilesStore.add(entry.name, entry.path)
       message.success(t('menuBar.opened'))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -361,12 +280,10 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   async function saveProject(): Promise<void> {
     const json = buildProjectJson()
     fileStore.suggestedName = defaultFileName()
-    const handle = fileStore.getSavedHandle()
-    if (handle) {
+    const path = fileStore.getSavedPath()
+    if (path) {
       try {
-        const writable = await handle.createWritable()
-        await writable.write(json)
-        await writable.close()
+        await nativeFile.writeFile({ path, content: json })
         fileStore.markClean()
         message.success(t('menuBar.saved'))
       } catch (e) {
@@ -375,51 +292,26 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       }
       return
     }
-    // 无记忆句柄：走另存为逻辑
+    // 无记忆路径：走另存为逻辑
     await saveAsProject()
   }
 
-  /** 另存为项目 */
+  /** 另存为项目（main showSaveDialog + writeFile） */
   async function saveAsProject(): Promise<void> {
     const json = buildProjectJson()
     const name = defaultFileName()
     fileStore.suggestedName = name
-    if (isFileSystemAccessSupported()) {
-      try {
-        const w = window as unknown as {
-          showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>
-        }
-        const handle = await w.showSaveFilePicker({
-          suggestedName: name,
-          types: [
-            {
-              description: '头脑风暴白板项目',
-              accept: { 'application/json': ['.aidea.json', '.json'] },
-            },
-          ],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(json)
-        await writable.close()
-        fileStore.setSavedHandle(handle)
-        fileStore.markClean()
-        recentFilesStore.add(name, json)
-        message.success(t('menuBar.saved'))
-      } catch (e) {
-        // 用户取消（AbortError）不报错
-        if (e && typeof e === 'object' && (e as { name?: string }).name === 'AbortError') {
-          return
-        }
-        const msg = e instanceof Error ? e.message : String(e)
-        message.error(t('menuBar.saveFailed', { message: msg }))
-      }
-      return
+    try {
+      const res = await nativeFile.saveProject({ defaultName: name, content: json })
+      if (res.canceled || !res.path) return // 用户取消不报错
+      fileStore.setSavedPath(res.path)
+      fileStore.markClean()
+      recentFilesStore.add(res.name ?? '', res.path)
+      message.success(t('menuBar.saved'))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      message.error(t('menuBar.saveFailed', { message: msg }))
     }
-    // 下载兜底
-    downloadProject(json, name)
-    fileStore.markClean()
-    recentFilesStore.add(name, json)
-    message.success(t('menuBar.saved'))
   }
 
   return {

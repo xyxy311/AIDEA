@@ -1,4 +1,4 @@
-﻿/**
+/**
  * plugin store 目录脏标记（dirDirty / changedIds）测试（M2）
  *
  * store 的 init() 在桌面运行态经 subscribePluginChanges 订阅桥推送；
@@ -10,8 +10,6 @@
  * import、无插件 setup），init 走完整引导但零副作用；onPluginsChanged 捕获
  * 订阅回调，测试中手动触发模拟 main 推送。
  *
- * web 形态（无桥）：init 不建立订阅 → dirDirty 恒 false（web 全程无感知语义）。
- * 无桥时 collectPluginEntries 走 web 清单源，stub fetch 返回空清单避免真实请求。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -74,22 +72,5 @@ describe('usePluginStore dirDirty（桌面桥推送驱动）', () => {
     cbs[0]!(['ai'])
     expect(store.dirDirty).toBe(true)
     expect(store.changedIds).toEqual(['ai'])
-  }, 30000)
-
-  it('无桥（web 形态）：不建立订阅，dirDirty 恒 false（web 无感知）', async () => {
-    // web 清单源 fetch stub 为空清单（避免真实网络请求；空集 → installAll 空转）
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ ok: true, status: 200, json: async () => [] })),
-    )
-    const pinia = createPinia()
-    setActivePinia(pinia)
-    const { usePluginStore } = await import('@/stores/plugin')
-    const store = usePluginStore()
-    await store.init()
-
-    expect(store.ready).toBe(true)
-    expect(store.dirDirty).toBe(false)
-    expect(store.changedIds).toEqual([])
   }, 30000)
 })

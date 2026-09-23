@@ -14,9 +14,9 @@
  * - CSS 内联后处理：SFC 的 <style scoped> 会被抽成独立 .css 产物，而协议入口只加载 plugin.js，
  *   CSS 不会自动加载，故把新增 .css 以注入代码形式追加到 plugin.js 末尾（运行时 document 存在才插入），
  *   然后删除该 .css 文件，目录内只留 plugin.js；
- * - 打包完成后全量重写 plugins/index.json（web 形态插件清单）：扫描 plugins/ 顶层子目录，
- *   凡存在 plugin.js 的目录记一条 { id, entry: 'plugin.js' }——每次打包全量重写，插件删除后自动收敛；
  * - 产物用 esbuild transform 做语法校验，校验失败即打包失败。
+ * - 桌面形态的插件装载走 aidea-plugin:// 协议 + 目录扫描（见 src/plugin/sources/desktop.ts），
+ *   不再维护 web 静态清单 plugins/index.json（web 形态已删除）。
  */
 import path from 'node:path'
 import fs from 'node:fs/promises'
@@ -103,35 +103,6 @@ export async function packagePlugin(id) {
 
   const size = (await fs.stat(outFile)).size
   console.log(`[package-plugin] ${id} -> plugins/${id}/plugin.js（${(size / 1024).toFixed(1)} KB）`)
-
-  await writePluginIndex()
-}
-
-/**
- * 扫描 plugins/ 顶层子目录，凡存在 plugin.js 的目录记一条 { id, entry: 'plugin.js' }。
- * 纯扫描不落盘——build-web.mjs 在清单缺失时也用它现场兜底。
- */
-export async function scanPluginManifest() {
-  const entries = await fs.readdir(path.join(ROOT, 'plugins'), { withFileTypes: true })
-  const list = []
-  for (const ent of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-    if (!ent.isDirectory()) continue
-    try {
-      await fs.access(path.join(ROOT, 'plugins', ent.name, 'plugin.js'))
-    } catch {
-      continue // 无产物（纯源码或产物已删）不入清单
-    }
-    list.push({ id: ent.name, entry: 'plugin.js' })
-  }
-  return list
-}
-
-/** 全量重写 plugins/index.json（web 形态清单：renderer 启动 fetch 清单 → import /plugins/<id>/plugin.js）。 */
-export async function writePluginIndex() {
-  const list = await scanPluginManifest()
-  await fs.writeFile(path.join(ROOT, 'plugins', 'index.json'), JSON.stringify(list, null, 2) + '\n')
-  console.log(`[package-plugin] plugins/index.json 已重写：[${list.map((e) => e.id).join('、') || '空'}]`)
-  return list
 }
 
 // CLI 直跑：node scripts/package-plugin.mjs [id]（默认 ai）

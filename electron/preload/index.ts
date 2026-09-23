@@ -16,7 +16,7 @@
  */
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { DesktopBridge, WindowBridge } from '../shared/bridge'
+import type { DesktopBridge, FileBridge, WindowBridge } from '../shared/bridge'
 import { IPC } from '../shared/bridge'
 
 const bridge: DesktopBridge = {
@@ -33,6 +33,17 @@ const bridge: DesktopBridge = {
       ipcRenderer.removeListener(IPC.CHANGED, listener)
     }
   },
+}
+
+const fileBridge: FileBridge = {
+  /** renderer → main invoke：打开项目（main 用原生对话框选路径 + readFile） */
+  openProject: () => ipcRenderer.invoke(IPC.FILE_OPEN),
+  /** renderer → main invoke：另存项目（main 用 showSaveDialog 选路径 + writeFile） */
+  saveProject: (opts) => ipcRenderer.invoke(IPC.FILE_SAVE, opts),
+  /** renderer → main invoke：覆盖写入已记忆路径（Ctrl+S 覆盖保存） */
+  writeFile: (opts) => ipcRenderer.invoke(IPC.FILE_WRITE, opts),
+  /** renderer → main invoke：读取已记忆路径内容（打开最近文件 / 重读） */
+  readFile: (opts) => ipcRenderer.invoke(IPC.FILE_READ, opts),
 }
 
 const windowBridge: WindowBridge = {
@@ -58,3 +69,4 @@ const windowBridge: WindowBridge = {
 
 contextBridge.exposeInMainWorld('aideaDesktop', bridge)
 contextBridge.exposeInMainWorld('aideaWindow', windowBridge)
+contextBridge.exposeInMainWorld('aideaFile', fileBridge)

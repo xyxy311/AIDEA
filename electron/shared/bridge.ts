@@ -32,6 +32,14 @@ export const IPC = {
   WINDOW_IS_MAXIMIZED: 'window:is-maximized',
   /** main → renderer：最大化状态变更推送，载荷 boolean（最大化/进入全屏 = true） */
   WINDOW_MAXIMIZED_CHANGED: 'window:maximized-changed',
+  /** renderer → main：打开项目文件（dialog + readFile），invoke */
+  FILE_OPEN: 'file:open',
+  /** renderer → main：另存项目（dialog + writeFile），invoke；载荷 { defaultName, content } */
+  FILE_SAVE: 'file:save',
+  /** renderer → main：覆盖写入已记忆路径（Ctrl+S 覆盖 / 重写），invoke；载荷 { path, content } */
+  FILE_WRITE: 'file:write',
+  /** renderer → main：读取已记忆路径内容（打开最近文件、重读），invoke；载荷 { path } */
+  FILE_READ: 'file:read',
 } as const
 
 /**
@@ -66,10 +74,10 @@ export interface DesktopPluginInfo {
 
 /**
  * preload 经 contextBridge 暴露到 renderer 的桌面桥（window.aideaDesktop）。
- * web 形态下 window.aideaDesktop === undefined，renderer 据此静默降级（sources/desktop.ts 唯一访问点）。
+ * 本项目为纯 Electron 桌面形态，桥恒存在；sources/desktop.ts 是唯一访问点。
  */
 export interface DesktopBridge {
-  /** 形态标记（预留调试/分叉排查用；插件禁探测，见蓝图红线 5） */
+  /** 形态标记（调试/分叉排查用；插件禁探测，见蓝图红线 5） */
   readonly kind: 'desktop'
   /** 列出本地插件目录中的插件（无参数——目录由 main 决定，renderer 永远不给路径） */
   listPlugins(): Promise<DesktopPluginInfo[]>
@@ -81,7 +89,7 @@ export interface DesktopBridge {
  * preload 经 contextBridge 暴露到 renderer 的窗口 chrome 桥（window.aideaWindow）。
  * 与插件桥 DesktopBridge 职责分离：DesktopBridge 服务插件系统（扫描/订阅插件目录），
  * WindowBridge 只管窗口 chrome 控制（最小化/最大化/关闭/最大化状态推送）。
- * web 形态下 window.aideaWindow === undefined，renderer 据此静默降级。
+ * 本项目为纯 Electron 桌面形态，桥恒存在。
  */
 export interface WindowBridge {
   /** 最小化窗口（fire-and-forget） */
@@ -100,15 +108,56 @@ export interface WindowBridge {
   onMaximizedChange(cb: (maximized: boolean) => void): () => void
 }
 
+/**
+ * preload 经 contextBridge 暴露到 renderer 的项目桥（window.aideaFile）。
+ * 负责项目文件的新建/保存/打开的磁盘 IO——文件位置与读写一律由 main 进程
+ * （dialog + fs）完成，renderer 不接触文件系统：
+ * - 打开/另存：main 用原生对话框让用户选路径，renderer 不传路径；
+ * - 覆盖保存 / 打开最近文件：renderer 回传「之前由对话框产生的路径」（其自身
+ *   持久化的最近列表），main 仅对其做磁盘读写（该路径即应用自己的项目数据）。
+ * 纯桌面形态恒存在。
+ */
+export interface FileBridge {
+  /** 打开项目（showOpenDialog + readFile）；取消返回 { canceled: true } */
+  openProject(): Promise<OpenFileResult>
+  /** 另存项目（showSaveDialog + writeFile）；取消返回 { canceled: true } */
+  saveProject(opts: { defaultName: string; content: string }): Promise<SaveFileResult>
+  /** 覆盖写入已记忆路径（Ctrl+S 覆盖保存） */
+  writeFile(opts: { path: string; content: string }): Promise<void>
+  /** 读取已记忆路径内容（打开最近文件 / 重读） */
+  readFile(opts: { path: string }): Promise<{ content: string }>
+}
+
+/** openProject 的返回：取消 / 成功（path + name + content） */
+export interface OpenFileResult {
+  canceled: boolean
+  path?: string
+  name?: string
+  content?: string
+}
+
+/** saveProject 的返回：取消 / 成功（path + name） */
+export interface SaveFileResult {
+  canceled: boolean
+  path?: string
+  name?: string
+}
+
 declare global {
   interface Window {
-    /** 仅桌面形态存在；web 为 undefined。全 renderer 仅 src/plugin/sources/desktop.ts 允许访问（蓝图红线 1） */
-    aideaDesktop?: DesktopBridge
+    /** 纯桌面形态恒存在。全 renderer 仅 src/plugin/sources/desktop.ts 允许访问（架构红线） */
+    aideaDesktop: DesktopBridge
     /**
-     * 仅桌面形态存在；web 为 undefined。窗口控制桥的全 renderer 唯一运行时访问点为
+     * 纯桌面形态恒存在。窗口控制桥的全 renderer 唯一运行时访问点为
      * src/composables/useWindowControls.ts——该文件不 import 本文件（红线：renderer 只允许
      * desktop.ts import），用局部形状断言保持与 WindowBridge 一致。
      */
-    aideaWindow?: WindowBridge
+    aideaWindow: WindowBridge
+    /**
+     * 纯桌面形态恒存在。项目文件桥的全 renderer 唯一运行时访问点为
+     * src/composables/useNativeFile.ts——该文件 type-only import 本文件（与 desktop.ts
+     * 同一红线模式：bridge 契约文件与 renderer 访问面分离）。
+     */
+    aideaFile: FileBridge
   }
 }

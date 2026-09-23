@@ -12,7 +12,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { PluginManager, collectPluginEntries } from '@/plugin/manager'
 import type { PluginRecord } from '@/plugin/manager'
-import { isDesktopRuntime, subscribePluginChanges } from '@/plugin/sources'
+import { subscribePluginChanges } from '@/plugin/sources'
 import { useLayoutStore } from '@/stores/layout'
 
 const STORAGE_KEY = 'aidea-plugins'
@@ -33,24 +33,22 @@ export const usePluginStore = defineStore('plugin', () => {
   const manager = ref<PluginManager | null>(null)
   const records = ref<PluginRecord[]>([])
   const ready = ref(false)
-  /** 插件目录脏标记（M2）：仅桌面桥推送置位；web 无桥 → 恒 false（全程无感知） */
+  /** 插件目录脏标记（M2）：由桌面桥推送置位（纯桌面形态恒有桥） */
   const dirDirty = ref(false)
   /** 桥推送的变更插件 id 列表（M2 预留：当前仅置位 dirDirty，不触发重扫） */
   const changedIds = ref<string[]>([])
 
-  /** 引导装载插件（应用启动后调用一次；收集为 async：内置 glob + 桌面桥扫描） */
+  /** 引导装载插件（应用启动后调用一次；收集为 async：桌面桥扫描） */
   async function init(): Promise<void> {
     if (manager.value) return
-    // 桌面运行态订阅插件目录变更推送（main watch → 桥推送，M2）：
+    // 订阅插件目录变更推送（main watch → 桥推送，M2）：
     // 仅置脏标记，不做热重扫/热卸载——插件启停语义固定为「重启应用生效」。
     // 应用生命周期订阅，不退订（init 全程只跑一次，与进程同生命周期）。
-    if (isDesktopRuntime) {
-      subscribePluginChanges((ids) => {
-        dirDirty.value = true
-        changedIds.value = ids
-      })
-    }
-    // 收集聚合条目（无桌面桥 = web → 桌面源空集，只装内置）
+    subscribePluginChanges((ids) => {
+      dirDirty.value = true
+      changedIds.value = ids
+    })
+    // 收集聚合条目（纯桌面形态：桌面桥扫描返回条目）
     const entries = await collectPluginEntries()
     // 先回填布局发现集（重清洗 delta），再构造 manager 装载注册 UI——
     // 面板 / 顶栏按钮的位置 delta 在注册前即已正确（禁用→启用不丢布局）

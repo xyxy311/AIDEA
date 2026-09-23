@@ -11,13 +11,12 @@
  * - 最大化图标随桥状态切换：isMaximized() 初值报告已最大化 → 渲染「还原图标」
  *   （CopyOutline 双框）；onMaximizedChange 事件回调触发 → 图标在
  *   「最大化（SquareOutline 方框）/ 还原（CopyOutline 双框）」间随状态切换；
- * - 卸载时取消 onMaximizedChange 订阅（防泄漏）；
- * - 无桥（web 形态）：根 v-if 整组不渲染。
+ * - 卸载时取消 onMaximizedChange 订阅（防泄漏）。
  *
  * 模块加载时序说明：useWindowControls 在「模块加载时」读取一次 window.aideaWindow
- * （preload 注入先于应用脚本执行的既定语义），因此每个用例先设置/删除
+ * （preload 注入先于应用脚本执行的既定语义），因此每个用例先设置
  * window.aideaWindow，再 vi.resetModules() + 动态 import 组件——组件与其依赖
- * useWindowControls 一起重新求值，重新读桥。
+ * useWindowControls 一起重新求值，重新读桥。纯桌面形态下桥部署须存在。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
@@ -83,18 +82,14 @@ function createFakeProjectFile(discard: boolean): FakeProjectFile {
 
 /**
  * 按当前 window.aideaWindow 状态挂载组件（先重置模块表，让桥在模块加载时被重新读取）。
- * @param fake          假桥；缺省 = 无桥（web 形态）
+ * @param fake          假桥（纯桌面形态必须提供）
  * @param projectFile   经 global.provide 注入的 fake projectFile；缺省 = 无注入（兜底路径）
  */
 async function mountControls(
-  fake?: ReturnType<typeof createFakeBridge>,
+  fake: ReturnType<typeof createFakeBridge>,
   projectFile?: FakeProjectFile,
 ) {
-  if (fake) {
-    ;(window as any).aideaWindow = fake.bridge
-  } else {
-    delete (window as any).aideaWindow
-  }
+  ;(window as any).aideaWindow = fake.bridge
   vi.resetModules()
   const mod = await import('@/components/topbar/WindowControls.vue')
   const wrapper = mount(mod.default, {
@@ -204,12 +199,5 @@ describe('WindowControls（窗口控制按钮组）', () => {
 
     wrapper.unmount()
     expect(fake.unsubscribed).toBe(true)
-  })
-
-  it('无桥（web 形态）整组不渲染', async () => {
-    const wrapper = await mountControls(undefined)
-
-    expect(wrapper.find('.window-controls').exists()).toBe(false)
-    expect(wrapper.findAll('.win-btn').length).toBe(0)
   })
 }, 20000)

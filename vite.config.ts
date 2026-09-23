@@ -43,6 +43,8 @@ export default defineConfig(({ mode }) => {
       : {}),
     test: {
       environment: 'happy-dom',
+      // 纯桌面形态：预置恒在桥的全局测试桩（见 test/setup.ts），供经桌面桥的模块加载即用
+      setupFiles: ['./test/setup.ts'],
     },
   }
 })

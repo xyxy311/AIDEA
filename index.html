@@ -8,7 +8,8 @@
       共享依赖 import map：插件 bundle 与宿主共享同一 vue/pinia/naive-ui/konva 模块实例
       （两个 Vue 副本 = 组件上下文断裂），插件打包时这些依赖声明为 external（electron/shared/vendor.ts
       的 SDK_VENDOR，只增不减），bare import 由本表解析。vendor 产物由脚本落 public/vendor/
-      （gitignored）；web 形态无桌面插件，不加载 vendor 也不受影响。
+      (dev) 与 dist/vendor/（生产，gitignored）；纯桌面形态（无 dev server 时经 aidea-plugin 协议
+      装载的插件 bundle）依赖本表解析到 /vendor/*.js。
     -->
     <!--
       CSP（M1 宽松版，蓝图 §2）：script 放行 aidea-plugin:/app:（插件协议模块与生产 renderer 载体）、

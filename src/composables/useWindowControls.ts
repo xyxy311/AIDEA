@@ -3,10 +3,8 @@
  *
  * ⚠ 全 renderer 唯一的 `window.aideaWindow` 桥访问点（架构红线，与
  * src/plugin/sources/desktop.ts 的 window.aideaDesktop 同一模式）：
- * - web 形态无桥（undefined）→ available = false，三个动作 no-op，isMaximized 恒 false，
- *   静默降级，行为与无此文件等价；
- * - Electron preload 经 contextBridge 注入先于应用脚本执行，因此模块加载时读取一次即可，
- *   运行期无需（也不应）重复探测。
+ * - 本项目已收敛为纯 Electron 桌面形态，preload 注入的窗口桥恒存在；
+ * - Electron preload 经 contextBridge 注入先于应用脚本执行，因此模块加载时读取一次即可。
  *
  * 除本文件外，renderer 任何代码不得访问 window.aideaWindow。窗口控制按钮组是固定
  * 窗口 chrome：不登记 constants/topbar.ts 品类表、不参与 layout store 与拖拽排序——
@@ -32,20 +30,18 @@ interface AideaWindowBridge {
   onMaximizedChange(cb: (maximized: boolean) => void): () => void
 }
 
-// 模块加载时读取一次（web 形态 undefined → null；preload 注入先于应用脚本执行）
-const bridge = (window as Window & { aideaWindow?: AideaWindowBridge }).aideaWindow ?? null
+// 纯桌面形态恒存在：模块加载时读取一次（preload 注入先于应用脚本执行）
+const bridge = (window as unknown as { aideaWindow: AideaWindowBridge }).aideaWindow
 
 /** useWindowControls 的返回形状 */
 export interface WindowControls {
-  /** 窗口桥是否可用（Electron 桌面形态 true；web false，按钮组据此整组隐藏） */
-  available: boolean
-  /** 当前是否最大化（挂载时查询初值 + 订阅变更同步；无桥恒 false） */
+  /** 当前是否最大化（挂载时查询初值 + 订阅变更同步） */
   isMaximized: Ref<boolean>
-  /** 最小化（无桥 no-op） */
+  /** 最小化 */
   minimize(): void
-  /** 最大化 / 还原切换（无桥 no-op） */
+  /** 最大化 / 还原切换 */
   toggleMaximize(): void
-  /** 关闭（无桥 no-op） */
+  /** 关闭 */
   close(): void
 }
 
@@ -56,28 +52,24 @@ export interface WindowControls {
 export function useWindowControls(): WindowControls {
   const isMaximized = ref(false)
 
-  if (bridge) {
-    // 挂载时查询初值（IPC 异步）+ 订阅后续变更；卸载时取消订阅防泄漏
-    onMounted(async () => {
-      try {
-        isMaximized.value = await bridge.isMaximized()
-      } catch (e) {
-        // IPC 失败不阻塞 UI：保持 false（未最大化是安全默认），仅记录便于排查
-        console.error('[window] 查询窗口最大化状态失败', e)
-      }
-    })
-    const unsubscribe = bridge.onMaximizedChange((maximized) => {
-      isMaximized.value = maximized
-    })
-    onUnmounted(() => unsubscribe())
-  }
+  // 挂载时查询初值（IPC 异步）+ 订阅后续变更；卸载时取消订阅防泄漏
+  onMounted(async () => {
+    try {
+      isMaximized.value = await bridge.isMaximized()
+    } catch (e) {
+      // IPC 失败不阻塞 UI：保持 false（未最大化是安全默认），仅记录便于排查
+      console.error('[window] 查询窗口最大化状态失败', e)
+    }
+  })
+  const unsubscribe = bridge.onMaximizedChange((maximized) => {
+    isMaximized.value = maximized
+  })
+  onUnmounted(() => unsubscribe())
 
   return {
-    available: bridge !== null,
     isMaximized,
-    // 无桥时 bridge 为 null，可选链调用即 no-op
-    minimize: () => bridge?.minimize(),
-    toggleMaximize: () => bridge?.toggleMaximize(),
-    close: () => bridge?.close(),
+    minimize: () => bridge.minimize(),
+    toggleMaximize: () => bridge.toggleMaximize(),
+    close: () => bridge.close(),
   }
 }

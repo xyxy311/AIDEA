@@ -6,7 +6,6 @@
  * TopBarZone 拖拽排序与跨区放置——被拖走或移除会导致窗口失控。由 RightTopBar
  * 固定渲染在 node-count 之后（顶部条最右端）。
  *
- * - web 形态无 window.aideaWindow 桥 → 根 v-if="available" 整组隐藏（见 useWindowControls）；
  * - 视觉与 TopBarButton 同一视觉语言：32px 圆角按钮、20px 图标、NTooltip bottom、
  *   hover var(--color-hover) 反馈；关闭按钮 hover 红底（var(--color-danger)）+
  *   反白图标（Windows 惯例红底关闭）；
@@ -23,7 +22,7 @@ import { useWindowControls } from '@/composables/useWindowControls'
 import type { ProjectFileApi } from '@/composables/useProjectFile'
 import { t } from '@/composables/useT'
 
-const { available, isMaximized, minimize, toggleMaximize, close } = useWindowControls()
+const { isMaximized, minimize, toggleMaximize, close } = useWindowControls()
 
 // 从 AppShell 注入的项目文件操作（单实例共享状态，注入方式对齐 OpenButton 等按钮组件）
 const projectFile = inject<ProjectFileApi | undefined>('projectFile')
@@ -42,7 +41,7 @@ async function handleClose(): Promise<void> {
 
 <template>
   <!-- 窗口 chrome 按钮组：no-drag 退出窗口拖动区，绝不参与窗口拖动 -->
-  <div v-if="available" class="window-controls">
+  <div class="window-controls">
     <NTooltip placement="bottom">
       <template #trigger>
         <button type="button" class="win-btn" @click="minimize">

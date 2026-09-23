@@ -14,3 +14,5 @@ plugins/index.json
 .mytodo
 docs/my*
 .slim/deepwork/
+/code-viewer.html
+/.code-viewer-index.json

@@ -1,23 +1,14 @@
 # AGENTS.md - 头脑风暴白板 (Vue3 + Konva + Naive UI)
 
-**所有回复、思考、代码注释必须使用中文（代码或特殊术语除外）。**
+## 关于项目
 
-## 核心概念
-
-- **一切皆节点**：经 `parentId` 构建树（邻接表），查看某节点子级即一个"视图"。
-- **连线表示同级关系**，非父子关系，嵌套在父节点 `connections` 中随父迁移。
-- **根节点**（`parentId === null`，id 固定 `'root'`）即整个项目，`text` 即项目名（单一数据源），几何与样式无意义。
-- 数据只存 `parentId`，nodeStore 用 `computed` 派生 `childrenIndex`。
-- **内联视图**：节点展开后用独立 Konva Stage（DOM 覆盖层）渲染子级画布，实现"画布内嵌画布"。
-- **节点引用**：`#` 开头定义可引用名（text 去 `#` 第一行 trim），`@名 ` 引用他人（主色高亮+下划线，点击切到该节点子视图）。重名禁止（先到先得）。nodeStore 用 `computed` 派生 `referenceIndex`（name -> nodeId，惰性缓存）；useCommands 文本写入加重名校验返回 `{ok, conflictRef}`，冲突不写不入栈；@ 补全经 useReferenceAutocomplete + TextAutocomplete。
+请见 `docs/项目功能介绍.md`。
 
 ## 命令与验证
 
 ```
-npm run dev          # Vite HMR
 npm run test         # vitest run --passWithNoTests
 npm run type-check   # vue-tsc --noEmit
-npm run build        # type-check + vite build
 ```
 
 完成标准：`type-check` 零错误 + `test` 全绿。**不要启动 dev server**（agent 无法验证 Canvas 渲染）。

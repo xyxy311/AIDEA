@@ -8,7 +8,7 @@ import { setMarkDirty } from '@/utils/dirtyMarker'
  * 职责：
  * - dirty 标记（是否有未保存改动）
  * - 建议保存文件名（suggestedName）
- * - File System Access API 的文件句柄（记忆保存位置）
+ * - 已记忆的保存路径（main 进程经对话框产出的路径，Ctrl+S 覆盖保存用）
  *
  * 依赖解耦：本 store 不依赖 history store（避免循环依赖）。
  * dirty 由 history 在数据变更后通过 markDataDirty() 触发，
@@ -19,8 +19,8 @@ export const useFileStore = defineStore('file', () => {
   const dirty = ref<boolean>(false)
   /** 建议的保存文件名（默认项目名 + '.aidea.json'） */
   const suggestedName = ref<string>('')
-  /** File System Access API 的文件句柄（记忆保存位置；null 表示未保存过或走下载兜底） */
-  const savedHandle = ref<FileSystemFileHandle | null>(null)
+  /** 已记忆的保存路径（main 对话框产出；null 表示未保存过或走另存为） */
+  const savedPath = ref<string | null>(null)
 
   // 注册脏标记回调（history store 通过 markDataDirty 触发）
   setMarkDirty(() => {
@@ -37,30 +37,30 @@ export const useFileStore = defineStore('file', () => {
     dirty.value = false
   }
 
-  /** 记录保存位置的文件句柄 */
-  function setSavedHandle(handle: FileSystemFileHandle | null): void {
-    savedHandle.value = handle
+  /** 记录保存位置路径 */
+  function setSavedPath(p: string | null): void {
+    savedPath.value = p
   }
 
-  /** 获取保存位置的文件句柄 */
-  function getSavedHandle(): FileSystemFileHandle | null {
-    return savedHandle.value
+  /** 获取保存位置路径 */
+  function getSavedPath(): string | null {
+    return savedPath.value
   }
 
   /** 重置文件状态（新建 / 打开项目后调用） */
   function resetFileState(): void {
     dirty.value = false
-    savedHandle.value = null
+    savedPath.value = null
   }
 
   return {
     dirty,
     suggestedName,
-    savedHandle,
+    savedPath,
     markDirty,
     markClean,
-    setSavedHandle,
-    getSavedHandle,
+    setSavedPath,
+    getSavedPath,
     resetFileState,
   }
 })

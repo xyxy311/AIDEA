@@ -1,15 +1,9 @@
 <script setup lang="ts">
 /**
- * TopBarZone - 顶部栏通用容器（左 / 右共用）
- *
- * 模仿左侧活动栏 ActivityBar 的图标渲染 + 拖拽排序：
- * - 按 layout store 的某侧实时目录（topLeft / topRight）渲染已放置按钮，
- *   条目直接含 component（按钮逻辑组件，外壳为 TopBarButton 模板）
- * - 同侧拖拽排序：HTML5 drag，drop 后调 layout.reorderTop
- * - 跨侧放置：从另一侧拖入本容器 → layout.moveTopZone（追加到末尾）；
- *   dragstart 置 suppressClick、dragend 用 setTimeout(0) 复位，抑制拖拽后误触点击
- *
- * LeftTopBar / RightTopBar 是薄封装，各自以固定 zone 引用本容器。
+ * TopBarZone - 顶部栏通用容器（左/右共用）：按 layout store 某侧实时目录渲染已放置按钮，
+ * 支持同侧拖拽排序（reorderTop）与跨侧放置（moveTopZone，经 utils/topbar 的统一拖拽协议）。
+ * dragstart 置 suppressClick、dragend 用 setTimeout(0) 复位，抑制拖拽后误触点击。
+ * LeftTopBar / RightTopBar 是固定 zone 的薄封装。
  */
 import { computed, ref } from 'vue'
 import { useLayoutStore } from '@/stores/layout'

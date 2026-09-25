@@ -1,7 +1,5 @@
 <script setup lang="ts">
-/**
- * UndoButton - 撤销按钮（注册于左顶部条）
- */
+// UndoButton - 撤销按钮（左顶条），无可撤销时禁用。
 import { ArrowUndoOutline } from '@vicons/ionicons5'
 import { useCommands } from '@/composables/useCommands'
 import { t } from '@/composables/useT'

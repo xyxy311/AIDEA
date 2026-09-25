@@ -1,14 +1,12 @@
 // @vitest-environment node
 /**
- * fsGuard.test.ts —— traversal 防护与目录名校验单测（蓝图红线 7：协议 traversal 测试永在）。
- * 被测模块为纯函数（不 import electron），node 环境直接运行。
- * 测试不依赖真实文件系统：resolveSafeFile 是纯路径运算，用合成路径断言即可（跨平台安全）。
+ * fsGuard.test.ts —— fsGuard traversal 防护与目录名校验单测。
+ * 被测模块为纯函数，node 环境直接运行、不触真实文件系统。
  */
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'
 import { decodeProtocolPath, isValidPluginDirName, resolveSafeFile } from '../fsGuard'
 
-/** 合成基目录：仅用于路径运算，不要求真实存在 */
 const ROOT = path.resolve('virtual-plugins-root')
 const BASE = path.join(ROOT, 'plugin-a')
 
@@ -63,7 +61,6 @@ describe('resolveSafeFile —— traversal 防护', () => {
   })
 
   it('URL 编码形态的 ../（%2e%2e）解码后被拒绝', () => {
-    // 模拟协议 handler 流程：先 decode 再 resolve
     const decoded = decodeProtocolPath('%2e%2e%2fsecret.txt')
     expect(decoded).not.toBeNull()
     expect(resolveSafeFile(BASE, decoded as string)).toEqual({ ok: false, reason: 'escape' })

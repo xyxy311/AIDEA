@@ -1,14 +1,8 @@
 <script setup lang="ts">
 /**
- * NodeItem - 纯展示组件
- *
- * 用于「可引用节点面板」与「搜索面板」统一展示节点行内容：
- * - 标题（首行）＋ 标签胶囊 ＋ 路径 + 悬停工具提示。
- * - 不持有面板交互与数据适配逻辑：面板经 `#title` / `#body` 插槽注入标题/正文，
- *   NodeItem 抽象了标题省略、标签渲染与路径展示，并负责 Tooltip。
- *
- * 纯展示逻辑（路径截断/拼接）在 utils/nodePath，可单测；
- * 标签数据经 node.tagIds → tagsStore 推导，路径数据经 nodeStore 推导。
+ * NodeItem - 纯展示组件：用于「可引用节点面板」「搜索面板」统一展示节点行内容
+ * （标题 + 标签胶囊 + 路径 + 悬停工具提示）。不持有交互/数据适配，
+ * 经 #title/#body 作用域插槽注入数据；路径逻辑在 utils/nodePath，可单测。
  */
 import { computed } from 'vue'
 import { NTooltip } from 'naive-ui'
@@ -46,41 +40,31 @@ const tagsStore = useTagsStore()
 /** 节点文本首行（标题/提示词用） */
 const firstLine = computed(() => props.node.text.split('\n')[0].trim() || '')
 
-// ── 路径推导 ──
-// nodeStore.pathToRoot 返回 [自身, ..., root]（自身在前、root 在后）。
-// slice(1).reverse() 得 [root, ..., 最近父]；再滤掉根节点 id，
-// 得到「根 → 最近父、不含根名」的名字数组（buildDisplayPath 用前导 "/" 表示根）。
+// ── 路径：pathToRoot 返回 [自身, ..., root]，slice(1).reverse() 得 [root, ..., 最近父]，
+// 滤掉根 id 得名字数组（buildDisplayPath 用前导 "/" 表示根）──
 const ancestorNames = computed<string[]>(() => {
   const ids = nodeStore
     .pathToRoot(props.node.id)
     .slice(1) // 去掉自身
-    .reverse() // root 在前、最近父在后
-    .filter((id) => id !== ROOT_NODE_ID) // 根名不参与展示，用前导 "/" 代指根
+    .reverse() // root 在前
+    .filter((id) => id !== ROOT_NODE_ID) // 根名不展示，用前导 "/" 代指
   return ids.map((id) => nodeStore.getNode(id)?.text?.split('\n')[0].trim() ?? '')
 })
 
-/** 完整路径（tooltip 用，自带前导 "/"） */
+/** 完整路径（tooltip 用） */
 const fullPath = computed(() => buildDisplayPath(ancestorNames.value).full)
 
-/** 展示路径（截断后的串，路径行用，自带前导 "/"；根直接子级为 "/"） */
+/** 展示路径（截断后，路径行用；根直接子级为 "/"） */
 const displayPath = computed(() => buildDisplayPath(ancestorNames.value).display)
 
-/**
- * 路径是否展示：非根节点即有路径（两面板都不含 root，故恒显示；最浅为 "/"）。
- * 防御：根自身（parentId === null）不显示路径行、tooltip 内也不显示路径项。
- */
+/** 路径是否展示：非根节点即有路径；防御根自身（parentId === null）不显示 */
 const hasPath = computed(() => props.node.parentId !== null)
 
-// ── 标签推导 ──
-// node.tagIds → getTag 过滤悬空引用；仅展示前 TAG_CAPSULE_MAX 个 + 溢出 "+N"
+// ── 标签：getTag 过滤悬空引用；仅展示前 TAG_CAPSULE_MAX 个 + 溢出 "+N" ──
 const validTags = computed(() =>
   props.node.tagIds.map((id) => tagsStore.getTag(id)).filter((t) => !!t),
 )
-
-/** 实际渲染的胶囊列表（截断到 TAG_CAPSULE_MAX 个） */
 const tagCapsules = computed(() => validTags.value.slice(0, TAG_CAPSULE_MAX))
-
-/** 溢出数量（标签总数 - 展示上限，大于 0 时渲染 "+N"） */
 const overflowCount = computed(() => validTags.value.length - TAG_CAPSULE_MAX)
 </script>
 

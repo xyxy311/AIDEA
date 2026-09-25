@@ -1,19 +1,7 @@
 <script setup lang="ts">
 /**
- * ConnectionTextEditor - 连线文字内联编辑器
- *
- * 一个绝对定位的 DOM textarea 覆盖层，渲染在 Konva Stage 上方，
- * 定位在连线中点。用于连线的双击文字编辑场景。
- *
- * 与 NodeTextEditor 类似的定位计算（世界坐标 -> 屏幕像素），
- * 但以连线中点为中心居中，尺寸根据初始文字估算。
- *
- * 键盘行为：
- * - Enter（非 Shift）-> 保存并关闭
- * - Escape -> 取消并关闭
- * - Blur（失焦）-> 保存并关闭
- *
- * 保存时若文字为空（含纯空白），上层会转为 null（表示无文字）。
+ * ConnectionTextEditor - 连线文字内联编辑器（DOM textarea 覆盖层，定位在连线中点）。
+ * Enter/Blur 保存、Escape 取消；空文字保存时上层转 null。
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import {
@@ -109,27 +97,22 @@ onMounted(async () => {
   }
 })
 
-// ── 内部状态 ──
-/** 防止组件卸载时的 blur 事件二次触发 save */
+// ── 内部状态与事件处理 ──
+/** 竞态守卫：Enter 保存后组件卸载引发的 blur 不得二次触发 save */
 let saved = false
 
-// ── 事件处理 ──
-
-/** 保存编辑内容 */
 function save() {
   if (saved) return
   saved = true
   emit('save', props.connectionId, currentText.value)
 }
 
-/** 取消编辑 */
 function cancel() {
   if (saved) return
   saved = true
   emit('cancel')
 }
 
-/** 键盘事件处理 */
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
@@ -141,9 +124,8 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/** 失焦时自动保存（Enter 保存后组件卸载引发的 blur 会被 saved 守卫拦截） */
+/** 失焦保存；延迟执行，让 Enter 的 save() 先置 saved 标志防双触发 */
 function onBlur() {
-  // 延迟执行，让 Enter 的 save() 先设置 saved 标志
   setTimeout(() => {
     save()
   }, 0)

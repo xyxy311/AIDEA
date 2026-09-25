@@ -1,23 +1,7 @@
 /**
- * useT - 轻量文本访问层（响应式多语言）
- *
- * 提供两部分能力：
- * 1. 宿主全局 `t()`：宿主本地化资源（src/locales/*.json）的唯一访问入口。
- *    语言状态归属 themeStore（useStorage 持久化到 localStorage('aidea-locale')，
- *    经 setLocale 切换）。支持点路径取值（如 `t('menuBar.file')`）与 `{name}` 插值。
- * 2. 可复用工厂 `createT(bundles)`：以同一机制构造独立的 t 函数。宿主表与
- *    **插件自有语言包**共用此工厂——插件文案数据归插件文件夹
- *    （plugins/<name>/locales/ 下的 JSON），不经宿主 locales 托管
- *    （见 plugin/api/i18n.ts 的转发暴露）。
- *
- * 取值回退链：bundles[当前语言] → bundles['zh-CN'] → 返回 key 本身（便于发现遗漏）。
- *
- * 响应式机制：t() / createT 产物内部经 getLocale() 读取 themeStore.locale
- * （useStorage ref，经 store 代理访问即建立响应式依赖），模板 / computed 上下文
- * 调用时自动订阅，切换语言即热更新。
- *
- * 未来引入 vue-i18n 时，只需把本文件内部实现替换为 vue-i18n 的 t 函数，
- * 调用方（组件 / composable / store）签名零改动；JSON 资源结构直接兼容。
+ * useT - 轻量文本访问层：宿主全局 t() 与插件语言包共用 createT 工厂。
+ * 回退链 bundles[当前语言]→zh-CN→返回 key；经 getLocale 读 themeStore.locale，
+ * 在模板/computed 内调用即建立响应式依赖。未来迁移 vue-i18n 只需替换内部实现。
  */
 import { getActivePinia } from 'pinia'
 import zhCN from '@/locales/zh-CN.json'

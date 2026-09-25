@@ -22,16 +22,8 @@ const MAX_HISTORY = 50
 const COALESCE_WINDOW = 1000
 
 /**
- * History Store - 撤销/重做栈管理
- *
- * 职责：
- * - 管理 past/future 栈
- * - 应用 DataPatch 到 nodeStore（直接操作已暴露的 nodes Map，不向 nodeStore 加方法）
- * - 视图协调（执行后当前视图节点无效时沿祖先链回退）
- * - batch 事务（复合操作合并为单条历史）
- * - coalesce 合并（连续同 key 编辑合并为一条）
- *
- * 命令不含视图信息；视图协调统一为「当前视图节点无效则沿 pathToRoot 回退」。
+ * History Store —— 撤销/重做栈管理（直接操作 nodeStore.nodes 恢复状态，不向其加方法）。
+ * 支持 batch 事务（合并为单条历史）与 coalesce 合并（1s 内同 key modify 合并）；视图协调统一为「当前视图节点无效则沿 pathToRoot 回退」。
  */
 export const useHistoryStore = defineStore('history', () => {
   const nodeStore = useNodeStore()

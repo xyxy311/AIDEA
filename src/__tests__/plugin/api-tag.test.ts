@@ -2,11 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createTagApi } from '@/plugin/api/tag'
 
-/**
- * 标签域分类 api 测试（createTagApi 直测）。
- * 只读方法如实反映 store；CRUD 为项目级操作，不可撤销（不经命令层），
- * 与 tags store 语义保持一致。
- */
+/** 标签域分类 api 测试（createTagApi 直测）：只读如实反映 store，CRUD 为不可撤销项目级操作。 */
 function makeApi() {
   return createTagApi()
 }

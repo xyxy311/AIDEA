@@ -8,7 +8,6 @@ import {
 } from '../../utils/view'
 import { INLINE_VIEW_TITLE_HEIGHT } from '@/constants'
 
-// ── 辅助：构造 mock DOMRect ──
 function mockDOMRect(overrides: Partial<DOMRect> = {}): DOMRect {
   return {
     x: 0,
@@ -26,12 +25,10 @@ function mockDOMRect(overrides: Partial<DOMRect> = {}): DOMRect {
   } as DOMRect
 }
 
-// ── 辅助：构造 mock 节点 ──
 function mockNode(overrides: Partial<ReturnType<typeof vi.fn>> & { x: number; y: number; width: number; height: number; id: string }) {
   return overrides as any
 }
 
-// ── 辅助：构造 mock nodeStore ──
 function createMockNodeStore(nodes: Record<string, { x: number; y: number; width: number; height: number }>) {
   return {
     getNode: vi.fn((id: string) => {
@@ -41,7 +38,6 @@ function createMockNodeStore(nodes: Record<string, { x: number; y: number; width
   } as any
 }
 
-// ── 辅助：构造 mock 宿主视图 ──
 function createMockHostView(
   inlineViews: Array<{ nodeId: string; viewId: string; width: number; height: number }>,
   stageX: number = 0,
@@ -60,7 +56,6 @@ function createMockHostView(
   } as any
 }
 
-// ── 辅助：构造 mock 内联视图 ──
 function createMockInlineView(
   stageX: number = 0,
   stageY: number = 0,
@@ -73,9 +68,6 @@ function createMockInlineView(
   } as any
 }
 
-// ===================================================================
-// hitTestInlineViewWorld
-// ===================================================================
 describe('hitTestInlineViewWorld', () => {
   it('应该命中内容区内的世界坐标', () => {
     const nodeStore = createMockNodeStore({
@@ -153,9 +145,6 @@ describe('hitTestInlineViewWorld', () => {
   })
 })
 
-// ===================================================================
-// mapMainWorldToInlineWorld
-// ===================================================================
 describe('mapMainWorldToInlineWorld', () => {
   it('scale=1 stageX=0 基础情况', () => {
     const nodeStore = createMockNodeStore({
@@ -213,9 +202,6 @@ describe('mapMainWorldToInlineWorld', () => {
   })
 })
 
-// ===================================================================
-// hitTestInlineViewScreen
-// ===================================================================
 describe('hitTestInlineViewScreen', () => {
   const containerRect = mockDOMRect({ left: 0, top: 0, width: 1200, height: 800 })
 
@@ -271,9 +257,6 @@ describe('hitTestInlineViewScreen', () => {
   })
 })
 
-// ===================================================================
-// screenToMainWorld
-// ===================================================================
 describe('screenToMainWorld', () => {
   it('scale=1 stageX=0 stageY=0 基础情况', () => {
     const containerRect = mockDOMRect({ left: 10, top: 20, width: 1200, height: 800 })
@@ -304,9 +287,6 @@ describe('screenToMainWorld', () => {
   })
 })
 
-// ===================================================================
-// screenToInlineWorld
-// ===================================================================
 describe('screenToInlineWorld', () => {
   const containerRect = mockDOMRect({ left: 0, top: 0, width: 1200, height: 800 })
 

@@ -12,10 +12,7 @@ import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useModalStore } from '@/stores/modal'
 import { useTagsStore } from '@/stores/tags'
 
-/**
- * Helper: Mount a renderless component that calls the composable in setup,
- * ensuring onMounted/onUnmounted lifecycle hooks fire correctly.
- */
+/** 挂载无渲染组件以触发 composable 生命周期钩子 */
 function mountWithShortcuts(isEditing: Ref<boolean>) {
   return mount(
     defineComponent({

@@ -1,12 +1,8 @@
 <script setup lang="ts">
 /**
- * TextAutocomplete - 文本编辑器 @ 引用补全下拉
- *
- * 以 position:fixed 定位在视口坐标 (x, y) 处，超出视口边界时自动翻转方向。
- * 使用 Teleport 渲染到 body 避免被父级 overflow:hidden 裁切。
- * 点击外部按 Escape 时 emit close。
- *
- * 候选项用 @mousedown.prevent 阻止焦点转移，避免原生 textarea 因点击下拉而 blur。
+ * TextAutocomplete - 文本编辑器 @ 引用补全下拉。
+ * Teleport 到 body 定位在视口 (x, y)，超界自动翻转；点击外部或 Escape 时 emit close，
+ * 候选项用 @mousedown.prevent 阻止焦点转移，避免 textarea 因点击下拉而 blur。
  */
 import { ref, watch, nextTick, onUnmounted } from 'vue'
 import type { AutocompleteCandidate } from '@/composables/useReferenceAutocomplete'
@@ -30,7 +26,6 @@ const emit = defineEmits<{
 }>()
 
 // ── Refs ──
-/** 下拉 DOM 元素引用，用于尺寸测量与外部点击判断 */
 const menuRef = ref<HTMLElement | null>(null)
 
 /** 翻转后的定位样式 */
@@ -84,7 +79,7 @@ function onDocumentKeyDown(e: KeyboardEvent): void {
 
 // ── 生命周期与监听 ──
 
-/** 监听 visible / x / y 变化：visible 变 true 时定位并挂全局监听 */
+/** visible/x/y 变化：visible 变 true 时定位并按需挂/卸全局监听 */
 watch(
   [() => props.visible, () => props.x, () => props.y],
   ([visible]) => {
@@ -99,7 +94,7 @@ watch(
   },
 )
 
-/** 组件卸载时清理全局事件 */
+/** 卸载时清理全局事件 */
 onUnmounted(() => {
   document.removeEventListener('mousedown', onDocumentMouseDown)
   document.removeEventListener('keydown', onDocumentKeyDown)

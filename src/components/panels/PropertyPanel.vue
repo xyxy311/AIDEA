@@ -1,12 +1,7 @@
 <script setup lang="ts">
 /**
- * PropertyPanel - 属性编辑器面板（property）
- *
- * 作为右侧 dock 的一个普通面板，根据当前选中对象自动切换：
- * - 选中连线 → ConnectionPropertyEditor
- * - 否则（选中节点 / 无选中）→ NodePropertyEditor
- *
- * 无自带 header，标题由外层 DockPanel 提供。
+ * PropertyPanel - 属性编辑器面板：按当前选中对象自动切换
+ * 连线 → ConnectionPropertyEditor，否则 → NodePropertyEditor。无自带 header。
  */
 import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'

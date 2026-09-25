@@ -2,17 +2,7 @@ import type { TopBarKey } from '@/constants/topbar'
 import { reorderSeq } from './dock'
 
 /**
- * 顶部栏布局纯函数（delta 模型，模仿 utils/dock.ts）
- *
- * 统一管理「左顶部条 LeftTopBar」与「右顶部条 RightTopBar」的按钮归属与顺序。
- *
- * 数据模型（与 dock 一致：存在性与排布分离）：
- * - 登记表（uiRegistry store）回答「有哪些按钮、默认放哪侧」（defaultZone）；
- * - 用户排布（TopDelta）只存用户显式改动：顺序覆盖、跨侧移动；
- * - 渲染目录 = deriveTopLayout(登记表, delta) 实时派生，永不包含未登记 id。
- *
- * 收益：新增内置按钮 / 插件按钮注册后自动按默认侧出现；恢复默认 = 清空 delta。
- * 兼容性：持久化沿用旧 key（aidea-top-left / right）——旧完整列表按 delta 读取语义等价。
+ * 顶部栏布局纯函数（delta 模型）：登记表提供默认侧，用户排布存显式改动，实时派生两侧按钮目录。
  */
 
 /** 顶栏用户排布增量（layout store 持久化的全部内容） */
@@ -85,9 +75,7 @@ function orderedUnion(base: string[] | undefined, pool: string[]): string[] {
 
 /**
  * 派生两侧实时目录：
- * - 每个登记按钮的归属：rightOrder 命中 → 右；leftOrder 命中 → 左；否则 defaultZone
- *   （同现两侧时右优先，与旧归一化语义一致）；
- * - 顺序：该侧用户顺序优先，未覆盖的按登记顺序追加。
+ * 归属 = 用户顺序命中（右优先）否则 defaultZone；顺序 = 用户顺序优先，其余按登记追加。
  */
 export function deriveTopLayout(defs: ZoneDef[], delta: TopDelta): TopPlacement {
   const leftPool: string[] = []

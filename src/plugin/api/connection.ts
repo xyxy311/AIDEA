@@ -1,10 +1,7 @@
 /**
  * api/connection.ts —— 连线域：查询 + 连线写
- * 接口类型由实现派生（`ConnectionApi = ReturnType<typeof createConnectionApi>`）。
- *
- * 写方法统一委托 useCommands()（唯一数据写入口，走历史）。
- * 凡写方法末尾均带 `user?: string` 作为操作者归因此的预留（当前版本不消费）。
- * 只读查询返回深拷贝的普通对象数组，避免把内部响应式状态暴露给插件。
+ * 写方法统一委托 useCommands()（唯一数据写入口，走历史）；查询返回深拷贝，不暴露内部响应式状态。
+ * 写方法均带可选 `user` 参数为操作者归因预留（当前版本不消费）。
  */
 import type { Connection, LineStyle } from '@/types/node'
 import { useNodeStore } from '@/stores/node'
@@ -24,31 +21,26 @@ export function createConnectionApi() {
       return found ? { parentId: found.parentId, connection: deepClone(found.connection) } : null
     },
     add(parentId: string, fromNodeId: string, toNodeId: string, user?: string): string | null {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       return useCommands().addConnection(parentId, fromNodeId, toNodeId)
     },
     /** 按父级删除一批连线 */
     remove(parentId: string, connIds: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().deleteConnections(parentId, connIds)
     },
     /** 按连线 ID 跨父级批量删除（自动定位各自所属父级） */
     removeByIds(connIds: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().deleteConnectionsByIds(connIds)
     },
     /** 按单一连线 ID 直接删除（内部经 deleteConnectionsByIds 定位所属父级） */
     delete(connectionId: string, user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().deleteConnectionsByIds([connectionId])
     },
     /** 将连线迁移挂到目标父级下（命令层按"原父删除 + 目标父新增"合并为单条历史） */
     move(fromParentId: string, toParentId: string, connIds: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().moveConnections(fromParentId, toParentId, connIds)
     },
@@ -58,7 +50,6 @@ export function createConnectionApi() {
       partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed' | 'text'>>,
       user?: string,
     ): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateConnection(parentId, connectionId, partial)
     },
@@ -75,7 +66,6 @@ export function createConnectionApi() {
       },
       user?: string,
     ): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateConnectionsStyle(parentId, connIds, partial)
     },
@@ -91,16 +81,12 @@ export function createConnectionApi() {
       },
       user?: string,
     ): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateConnectionsStyleByIds(connIds, partial)
     },
     /**
-     * 应用连线预设样式（标准语义，走可撤销写入）。
-     * 与 UI 行为一致：preset.applyText 为真时把 preset.name 写入连线文字。
-     *
-     * 说明：useCommands 未提供 applyConnectionPreset 命令，此能力隐含于
-     * updateConnection（updateConnectionsStyle），故此处由既有命令组合实现，能力完整。
+     * 应用连线预设样式（走可撤销写入）；applyText 为真时把 preset.name 写入连线文字。
+     * useCommands 无 applyConnectionPreset 命令，故由既有 updateConnection 组合实现。
      */
     applyPreset(
       parentId: string,
@@ -111,7 +97,6 @@ export function createConnectionApi() {
       },
       user?: string,
     ): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateConnection(
         parentId,
@@ -130,7 +115,6 @@ export function createConnectionApi() {
      * 经 useCommands 可撤销命令层；预设或连线不存在返回 false，不写历史。
      */
     applyPresetById(connectionId: string, presetId: string, user?: string): boolean {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       const preset = usePresetsStore().connectionPresets.find((p) => p.id === presetId)
       const found = useNodeStore().findConnectionById(connectionId)

@@ -1,31 +1,11 @@
+// 项目文件序列化/解析（纯函数）：JSON 带版本号，含 projectName/节点/标签/视图状态/插件 additions；
+// 解析时逐字段校验并提供默认值，剔除非法节点、悬空连线与标签引用。
 import type { WhiteboardNode, Tag } from '@/types'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
 import { ROOT_NODE_ID } from '@/stores/node'
 import { deepClone } from '@/utils/command'
 import { t } from '@/composables/useT'
-
-/**
- * projectFile - 项目文件序列化 / 解析（纯函数，不依赖 store 实例）
- *
- * 文件格式（JSON 带版本号）：
- * {
- *   "version": 1,
- *   "projectName": string,          // 根节点 text
- *   "nodes": WhiteboardNode[],      // 数组，含根节点（id='root', parentId=null）
- *   "tags": Tag[],                  // 项目级标签定义
- *   "viewState": {
- *     "viewedNodeId", "stageX", "stageY", "stageScale",
- *     "expandedIds", "inlineViews", "selectedNodeIds", "selectedConnectionIds"
- *   },
- *   "additions": {                  // 插件项目化数据（键 → 插件原始数据，保存时全量写出）
- *     "stats:counter": { "count": 3 }
- *   }
- * }
- *
- * childrenIndex / referenceIndex 是 computed 派生，不落盘。
- * 连线嵌套在父节点 connections 中，随节点一起序列化。
- */
 
 /** 项目文件格式版本号 */
 export const PROJECT_FILE_VERSION = 1

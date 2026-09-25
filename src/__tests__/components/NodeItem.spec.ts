@@ -1,15 +1,4 @@
-/**
- * NodeItem - 纯展示组件的真实挂载测试
- *
- * 用 @vue/test-utils mount + happy-dom + 真实 pinia（createPinia / setActivePinia），
- * 验证 NodeItem 的关键渲染分支，证明「路径」与「标签」确实可见：
- * - 路径行以 "/" 开头、不含项目根名（根用前导 "/" 表示）。
- * - 打标签的节点渲染标签胶囊；超出 TAG_CAPSULE_MAX 渲染 "+N" 溢出胶囊。
- * - 未打标签的节点标题右侧不渲染标签容器。
- * - NTooltip 悬停提示延迟已设为 1000ms。
- *
- * 说明：nodeStore（pinia store）初始化即创建根节点（parentId===null）。
- */
+/** NodeItem 纯展示组件真实挂载测试：路径行、标签胶囊/溢出、无标签容器与 tooltip 延迟。 */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'

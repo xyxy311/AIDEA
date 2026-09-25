@@ -1,22 +1,8 @@
 <script setup lang="ts">
 /**
- * AppShell — 应用布局外壳
- *
- * 布局结构：
- *   ┌────── 顶部图标条（LeftTopBar 左 │ TabBar 中 │ RightTopBar 右）──────┐
- *   ├ ActivityBar ┬ LeftSidebar ┬ Canvas ┬ RightSidebar ┤
- *   └─────────────┴────────────┴────────┴───────────────┘
- *
- * 左侧：活动栏（ActivityBar，始终可见）+ 面板区（LeftSidebar，渲染激活面板）。
- * 面板区收起状态由 layout store 驱动。
- *
- * 顶部左/右图标按钮条（LeftTopBar / RightTopBar）：按钮经 constants/topbar.ts
- * 品类表注册，可拖拽排序与跨区放置（状态由 layout store 管理）。
- *
- * 拖拽调整侧边栏宽度：
- * - 左右侧边栏边缘有可拖拽的 resize handle
- * - 宽度范围：180px ~ 440px
- * - 收起态下 handle 隐藏
+ * AppShell - 应用布局外壳：顶部图标条（LeftTopBar │ TabBar │ RightTopBar）
+ * + 主体（ActivityBar ┬ LeftSidebar ┬ Canvas ┬ RightSidebar，侧边栏带可拖拽 resize 手柄），
+ * 并挂载设置模态、插件模态/浮动宿主与浮动属性编辑器，提供项目文件与键盘快捷键。
  */
 import { ref, computed, provide, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
@@ -59,9 +45,8 @@ const dragStartX = ref(0)
 const dragStartLeftWidth = ref(220)
 const dragStartRightWidth = ref(240)
 
-/** 左侧拖拽中 → 禁用 transition */
+/** 拖拽中 → 禁用 transition */
 const leftResizing = computed(() => isDraggingLeft.value)
-/** 右侧拖拽中 → 禁用 transition */
 const rightResizing = computed(() => isDraggingRight.value)
 
 // ── 拖拽逻辑（pointer events） ──
@@ -145,10 +130,7 @@ useEventListener('beforeunload', (e: BeforeUnloadEvent) => {
   }
 })
 
-// ── 插件目录变更全局轻提示（M2）──
-// 插件 store 的 dirDirty 由桌面桥推送置位（web 无桥恒 false，此 watch 不触发）。
-// 用 message.info 轻提示而非 dialog/notification：不打断进行中的编辑；
-// 语义为「重启应用后生效」，与插件面板的启停重启提示一致。
+// ── 插件目录变更全局轻提示（仅桌面桥推送时触发）──
 const pluginStore = usePluginStore()
 const message = useMessage()
 watch(

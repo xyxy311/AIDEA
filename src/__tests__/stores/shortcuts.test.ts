@@ -23,7 +23,6 @@ function freshStore() {
 describe('shortcuts store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    // 清理测试环境中的持久化
     localStorage.removeItem('aidea-shortcuts')
     localStorage.removeItem('aidea-shortcuts-seqmod')
     clearPluginConfigStorage()

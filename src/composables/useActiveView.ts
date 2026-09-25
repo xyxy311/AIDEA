@@ -8,27 +8,8 @@ import { GRID_G } from '@/constants'
 import type { GridDirection } from '@/utils/grid'
 
 /**
- * 快捷访问当前活跃视图的 composable
- *
- * 组合 project store（导航）、nodeStore（全局数据）与 per-view store（视图状态）。
- *
- * `view` 是一个 getter--每次访问时重新获取当前活跃视图的 store，
- * 确保切换视图后所有引用自动指向新的 store 实例。
- *
- * 数据与视图状态分离：
- * - `nodeStore`：全局唯一的节点树 + 连线数据（按 ID 操作）
- * - `view`：当前活跃视图的视口 / 选中 / 编辑状态
- * - `project`：活跃视图 ID、项目名、树展开状态
- *
- * 另提供若干跨 store 编排方法（选中 <-> 数据），封装"对选中项的操作"，
- * 使组件调用方式接近原 board API，减少迁移改动。
- * 所有写操作通过命令层（useCommands）执行，自动入历史栈。
- *
- * 用法：
- *   const active = useActiveView()
- *   active.view.stageX           // 当前视图视口
- *   active.nodeStore.childrenOf(active.project.currentNodeId)  // 当前视图节点
- *   active.deleteSelectedNodes() // 编排：删除选中节点
+ * 快捷访问当前活跃视图：组合 project（导航）/nodeStore（数据）与 per-view（视图状态）。
+ * view 为 getter，每次访问取最新 store；跨 store 编排方法统一经命令层入历史栈。
  */
 export function useActiveView() {
   const project = useProjectStore()
@@ -79,10 +60,7 @@ export function useActiveView() {
     commands.updateNodesTagsPerNode(Array.from(view().selectedNodeIds), tagIdsPerNode)
   }
 
-  /**
-   * 删除所有选中节点（含各自子树）。
-   * 视图协调（销毁 viewStore、活跃视图回退）已由命令层 + history store 处理。
-   */
+  /** 删除所有选中节点（含子树；视图协调由命令层处理） */
   function deleteSelectedNodes(): void {
     const v = view()
     const ids = Array.from(v.selectedNodeIds)
@@ -101,13 +79,8 @@ export function useActiveView() {
   }
 
   /**
-   * 方向键移动所有选中节点（快捷键层锁定绑定 arrowMove* 的共享动作，网格模式不单独实现）。
-   *
-   * - 仅移动「选中 ∩ 当前视图直接子节点」（跨视图选中节点不移动，参照 useNodeDragging 过滤）。
-   * - 保持相对位置，步进 GRID_G（一格）。
-   * - 拖拽节点中直接返回（避免与拖拽冲突）。
-   * - 历史：实时 nodeStore.moveNode 改数据，随后 commands.commitNodeMove 入栈
-   *   （带 coalesceKey，合并连续方向键步进为单条历史；key 含视图与选中签名，切换后断开合并）。
+   * 方向键移动所有选中节点：仅移动「选中 ∩ 当前视图直接子节点」，步进 GRID_G 保持相对位置。
+   * 实时 moveNode 改数据，再 commitNodeMove 入栈（coalesceKey 合并连续步进为单条历史）。
    */
   function moveSelectedNodesByArrow(dir: GridDirection): void {
     // 拖拽节点中不响应（避免与拖拽冲突）

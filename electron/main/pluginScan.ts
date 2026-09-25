@@ -1,16 +1,7 @@
 /**
  * pluginScan.ts —— 本地插件目录扫描的纯逻辑（不 import electron；IO 经 ScanIO 注入，可独立单测）。
- *
- * 设计依据：docs/Electron桌面化实施蓝图.md §3（main 职责：扫描）与 §6（目录插件规格 v1）。
- *
- * 扫描规则（零代码执行：只读目录名 / manifest.json / 入口文件存在性，绝不 import 插件代码）：
- * - 插件根下每个【子目录】视为候选插件；目录名 = pluginId，强校验 ^[a-z0-9_-]+$，不合法 → 跳过；
- * - 入口判定优先级 plugin.js > index.js > index.mjs；无入口 → 跳过（不产出条目）；
- * - manifest.json 可选：JSON.parse 失败或字段不符 → 条目携带 error 说明，但不中断扫描；
- * - 目录不存在 → 返回空结果。
- *
- * 产出同时包含白名单 Map（id → 插件目录绝对路径），供协议 handler 做访问控制：
- * 仅出现在白名单中的 id 才允许经 aidea-plugin:// 协议读取文件。
+ * 零代码执行：只读目录名 / manifest.json / 入口文件存在性。扫描产出条目列表 + 白名单 Map（id → 插件目录），
+ * 白名单供协议 handler 做访问控制：仅白名单内 id 才允许经 aidea-plugin:// 读取文件。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -23,15 +14,15 @@ export const ENTRY_CANDIDATES = ['plugin.js', 'index.js', 'index.mjs'] as const
 /** manifest.json 的固定文件名 */
 export const MANIFEST_FILENAME = 'manifest.json'
 
-/** 文件系统最小访问面（注入式设计：测试用内存 fake 替换，主进程用 nodeScanIO） */
+/** 文件系统最小访问面（注入式设计：测试用内存 fake，主进程用 nodeScanIO） */
 export interface ScanIO {
-  /** 路径是否为已存在的目录 */
+  /** 是否为已存在的目录 */
   isDirectory(p: string): boolean
-  /** 路径是否为已存在的普通文件 */
+  /** 是否为已存在的普通文件 */
   isFile(p: string): boolean
-  /** 列出目录的直接子项（name + 是否目录） */
+  /** 列出目录直接子项 */
   listDirEntries(p: string): Array<{ name: string; isDirectory(): boolean }>
-  /** 读取文本文件（UTF-8）；不存在/不可读时抛错 */
+  /** 读文本文件（UTF-8） */
   readTextFile(p: string): string
 }
 
@@ -67,7 +58,7 @@ export interface ScanOutcome {
 }
 
 /**
- * 扫描插件根目录。纯函数（IO 注入），不做任何代码执行。
+ * 扫描插件根目录。纯函数（IO 注入），零代码执行。
  * @param root 插件根目录绝对路径（dev: <仓库根>/plugins；prod: userData/plugins）
  */
 export function scanPluginDirectories(root: string, io: ScanIO = nodeScanIO): ScanOutcome {
@@ -98,7 +89,7 @@ export function scanPluginDirectories(root: string, io: ScanIO = nodeScanIO): Sc
     const entryFile = ENTRY_CANDIDATES.find((name) => io.isFile(path.join(dir, name)))
     if (!entryFile) continue
 
-    // manifest.json 可选：解析/校验失败 → 条目带 error 但不中断
+    // manifest.json 可选：解析/校验失败 → 带 error 但不中断
     let manifest: PluginManifestJSON | null = null
     let error: string | undefined
     const manifestPath = path.join(dir, MANIFEST_FILENAME)
@@ -120,10 +111,8 @@ export function scanPluginDirectories(root: string, io: ScanIO = nodeScanIO): Sc
 }
 
 /**
- * manifest.json 结构校验（对齐 shared/bridge.ts 的 PluginManifestJSON）：
- * id/name/version/sdkVersion 必填非空 string；description/author 可选 string。
- * 不符则抛错（中文信息，会进入 DesktopPluginInfo.error 供 UI 展示）。
- * 只返回已知字段（多余字段一律丢弃，避免任意内容透传到 renderer）。
+ * manifest.json 结构校验：id/name/version/sdkVersion 必填非空 string；description/author 可选 string。
+ * 不符抛错（中文信息进 DesktopPluginInfo.error）。只返回已知字段（多余字段丢弃，避免任意内容透传 renderer）。
  */
 export function validateManifestJson(raw: unknown): PluginManifestJSON {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {

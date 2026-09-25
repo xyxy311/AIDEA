@@ -1,21 +1,7 @@
 /**
- * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项 / 模态面板 / 浮动层）
- *
- * 全应用唯一的「UI 元素登记表」：内置目录（PANEL_CATALOG / TOP_BAR_CATALOG /
- * SETTINGS_CATALOG）在 store 初始化时 seed 进表，插件经注册面（ctx.register →
- * plugin/ui.ts）把运行时组件 / 动作注册进**同一张表**。条目带 origin（builtin | plugin）与 pluginId 归因，
- * 供布局派生、恢复默认、错误隔离按来源过滤。
- * 快捷键动作与右键菜单项两表只收插件条目（内置动作在 CUSTOM_SHORTCUTS、内置菜单项
- * 在 useCanvasEvents 构建处，均不走登记表）。模态面板表同样只收插件条目，且不进
- * dock/活动栏布局派生体系（只登记，打开/关闭运行时另行实现）。浮动层表同只收插件
- * 条目（只登记不派生布局；宿主 PluginFloatingHost 常驻应用根级逐条渲染，显隐由组件自管）。
- *
- * 分层：
- * - constants 品类表保持纯数据（不持有运行时状态）；
- * - 本表是登记记录（只增删条目，不管排布）；
- * - 排布（顺序 / 归属 / 激活 / 持久化）在 layout store，渲染组件从 layout 派生目录读取。
- *
- * 响应性：reactive Map（深度），computed 内遍历可追踪；插件注册 / 回滚即时反映到布局。
+ * uiRegistry —— UI 登记总表（面板 / 顶栏按钮 / 设置栏目 / 快捷键动作 / 右键菜单项 / 模态面板 / 浮动层）。
+ * 内置目录（PANEL_CATALOG / TOP_BAR_CATALOG / SETTINGS_CATALOG）seed 进表，插件经注册面进同一张表；条目带 origin/pluginId 归因。
+ * 分层：constants 品类表纯数据 → 本表只登记不排布；排布（顺序/归属/激活/持久化）在 layout store。reactive Map 插件注册/回滚即时反映到布局。
  */
 import { reactive } from 'vue'
 import { defineStore } from 'pinia'

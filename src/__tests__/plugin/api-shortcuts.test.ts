@@ -9,12 +9,7 @@ import { useShortcutsStore } from '@/stores/shortcuts'
 import { RESERVED_CHORDS } from '@/constants/shortcuts'
 import type { PluginShortcutActionRegistration } from '@/plugin/ui'
 
-/**
- * 快捷键动作注册 + 查询测试：
- * - 注册走注册面 createPluginRegister('demo').registerShortcutAction（自 api.shortcuts 迁移），
- *   校验顺序（短 id → key 冲突 → defaultChord）与登记落位（uiRegistry.shortcutActions）不变。
- * - api.shortcuts 仅只读查询（无 registerAction），经 createShortcutsApi() 构造。
- */
+/** 快捷键动作注册 + 查询测试：注册面校验顺序、登记落位与只读查询。 */
 function dummyAction(over: Partial<PluginShortcutActionRegistration> = {}): PluginShortcutActionRegistration {
   return {
     id: 'act',

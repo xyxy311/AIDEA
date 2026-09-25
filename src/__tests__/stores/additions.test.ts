@@ -7,12 +7,7 @@ import { createNode } from '@/utils/factory'
 import { ROOT_NODE_ID } from '@/stores/node'
 import type { ProjectViewState } from '@/utils/projectFile'
 
-/**
- * additions 域测试：additionsStore + adapter.for(id) 作用域 additions（含 undo/redo）+ projectFile 往返。
- * pinia 初始化沿用 api.test.ts：setActivePinia(createPinia())。
- * 历史控制（undo/redo）经共享 adapter.api 的 project 域驱动——历史控制不分命名空间。
- * additions 仅经 adapter.for(pluginId) 的 PluginScope 提供（共享 api 上无 additions 域）。
- */
+/** additions 域测试：additionsStore + for(id) 作用域 additions（含 undo/redo）+ projectFile 往返 */
 function makeAdditions() {
   return adapter.for('hello').additions
 }

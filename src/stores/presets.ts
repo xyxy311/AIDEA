@@ -23,19 +23,8 @@ export type PresetGroupFilter = 'all' | 'ungrouped' | string
 export type PresetKind = 'node' | 'connection'
 
 /**
- * 全局预设样式 Store
- *
- * 管理节点和连线的预设样式列表，支持 CRUD 和拖拽排序，并支持预设分组。
- * 节点与连线的分组【完全独立】：各自拥有自己的分组列表（nodeGroups /
- * connectionGroups）、各自的分组 CRUD，以及各自的分组筛选状态
- * （nodeGroupFilter / connectionGroupFilter）。给连线加分组不影响节点分组，
- * 删除节点分组也不影响连线分组。
- *
- * 数据通过 useStorage 持久化到 localStorage，首次加载自动初始化默认预设，
- * 并各自创建不可删除的"内置"保留分组，内置预设默认归入其中。
- *
- * 1-9 快捷键应用的正是当前类型可见列表（visibleNodePresets /
- * visibleConnectionPresets）中的预设。
+ * 全局预设样式 Store —— 管理节点/连线预设列表（useStorage 持久化 localStorage，首次自动初始化默认预设）。
+ * 节点与连线的分组 / 分组筛选【完全独立】；1-9 快捷键作用于当前筛选可见列表（visibleNodePresets / visibleConnectionPresets）。
  */
 export const usePresetsStore = defineStore('presets', () => {
   // ── State（localStorage 持久化） ──

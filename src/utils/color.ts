@@ -1,9 +1,6 @@
 /**
- * 颜色解析与派生工具
- *
- * 用于节点背景色派生：根据边框颜色（用户可调，可能含透明度）
- * 与当前主题（亮/暗）自动计算背景色——保持色相、调整亮度，
- * 并继承边框色的透明度，使背景与边框透明度始终一致。
+ * 颜色解析与派生工具：根据边框颜色与当前主题（亮/暗）派生节点背景色，
+ * 保持色相、调整亮度并继承边框透明度。
  */
 
 /** RGBA 颜色对象（r/g/b 为 0-255，a 为 0-1） */
@@ -29,7 +26,6 @@ export interface HSL {
 export function parseColor(input: string): RGBA {
   const str = input.trim().toLowerCase()
 
-  // #rrggbbaa / #rrggbb / #rgb
   const hexMatch = str.match(/^#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3})$/)
   if (hexMatch) {
     let hex = hexMatch[1]
@@ -47,7 +43,6 @@ export function parseColor(input: string): RGBA {
         a: 1,
       }
     }
-    // length === 8
     return {
       r: parseInt(hex.slice(0, 2), 16),
       g: parseInt(hex.slice(2, 4), 16),

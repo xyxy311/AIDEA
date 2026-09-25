@@ -1,36 +1,29 @@
 /**
- * manager.ts —— 插件「加载 + 生命周期」单一模块
- *
- * 合并原 source.ts（静态收集）与 context.ts（上下文组装），收敛过度抽象的接口：
- * - 插件收集收口在 sources/（运行时目录装载：桌面桥扫描协议 / web 静态清单），本模块经
- *   `export { collectPluginEntries } from './sources'` 暴露 Promise 形式聚合；
- *   装载本身测试可注入假 entries，不依赖构建期插件扫描。
- * - 启停意愿经 `getEnabled` 回调只读进入（持久化写入是 store 专属职责）。
- * - 启停**不卸载代码文件**，而是不调 setup（禁用状态）；setup 抛错走 onDispose → dispose() 回滚（活路径）。
- *
- * 本模块不感知 pinia：记录快照经 onChange 订阅暴露，启停意愿经注入的 getEnabled 读取——
- * 便于在 vitest 中仅构造源码即测试（不依赖 localStorage / 构建期插件扫描）。
+ * manager.ts —— 插件「加载 + 生命周期」单一模块。
+ * - 插件收集收口在 sources/，本模块经 `export { collectPluginEntries }` 暴露；装载测试可注入假 entries。
+ * - 启停意愿经 `getEnabled` 回调只读进入；启停**不卸载代码**，而是不调 setup（禁用态），setup 抛错走 onDispose → dispose() 回滚。
+ * - 本模块不感知 pinia，便于在 vitest 中仅构造源码即测试。
  */
 import type { AideaPlugin, PluginContext, PluginManifest } from './adapter'
 import { SDK_VERSION } from '@/types/plugin'
 import { createPluginRegister, createPluginModalApi, createPluginFloatingApi, rollbackPluginUi } from './ui'
 
-/** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。这是内部/注入的装载项。 */
+/** 单个待装载插件：id（manifest 路由键）+ loader（取插件模块）。内部/注入的装载项。 */
 export interface PluginEntry {
   id: string
   loader: () => Promise<{ default?: AideaPlugin; [k: string]: unknown }>
-  /** 来源标记：builtin=历史内置 glob 源（已废除，保留枚举兼容）；local=运行时目录装载（桌面协议 / web 清单） */
+  /** 来源标记：builtin=历史内置 glob 源（已废除，保留枚举兼容）；local=运行时目录装载 */
   source?: 'builtin' | 'local'
 }
 
 // 历史内置 glob 源（sources/builtin.ts）已废除，路径推断工具随迁移保留在此：
-/** 从路径推断插件 id：取 `…/<name>/index.{ts,js,vue}` 中的 <name>（历史 glob 收集期工具，保留供既有测试与调试引用） */
+/** 从路径推断插件 id（历史 glob 收集期工具，保留供既有测试与调试引用） */
 export function pluginIdFromPath(path: string): string {
   const match = /([^/]+)\/index\.(ts|js|vue)$/.exec(path)
   return match ? match[1] : path
 }
 
-// 插件收集的聚合收口：桌面桥扫描 / web 静态清单互斥二选一，见 sources/index.ts
+// 插件收集的聚合收口：manager 只调本函数，见 sources/index.ts
 export { collectPluginEntries } from './sources'
 
 /** PluginContext 内部形态：额外携带触发全部 onDispose 回调的 dispose() */
@@ -49,11 +42,9 @@ function createPluginContext(manifest: PluginManifest): InternalPluginContext {
       disposers.push(fn)
     },
     register: createPluginRegister(manifest.id),
-    // 模态运行时：open 收短 id，先查登记表（未登记 → warn + false）再拼 `${pluginId}:${id}`；
-    // teardown 后误调无需失效——入口校验直接拒绝（运行期注册表不变，见 createPluginModalApi 注释）
+    // 模态运行时：open 收短 id，拼 `${pluginId}:${id}`；未登记 → warn + false（fail fast）
     modal: createPluginModalApi(manifest.id),
-    // 浮动层运行时：open/toggle 同样收短 id 先查登记表（fail fast），close/isVisible 幂等只读；
-    // 与 modal 同工厂模式，语义见 createPluginFloatingApi 注释
+    // 浮动层运行时：open/toggle 收短 id 先查登记表（fail fast），close/isVisible 幂等只读
     floating: createPluginFloatingApi(manifest.id),
     dispose(): void {
       for (const fn of disposers.splice(0)) {

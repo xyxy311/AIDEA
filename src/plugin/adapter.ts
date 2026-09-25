@@ -1,30 +1,12 @@
 /**
- * adapter.ts —— 插件适配层（稳定壳，插件对外唯一入口）
- *
- * 组装并导出全局唯一 `adapter` 单例：
- * - 分类好的应用 api 在 `./api/`（node / connection / tag / project / view /
- *   presets / theme / file / shortcuts），类型由实现派生；本文件只装配并在下方 re-export。
- *   api 不含 additions 与 config（插件命名空间能力仅经 `for(id)` 的 PluginScope 提供）；
- *   shortcuts 仅只读查询（动作注册在 ctx.register.registerShortcutAction）。
- * - 插件命名空间能力经 `adapter.for(pluginId)` 获取：模块级 Map 缓存，同 id
- *   重复调用返回同一实例；AdditionsApi / ConfigApi / ModalApi 闭包内才 useStore，
- *   模块加载期不触碰 pinia。
- * - 插件运行时契约类型（PluginAdapter / PluginContext / AideaPlugin）也定在这里，
- *   与实现型 api 类型聚于同一入口，插件统一从本文件导入。
- *
- * 数据操作：插件直接 `import { adapter }` 使用 `adapter.api`（共享，无命名空间）、
- * `adapter.for(id).additions`（插件命名空间的项目级数据桶）、
- * `adapter.for(id).config`（插件自身偏好的应用级独立存储，不入项目历史）、
- * `adapter.for(id).modal`（本插件登记的模态运行时，open 收短 id）与
- * `adapter.for(id).floating`（本插件登记的浮动层运行时，open/close/toggle/isVisible 收短 id）；
- * UI 注册不在 adapter 上——setup(ctx) 经 ctx.register 进行（plugin/ui.ts）。
- *
- * SDK 通用 UI 组件与共享样式：本文件同时 re-export 少量可复用 UI 组件
- * （ShortcutActionRow——快捷键动作改键行、DraggableSortList——可拖拽排序列表），
- * 供插件设置栏目等场景直接使用；SDK 组件配套的设置区共享样式
- * （settings-shared.css）由本文件统一注入，插件无需（也不得）复制或另引样式副本。
- * 下方「重新导出」区块还 re-export SDK 类型（PluginManifest / WhiteboardNode 等），
- * 插件统一从本文件导入，不直接依赖 @/types 内部路径。
+ * adapter.ts —— 插件适配层（稳定壳，插件对外唯一入口）。
+ * - 分类应用 api 在 ./api/，本文件只装配并 re-export；api 不含 additions 与 config（插件
+ *   命名空间能力仅经 `for(id)` 的 PluginScope 提供）。
+ * - `adapter.for(pluginId)`：模块级 Map 缓存，同 id 返回同一实例；AdditionsApi / ConfigApi /
+ *   ModalApi 闭包内才 useStore，模块加载期不触碰 pinia。
+ * - 数据操作：`adapter.api`（共享）、`adapter.for(id).additions/config/modal/floating`（命名空间）；
+ *   UI 注册经 setup(ctx).register（plugin/ui.ts）。
+ * - 同文件 re-export 少量 SDK 通用 UI 组件（ShortcutActionRow / DraggableSortList）与共享样式。
  */
 import type { PluginManifest } from '@/types'
 import { SDK_VERSION } from '@/types/plugin'

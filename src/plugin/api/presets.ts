@@ -1,11 +1,7 @@
 /**
- * api/presets.ts —— 预设域：节点 / 连线预设的 CRUD 与分组筛选查询
- * 接口类型由实现派生（`PresetsApi = ReturnType<typeof createPresetsApi>`）。
- *
- * 职责边界：本域只管预设**增删改查 / 分组 / 筛选查询**（localStorage 视图级状态，
- * 不经 undo 命令层，故不带 user）。把预设**应用**到节点 / 连线属于节点 / 连线操作，
- * 已归 node / connection 域（`node.applyPresetById` / `connection.applyPresetById`），
- * 走可撤销命令层（`useCommands`）。
+ * api/presets.ts —— 预设域：节点 / 连线预设的 CRUD、分组与筛选查询
+ * 本域只做增删改查 / 分组 / 筛选（localStorage 视图级状态，不经 undo，不带 user）；
+ * 把预设应用到节点 / 连线属 node / connection 域（applyPresetById），走可撤销命令层。
  */
 import type { NodePresetStyle, ConnectionPresetStyle, PresetGroup } from '@/types'
 import { usePresetsStore, type PresetKind, type PresetGroupFilter } from '@/stores/presets'

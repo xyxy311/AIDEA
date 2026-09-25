@@ -8,23 +8,9 @@ import { generateId } from '@/utils/id'
 import { createNode, createConnection } from '@/utils/factory'
 
 /**
- * 剪贴板 composable - 复制 / 剪切 / 粘贴
- *
- * 职责：
- * - copy：将选中节点（含整个子树）与子树内部连线深拷贝到剪贴板
- * - cut：复制到剪贴板后删除原节点（经命令层，可撤销）
- * - paste：将剪贴板内容以新 ID 克隆到指定父节点视图，并重建内部连线（入历史栈，可撤销）
- *
- * 设计要点：
- * - 剪贴板【内容】为模块级（跨组件 / 跨视图持久），不随视图切换丢失，
- *   且不进入历史栈——copy 只读数据，不产生历史。
- * - 剪切 / 粘贴【操作】可撤销重做：
- *   - cut = copy + commands.deleteNodes（删除入历史栈，undo 恢复原节点）
- *   - paste = 构造完整 DataPatch（add 节点 + add 连线）经 history.pushCommand 入栈，
- *     undo 移除粘贴出的节点与连线，redo 重建。
- * - 复制时用临时数字 key 建立"旧 id -> key"映射，粘贴时用 key 重建新的
- *   parentId / 连线端点引用，避免残留旧节点 id。
- * - 内部连线：仅当连线两端都在复制集合内时随迁（含兄弟间连线与子树内连线）。
+ * 剪贴板 composable：copy（子树+内部连线深拷贝）/cut（拷贝后删原）/paste（新 ID 克隆入栈）。
+ * 剪贴板内容为模块级持久且不入历史；剪切/粘贴操作经命令层可撤销。
+ * 复制用临时 key 建 id 映射，粘贴重建 parentId 与连线端点引用，连线仅两端都在集内时随迁。
  */
 
 /** 剪贴板节点条目（保留子树层级关系） */
@@ -69,15 +55,7 @@ export function useClipboard() {
   const history = useHistoryStore()
   const commands = useCommands()
 
-  /**
-   * 复制选中节点到剪贴板。
-   * 收集每个节点的整个子树（沿 parentId 递归），并收集全部内部连线
-   * （两端均在复制集合内，含兄弟间连线与子树内连线）。
-   * 纯读取，不产生历史。
-   *
-   * @param ids 顶层选中节点 id 列表
-   * @returns 是否成功（剪贴板非空）
-   */
+  /** 复制选中节点到剪贴板：收集整个子树与内部连线，纯读取不入历史。 */
   function copy(ids: string[]): boolean {
     if (ids.length === 0) return false
 
@@ -129,14 +107,7 @@ export function useClipboard() {
     return nodes.length > 0
   }
 
-  /**
-   * 剪切：复制到剪贴板后删除原节点（含子树）。
-   * = copy + commands.deleteNodes——删除经命令层入历史栈，undo 可恢复原节点，
-   * 剪贴板内容仍保留（后续可粘贴）。
-   *
-   * @param ids 要剪切的节点 id 列表
-   * @returns 是否成功
-   */
+  /** 剪切：复制到剪贴板后删除原节点（经命令层可撤销，剪贴板内容保留）。 */
   function cut(ids: string[]): boolean {
     if (ids.length === 0) return false
     if (!copy(ids)) return false
@@ -144,15 +115,7 @@ export function useClipboard() {
     return true
   }
 
-  /**
-   * 粘贴到指定父节点视图（可撤销）。
-   * 为剪贴板内每个节点生成新 id，重建 parentId 引用，并重建内部连线。
-   * 数据写入后构造完整 DataPatch（add 节点 + add 连线）pushCommand 入历史栈，
-   * undo 移除粘贴内容，redo 重建。
-   *
-   * @param parentId 顶层节点要粘贴到的父节点 id（通常为当前视图 viewedNodeId）
-   * @returns 新建的顶层节点 id 列表（供调用方选中）
-   */
+  /** 粘贴到指定父节点视图：新 ID 克隆入历史栈（可撤销）；返回顶层节点 id 列表 */
   function paste(parentId: string): string[] {
     const data = clipboardData.value
     if (!data || data.nodes.length === 0) return []

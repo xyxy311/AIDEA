@@ -1,18 +1,6 @@
 /**
- * useFloatingPropertyEditor — 浮动属性编辑器逻辑
- *
- * 负责：
- * - 显隐判定：全局选中（节点或连线）即弹出，不做视图判定
- * - 渲染视图解析：选中项在哪个视图渲染（内联视图 / 主视图）
- * - 锚点（屏幕坐标）计算：节点顶部居中偏上 / 连线两端中点
- * - 拖动偏移状态（无记忆，选中变化时归零）
- *
- * 说明：
- * - 当前视图 = 选中项.parentId 对应的渲染视图。
- *   优先在 mainView.inlineViews 中找展开节点（nodeId）等于 parentId 的内联视图；
- *   没有则用主视图 'main'。
- * - 世界坐标 → 屏幕坐标：screen = world * stageScale + stageOffset + containerRect
- *   内联视图内容被宿主 CSS transform: scale(宿主缩放) 缩放，还需额外乘宿主缩放。
+ * 浮动属性编辑器逻辑：全局选中（节点/连线）即显，解析渲染视图（内联优先，否则主视图），
+ * 计算锚点屏幕坐标（内联视图内容被宿主缩放，需额外乘宿主 scale）。
  */
 import { ref, computed, watch } from 'vue'
 import { useProjectStore } from '@/stores/project'

@@ -1,12 +1,6 @@
 /**
- * 配色方案定义 — 重构后支持"主色调可切换"
- *
- * 架构：将"明暗模式"与"主色调"解耦为两个正交维度。
- *   modeSchemes —— 明暗中性色（背景、文本、边框等）
- *   accentSchemes —— 主色调（翡翠绿、经典蓝等），每个含 light/dark 两个变体
- *   combineScheme(mode, accent) —— 合并为完整 ColorScheme（消费方接口不变）
- *
- * CSS 变量分两组，变量名互不冲突，合并时直接展开。
+ * 配色方案：将「明暗模式」与「主色调」解耦为 modeSchemes 与 accentSchemes 两个正交维度，
+ * 由 combineScheme(mode, accent) 合并为完整 ColorScheme。CSS 变量分两组、互不冲突，合并时直接展开。
  */
 
 import type { GlobalTheme, GlobalThemeOverrides } from 'naive-ui'
@@ -130,7 +124,7 @@ export const modeSchemes: Record<'light' | 'dark', ModeScheme> = {
 /** 翡翠绿（默认主色调） */
 const emerald: AccentScheme = {
   id: 'emerald',
-  // name 为内部标识（非 UI 文案）：UI 显示走 t('settings.accentEmerald') 等资源 key
+  // name 为内部标识，UI 显示走 t('settings.accentEmerald') 等资源 key
   name: '翡翠绿',
   variants: {
     light: {
@@ -196,10 +190,10 @@ const emerald: AccentScheme = {
   },
 }
 
-/** 经典蓝（从旧 colorSchemes 提取，保持不变） */
+/** 经典蓝 */
 const blue: AccentScheme = {
   id: 'blue',
-  // name 为内部标识（非 UI 文案）：UI 显示走 t('settings.accentBlue') 等资源 key
+  // name 为内部标识，UI 显示走 t('settings.accentBlue') 等资源 key
   name: '经典蓝',
   variants: {
     light: {

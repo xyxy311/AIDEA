@@ -1,12 +1,6 @@
 /**
- * 快捷键匹配与展示（纯函数，可单测）
- *
- * 核心表示：规范化 chord 字符串。一条组合键唯一对应一条字符串：
- *   修饰键 + 键名，修饰键按固定顺序拼接（mod > alt > shift），无修饰则只有键名。
- *   例：'a' / 'mod+s' / 'mod+shift+z' / 'alt+1' / 'tab' / 'delete'
- *
- * `mod` 表示「Ctrl 或 Meta(Cmd)」，两者等价（符合项目既有语义）。
- * 键名统一小写，特殊键映射为小写别名（Tab→'tab'、Escape→'escape' 等）。
+ * 快捷键匹配与展示（纯函数，可单测）：组合键规范化为 chord 字符串，
+ * `mod` 表示 Ctrl 或 Meta，键名统一小写并映射特殊键别名。
  */
 import type { ShortcutChord } from '@/types/shortcuts'
 
@@ -54,9 +48,7 @@ const KEY_ALIAS: Record<string, string> = {
   PageDown: 'pagedown',
 }
 
-/**
- * 规范化单个键名：单字符小写；多字符查别名表，否则整体小写。
- */
+/** 规范化单个键名：单字符小写，多字符查别名表，否则整体小写。 */
 export function normalizeKey(key: string): string {
   const alias = KEY_ALIAS[key]
   if (alias) return alias
@@ -64,10 +56,7 @@ export function normalizeKey(key: string): string {
   return key.toLowerCase()
 }
 
-/**
- * 把一次按键事件序列化为规范 chord 字符串。
- * Ctrl 与 Meta 均归一为 `mod`。
- */
+/** 把按键事件序列化为规范 chord 字符串（Ctrl 与 Meta 归一为 mod）。 */
 export function toChordString(e: KeyEventLike): string {
   const parts: string[] = []
   if (e.ctrlKey || e.metaKey) parts.push('mod')
@@ -77,11 +66,7 @@ export function toChordString(e: KeyEventLike): string {
   return parts.join('+')
 }
 
-/**
- * 校验是否为合法绑定字符串：
- * - 末尾必须是"独立键"（非修饰键名、非 mod/alt/shift 令牌）
- * - 修饰令牌只允许 mod/alt/shift，且只能出现在非末尾位置
- */
+/** 校验：末尾须为独立键，修饰令牌仅 mod/alt/shift 且不能居末。 */
 export function isValidChord(s: unknown): s is string {
   if (typeof s !== 'string') return false
   if (s.length === 0) return false
@@ -96,10 +81,7 @@ export function isValidChord(s: unknown): s is string {
   return true
 }
 
-/**
- * 把规范化字符串反向解析为结构对象（供展示/逻辑判断）。
- * 非法输入返回 null。
- */
+/** 把规范化字符串反向解析为结构对象；非法输入返回 null。 */
 export function parseChord(s: string): ShortcutChord | null {
   if (!isValidChord(s)) return null
   const parts = s.split('+')
@@ -129,10 +111,7 @@ const KEY_DISPLAY: Record<string, string> = {
   right: '→',
 }
 
-/**
- * 展示为人类可读字符串，按平台区分 mod：Mac 显示 ⌘/⌥/⇧ 且无 '+',
- * 其他平台显示 Ctrl/Alt/Shift 且用 '+' 连接。
- */
+/** 展示为可读字符串：Mac 用 ⌘/⌥/⇧（无 +），其他平台用 Ctrl/Alt/Shift + 连接。 */
 export function formatChord(s: string, platform?: 'mac' | 'other'): string {
   const chord = parseChord(s)
   if (!chord) return s

@@ -1,8 +1,6 @@
 /**
  * api/index.ts —— 应用 api 的组合与对外导出
- *
- * 分类 api 的类型全部**从实现派生**（`ReturnType<typeof createXxxApi>`），
- * 不手写接口，消除签名重复与双份维护成本。
+ * 各分类 api 类型从实现派生（ReturnType<typeof createXxxApi>），不手写接口。
  */
 import { createNodeApi } from './node'
 import { createConnectionApi } from './connection'
@@ -16,13 +14,9 @@ import { createShortcutsApi } from './shortcuts'
 import { createI18nApi } from './i18n'
 
 /**
- * 构造分类好的应用 api。已有域：node / connection / tag / project / view；
- * 新增域：presets / theme / file / shortcuts / i18n（仅只读查询；
- * i18n 为语言只读 + 文案翻译，语言切换是用户设置，对插件不可写）。
- * additions 已移出共享 api：插件命名空间数据仅经 adapter.for(pluginId) 的
- * PluginScope.additions 提供（`pluginId:` 前缀桶，见 api/additions.ts）；
- * shortcuts 的动作注册已移至注册面（ctx.register.registerShortcutAction）。
- * （AI 功能已移除，未来迁移为内置插件，不再占用独立 api 域。）
+ * 构造分类好的应用 api：node / connection / tag / project / view / presets / theme / file / shortcuts / i18n。
+ * additions 移出共享 api（插件命名空间数据仅经 adapter.for(id).additions）；shortcuts 动作注册已移至 ctx.register。
+ * AI 功能已移除，未来迁移为内置插件。
  */
 export function createPluginApi() {
   return {

@@ -4,11 +4,7 @@ import { createPluginAdapter } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
 import { useStageSize } from '@/composables/useStageSize'
 
-/**
- * 插件视图域扩展 API 测试（视口 / 选中 / 编辑态 / 内联视图 / 网格）。
- * 全部为视图状态操作（不入历史、不带 user）。只读 getter 返回结构化快照；
- * 视图态写经 store 修改后，由对应只读 getter / selection() 确认状态确实被改变。
- */
+/** 插件视图域扩展 API 测试：视口 / 选中 / 编辑态 / 内联视图 / 网格（视图状态操作，不入历史）。 */
 function makeView() {
   return createPluginAdapter().api.view
 }

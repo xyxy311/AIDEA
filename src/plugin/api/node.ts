@@ -1,6 +1,5 @@
 /**
- * api/node.ts —— 节点域：树查询 + 节点写
- * 接口类型由实现派生（`NodeApi = ReturnType<typeof createNodeApi>`），不再手写。
+ * api/node.ts —— 节点域：树查询 + 节点写（写统一委托 useCommands 走历史）
  */
 import type { NodeStyle, WhiteboardNode } from '@/types/node'
 import type { TreeVisitInfo } from '@/types/plugin'
@@ -57,7 +56,6 @@ export function createNodeApi() {
      * 预设或节点不存在返回 false，不写历史。
      */
     applyPresetById(nodeId: string, presetId: string, user?: string): boolean {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       const preset = usePresetsStore().nodePresets.find((p) => p.id === presetId)
       if (!preset || !useNodeStore().getNode(nodeId)) return false
@@ -79,7 +77,6 @@ export function createNodeApi() {
      * 故逐节点构造 old/new 全量状态后分别入栈（每个节点一条历史）。
      */
     resize(ids: string[], size: { width: number; height: number }, user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       const store = useNodeStore()
       for (const id of ids) {
@@ -105,7 +102,6 @@ export function createNodeApi() {
      * 故先经 store.moveNode 变更数据，再构造 positions 入栈。
      */
     move(ids: string[], delta: { dx: number; dy: number }, user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       const store = useNodeStore()
       const positions: Array<{ id: string; oldX: number; oldY: number; newX: number; newY: number }> = []
@@ -129,7 +125,6 @@ export function createNodeApi() {
      * x/y 提供时为每个节点构造相同落点，否则传空 Map 保持原位。
      */
     reparent(ids: string[], newParentId: string, x?: number, y?: number, user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       const newPositions = new Map<string, { x: number; y: number }>()
       if (x !== undefined && y !== undefined) {
@@ -139,14 +134,12 @@ export function createNodeApi() {
     },
 
     alignToGrid(ids: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().alignNodesToGrid(ids)
     },
 
     /** 给目标节点统一设置同一组标签（整体替换，可撤销） */
     setTags(ids: string[], tagIds: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateSelectedNodesTags(ids, tagIds)
     },
@@ -157,7 +150,6 @@ export function createNodeApi() {
      *（store 仅持久化该字段；其余 NodeStyle 字段为全局常量，无从 per-node 重置）。
      */
     resetStyle(ids: string[], user?: string): void {
-      // 预留：操作者归因（未来联网协作/可视化历史）；当前版本不消费
       void user
       useCommands().updateNodesStyle(ids, { borderColor: DEFAULT_NODE_STYLE.borderColor })
     },

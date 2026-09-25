@@ -22,17 +22,9 @@ import { deepClone } from '@/utils/command'
 export const ROOT_NODE_ID = 'root'
 
 /**
- * 节点 Store - 全局唯一的节点树数据源
- *
- * 核心设计：
- * - 所有节点存于单一 Map，通过 parentId 构建树（邻接表模式）
- * - 连线嵌套在父节点的 connections 数组（同级关系归属父节点）
- * - childrenIndex 为 computed 派生索引，使子节点查询 / 递归删除均为高效
- * - 仅管理数据，不含选中 / 编辑 / 视口等视图状态（归 viewStore）
- * - 所有操作按节点 / 连线 ID 进行，不感知"选中"概念，
- *   批量操作由调用方传入 ID 列表，便于未来 undo/redo 以命令封装
- *
- * 根节点（ROOT_NODE_ID）在 store 初始化时创建，其 text 即项目名（单一数据源）。
+ * 节点 Store —— 全局唯一的节点树数据源（多实例节点经 parentId 建树，连线嵌套在父节点 connections）。
+ * childrenIndex/referenceIndex/tagIndex 为 computed 派生索引；仅管理数据，选中/编辑/视口归 viewStore。
+ * 根节点（ROOT_NODE_ID）初始化时创建，其 text 即项目名（单一数据源）。
  */
 export const useNodeStore = defineStore('node', () => {
   // ── State ──
@@ -451,14 +443,6 @@ export const useNodeStore = defineStore('node', () => {
 
   /** 从所有节点的 tagIds 中移除某标签（标签定义被删除时调用） */
   function stripTagFromAllNodes(tagId: string): void {
-    // for (const n of nodes.values()) {
-    //   // 与 tagIndex 一致：排除根节点
-    //   if (n.parentId === null) continue
-    //   if (!n.tagIds || n.tagIds.length === 0) continue
-    //   if (n.tagIds.includes(tagId)) {
-    //     n.tagIds = n.tagIds.filter((id) => id !== tagId)
-    //   }
-    // }
     tagIndex.value.get(tagId)?.forEach((id) => {
       const node = nodes.get(id)
       if (!node) return

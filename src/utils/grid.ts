@@ -1,13 +1,5 @@
-/**
- * 网格模式 - 纯函数层
- *
- * 背景语义：
- * - G = 100px（世界坐标），是网格模式下节点坐标与尺寸的最小单位。
- * - 节点坐标/尺寸必须是 G 的整数倍（对齐：尺寸向上取整百，位置四舍五入）。
- * - 活动网格 = G×G 单元格，其中心 = 焦点，焦点坐标是单元格中心（G/2 + G·n，即 50, 150, 250…）。
- *
- * 本文件只包含纯函数与类型，不依赖 store，便于单测与复用。
- */
+// 网格模式纯函数层：G=100px 为坐标/尺寸最小单位，节点坐标与尺寸须为 G 的整数倍，
+// 活动网格高亮中心 = 单元格中心（G/2 + G·n）。纯函数不依赖 store，便于单测与复用。
 import { GRID_G } from '@/constants'
 import type { WhiteboardNode } from '@/types'
 
@@ -30,55 +22,37 @@ export interface FindNodeAtCellOptions {
   y: number
 }
 
-/**
- * 位置吸附：四舍五入到最近的 G 网格点。
- * 注意：JS `Math.round` 对 .5 向 +∞ 取整，负数 G/2 边界（如 -50）会偏向 0。
- */
+/** 位置吸附：四舍五入到最近的 G 网格点（Math.round 对 .5 向 +∞，负边界如 -50 偏向 0）。 */
 export function snapPosition(v: number): number {
   return Math.round(v / GRID_G) * GRID_G
 }
 
-/**
- * 焦点吸附：任意世界坐标吸附到最近的单元格中心（G/2 + G·n，即 50, 150, 250…）。
- * 焦点 = 活动网格（G×G 单元格）的中心，唯一落在单元格中心（而非任意 G/2 倍数）。
- */
+/** 焦点吸附：吸附到最近的单元格中心（G/2 + G·n，即 50, 150, 250…）。 */
 export function snapFocus(v: number): number {
   return Math.round((v - GRID_G / 2) / GRID_G) * GRID_G + GRID_G / 2
 }
 
-/**
- * 尺寸吸附：向上取整到 G 的整数倍。
- */
+/** 尺寸吸附：向上取整到 G 的整数倍。 */
 export function snapSize(v: number): number {
   return Math.ceil(v / GRID_G) * GRID_G
 }
 
-/**
- * 世界坐标 → 网格单元索引（向下取整），用于碰撞/邻近判定。
- */
+/** 世界坐标 → 网格单元索引（向下取整，用于碰撞/邻近判定）。 */
 export function worldToGrid(v: number): number {
   return Math.floor(v / GRID_G)
 }
 
-/**
- * 网格单元索引 → 世界坐标（该单元左上角）。
- */
+/** 网格单元索引 → 世界坐标（该单元左上角）。 */
 export function gridToWorld(g: number): number {
   return g * GRID_G
 }
 
-/**
- * 网格单元索引 → 世界坐标（该单元中心，即焦点）。
- * 焦点坐标是单元格中心（G/2 + G·n）。
- */
+/** 网格单元索引 → 世界坐标（该单元中心，即焦点）。 */
 export function cellCenterToWorld(g: number): number {
   return g * GRID_G + GRID_G / 2
 }
 
-/**
- * 判断某世界坐标点落在哪个节点矩形内（含边）。
- * 返回命中的节点 id；无命中返回 null。
- */
+/** 判断某世界坐标点落在哪个节点矩形内（含边）；无命中返回 null。 */
 export function findNodeAtCell(opts: FindNodeAtCellOptions): string | null {
   const { nodes, x, y } = opts
   for (const node of nodes) {
@@ -90,12 +64,8 @@ export function findNodeAtCell(opts: FindNodeAtCellOptions): string | null {
 }
 
 /**
- * 在指定方向从 (fromX, fromY) 出发，找"该方向上最近的节点"（按投影距离最小）。
- * 要求：
- * - 节点必须位于该方向的半平面内（right：节点左边界 > fromX；left：节点右边界 < fromX；等）。
- * - 与该方向正交的投影：焦点在该方向的正交投影落在节点投影区间内（点-区间，非区间-区间），
- *   避免选中斜向太偏的节点。
- * 返回完整节点对象；无满足条件的节点返回 null。
+ * 在指定方向找最近的节点（按投影距离）：节点须位于该方向的半平面内，
+ * 且沿正交方向的投影重叠（点-区间），避免选中斜向太偏的节点。
  */
 export function nearestNodeInDirection(
   nodeList: WhiteboardNode[],

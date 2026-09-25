@@ -1,12 +1,7 @@
 <script setup lang="ts">
 /**
- * OverviewMap — 右下角导航小地图
- *
- * 以缩略图形式展示所有节点的空间分布，并用矩形框标注当前视口范围。
- *
- * 交互：
- * - 点击小地图空白区域 → 缩放并平移，使所有节点适应视口
- * - 拖拽蓝色视口框 → 平移画布（保持缩放不变）
+ * OverviewMap - 右下角导航小地图：缩略展示节点空间分布，矩形框标注当前视口；
+ * 点击空白处适应全部节点，拖拽视口框平移画布（保持缩放不变）。
  */
 import { computed, ref, onUnmounted } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'
@@ -34,7 +29,6 @@ let dragStartStageX = 0
 let dragStartStageY = 0
 
 // ── 当前视口的世界坐标边界 ──
-
 interface Rect {
   x: number
   y: number
@@ -53,7 +47,6 @@ const worldViewport = computed<Rect>(() => {
 })
 
 // ── 世界包围盒（所有节点 + 视口 + padding） ──
-
 const worldBounds = computed<Rect>(() => {
   const vp = worldViewport.value
   let minX = vp.x
@@ -95,8 +88,6 @@ const worldBounds = computed<Rect>(() => {
 })
 
 // ── 世界 → 小地图像素 ──
-
-
 function toMapX(wx: number): number {
   const b = worldBounds.value
   return ((wx - b.x) / b.width) * MAP_WIDTH
@@ -113,7 +104,6 @@ function toMapH(wh: number): number {
 }
 
 // ── 视口矩形样式 ──
-
 const viewportStyle = computed(() => {
   const vp = worldViewport.value
   return {
@@ -125,7 +115,6 @@ const viewportStyle = computed(() => {
 })
 
 // ── 节点缩略 ──
-
 const mapNodes = computed(() =>
   nodes.value.map((node) => ({
     id: node.id,
@@ -139,11 +128,9 @@ const mapNodes = computed(() =>
 )
 
 // ── 点击小地图 → 适应全部节点 ──
-
 function handleMapClick(e: MouseEvent): void {
-  // 拖拽期间不响应点击
+  // 拖拽期间不响应；点击在视口框上由拖拽处理
   if (isDragging.value) return
-  // 点击在视口框上不处理（由拖拽处理）
   if ((e.target as HTMLElement).classList.contains('overview-viewport')) return
 
   fitAllNodes()
@@ -175,7 +162,6 @@ function fitAllNodes(): void {
 }
 
 // ── 拖拽视口框 → 平移画布 ──
-
 function handleViewportMouseDown(e: MouseEvent): void {
   e.stopPropagation()
   isDragging.value = true
@@ -209,8 +195,7 @@ function handleDragEnd(): void {
   document.removeEventListener('mouseup', handleDragEnd)
 }
 
-// ── 滚轮缩放（以小地图位置为锚点） ──
-
+// ── 滚轮缩放（以大视口中心为锚点） ──
 function handleWheel(e: WheelEvent): void {
   e.preventDefault()
 

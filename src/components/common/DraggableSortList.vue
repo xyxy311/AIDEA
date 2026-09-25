@@ -1,4 +1,9 @@
 <script setup lang="ts" generic="T extends { id: string }">
+/**
+ * DraggableSortList — 通用可拖拽排序列表：封装 HTML5 拖拽排序（手柄/拖拽态/落点高亮）
+ * 与 1-9 序号徽标，列表项经 #default 作用域插槽注入（面板复用约定）。
+ * 行内操作按钮须 @click.stop 与行点击隔离，避免误触发 @row-click。
+ */
 import { ref } from 'vue'
 
 defineProps<{

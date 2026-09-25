@@ -1,14 +1,8 @@
 <script setup lang="ts">
 /**
- * TagsPanel - 标签管理面板（左侧活动栏面板之一）
- *
- * 集中管理项目级标签定义（Tag：名称 + 颜色）：
- * - 顶部快速新建：输入名称 + 取色 + 添加
- * - 列表每行：色块（可直接改色）+ 名称 + 改名 / 删除（带确认）
- * - 空状态：NEmpty 提示
- *
- * 数据层全部消费 tags store，不修改 store / types / constants。
- * 标签定义是项目级数据（CRUD 不可撤销），"节点打上标签"则在右侧属性面板操作。
+ * TagsPanel - 标签管理面板：集中管理项目级标签定义（名称+颜色）。
+ * 顶部快速新建；列表每行色块可直接改色 + 改名/删除；空状态 NEmpty。
+ * 标签定义为项目级数据（CRUD 不可撤销），"节点打上标签"在右侧属性面板操作。数据层全消费 tags store。
  */
 import { ref, computed } from 'vue'
 import { NInput, NButton, NColorPicker, NModal, NForm, NFormItem, NText, NScrollbar, NPopconfirm, NEmpty } from 'naive-ui'
@@ -82,11 +76,9 @@ function handleDelete(id: string): void {
   tagsStore.deleteTag(id)
 }
 
-// ── 点击标签项：为选中节点添加/移除标签（toggle，走命令层可撤销） ──
+// ── 点击标签项：为选中节点添加/移除标签（走命令层可撤销，各节点保留原有其它标签） ──
 
-/**
- * 当前全部选中节点（支持多选；未选中为空数组）。
- */
+/** 当前全部选中节点（支持多选；未选中为空数组） */
 const selectedNodes = computed<WhiteboardNode[]>(() => {
   const view = active.view
   return Array.from(view.selectedNodeIds)
@@ -108,8 +100,7 @@ function tagState(tag: Tag): 'all' | 'partial' | 'none' {
 
 /**
  * 点击标签项：为所有选中节点批量添加/移除该标签（走命令层可撤销）。
- * 全部节点已含该标签 -> 从所有节点移除；否则 -> 添加到所有节点。
- * 各节点保留自己原有其它标签，不做整体抹平。
+ * 全部已含 -> 移除；否则 -> 添加；各节点保留自己的其它标签。
  */
 function toggleTagForSelected(tag: Tag): void {
   const nodes = selectedNodes.value
@@ -176,14 +167,14 @@ function nextQuickColor(): string {
         @reorder="handleReorderTags"
       >
         <template #default="{ item: tag }">
-          <!-- 可点击主体（色点 + 名称）：点击为选中节点添加/移除该标签 -->
+          <!-- 主体（色点 + 名称）：点击为选中节点添加/移除该标签 -->
           <div
             class="tag-body"
             :class="{ active: tagState(tag) === 'all', partial: tagState(tag) === 'partial' }"
             :title="t('tagsPanel.applyToSelected')"
             @click="toggleTagForSelected(tag)"
           >
-            <!-- 色点（点击弹出改色选择器）：.stop 阻止冒泡，避免点色改色时误触发打标签 -->
+            <!-- 色点（点击弹改色选择器）：.stop 隔离，避免误触发打标签 -->
             <NColorPicker
               :value="tag.color"
               :show-alpha="false"
@@ -199,14 +190,11 @@ function nextQuickColor(): string {
                 />
               </template>
             </NColorPicker>
-            <!-- 名称 -->
             <NText class="tag-name" depth="2">{{ tag.name }}</NText>
           </div>
-          <!-- 改名 -->
           <NButton size="tiny" quaternary class="action-btn" @click="openEdit(tag.id)">
             ✎
           </NButton>
-          <!-- 删除（带确认） -->
           <NPopconfirm
             :positive-text="t('tagsPanel.confirm')"
             :negative-text="t('tagsPanel.cancel')"

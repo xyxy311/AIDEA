@@ -3,14 +3,8 @@ import { useStorage } from '@vueuse/core'
 import { generateId } from '@/utils/id'
 
 /**
- * recentFiles store - 最近打开的项目文件
- *
- * 记录「打开 / 另存为 / 作为最近打开」过的项目，供顶部「打开最近文件」子菜单使用。
- * 纯桌面形态下磁盘归属 main 进程，最近列表只存「文件名 + 磁盘路径」，打开时经
- * aideaFile 桥（FILE_READ）重新读盘——不再像浏览器形态那样内联存项目 JSON 文本，
- * 因此不受体积上限约束，且文件内容改动在最近列表保持最新。
- *
- * 数据由 useStorage 持久化到 localStorage（key: 'aidea-recent-files'）。
+ * recentFiles store —— 最近打开的项目文件（useStorage 持久化到 localStorage('aidea-recent-files')）。
+ * 桌面形态下只存「文件名 + 磁盘路径」，打开时经 aideaFile 桥重新读盘。
  */
 export interface RecentFile {
   /** 唯一标识（同 name 只需一条，重开会更新 id/lastOpenedAt） */

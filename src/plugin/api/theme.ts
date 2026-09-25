@@ -1,9 +1,6 @@
 /**
- * api/theme.ts —— 主题域：亮 / 暗模式与配色方案的读写
- * 接口类型由实现派生（`ThemeApi = ReturnType<typeof createThemeApi>`）。
- *
- * - 主题为纯 UI 状态（不落 undo 历史、不标注 dirty），故切换方法不带 user。
- * - `scheme()` 返回组合后的完整配色方案（Naive theme / CSS 变量 / 画布 chrome 色），只读。
+ * api/theme.ts —— 主题域：亮/暗模式与配色方案读写，接口类型由实现派生。
+ * 主题为纯 UI 状态（不入 undo 历史）故切换不带 user；`scheme()` 返回组合后的完整配色方案（只读）。
  */
 import type { ColorScheme, AccentSchemeId } from '@/config/colorSchemes'
 import { useThemeStore } from '@/stores/theme'

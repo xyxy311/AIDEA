@@ -1,15 +1,8 @@
 <script setup lang="ts">
 /**
- * FloatingPropertyEditor — Word 风格浮动属性编辑器
- *
- * 选中节点 / 连线时在选中物旁弹出，专注高频样式操作：
- * - 自由改色（NColorPicker）
- * - 颜色预设横条（FloatingColorStrip）
- * - 连线额外：线型 / 粗细 / 有向
- *
- * 定位：Teleport 到 body + position:fixed，避免被 overflow:hidden 裁切。
- * 头部可作拖拽把手（pointerdown/move/up + setPointerCapture）。
- * 无位置记忆：选中变化时 offset 归零，每次选中重新锚定。
+ * FloatingPropertyEditor — Word 风格浮动属性编辑器：选中节点/连线时在其旁弹出，
+ * 支持改色、颜色预设横条（FloatingColorStrip）及连线线型/粗细/有向。Teleport 到 body
+ * 用 position:fixed 定位，头部可作拖拽把手；无位置记忆，每次选中重新锚定。
  */
 import { ref, computed, watch, nextTick } from 'vue'
 import { NColorPicker, NSelect, NInputNumber, NCheckbox } from 'naive-ui'

@@ -8,11 +8,7 @@ import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 
-/**
- * Helper: Mount a renderless component that calls the composable in setup,
- * 确保 onMounted/onUnmounted 生命周期正确触发（注册/移除 window 事件监听）。
- * 同时捕获 composable 返回值供断言。
- */
+/** 挂载无渲染组件以调用 useGridMode，触发并验证生命周期，同时捕获其返回值。 */
 let grid: ReturnType<typeof useGridMode> | null = null
 function mountGrid() {
   return mount(

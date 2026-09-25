@@ -2,10 +2,8 @@
 export interface WhiteboardNode {
   id: string
   /**
-   * 父节点 ID。
-   * null = 根/项目节点（全局唯一，无父级；其几何与样式属性无意义，
-   * 因为它不会被绘制在任何父级视图中）。
-   * 通过 parentId 构建节点树：子节点 = parentId 指向本节点的节点。
+   * 父节点 ID。null = 根/项目节点（不绘制在任何父级视图）。
+   * 子节点 = parentId 指向本节点的节点。
    */
   parentId: string | null
   x: number
@@ -18,30 +16,20 @@ export interface WhiteboardNode {
    */
   tagIds: string[]
   /**
-   * 边框颜色（始终有值，默认值由工厂函数 createNode 填充）。
-   * 支持透明度（#rrggbbaa / rgba）。节点的唯一可定制样式字段——
-   * 文字色随主题（见 CanvasColors.nodeTextColor），
-   * 背景色由本字段经 deriveBackgroundColor 派生（保持色相、继承透明度）。
+   * 边框颜色（支持 #rrggbbaa/rgba），节点的唯一可定制样式字段（始终有值，默认值由 createNode 填充）。
+   * 文字色随主题，背景色由本字段经 deriveBackgroundColor 派生。
    */
   borderColor: string
   /**
-   * 本节点子级之间的连线集合。
-   *
-   * 连线表示同级关系（因果、时间等），非父子关系。
-   * 每条连线的两端（fromNodeId / toNodeId）均为本节点的直接子节点。
-   * 连线归属父节点（而非全局独立存储），使组合/移动子树时
-   * 连线随父节点自然迁移，且撤销重做只需快照单一节点 Map。
+   * 本节点子级之间的连线（表示同级关系，非父子关系），两端均为直接子节点。
+   * 连线归属父节点存储，使移动子树时连线随父迁移，撤销只需快照单一节点 Map。
    */
   connections: Connection[]
 }
 
 /**
- * 节点视觉样式配置（全局默认，非 per-node 数据）。
- *
- * 仅 borderColor 为用户可调字段（存在节点上）；
- * 其余为全局统一常量（边框宽度 / 圆角 / 字号 / 字体）。
- * 文字色与背景色不在此处——文字色随主题（CanvasColors.nodeTextColor），
- * 背景色由 borderColor 派生（deriveBackgroundColor）。
+ * 节点视觉样式（全局默认，非 per-node 数据）：仅 borderColor 为可调字段，
+ * 其余为统一常量；文字色随主题、背景色由 borderColor 派生。
  */
 export interface NodeStyle {
   borderColor: string
@@ -76,10 +64,7 @@ export interface Connection {
   text: string | null
 }
 
-/**
- * 标签定义（项目级，随项目文件序列化）。
- * 节点通过 WhiteboardNode.tagIds 引用标签 id。
- */
+/** 标签定义（项目级，随项目文件序列化），由 WhiteboardNode.tagIds 引用。 */
 export interface Tag {
   id: string
   name: string
@@ -89,10 +74,7 @@ export interface Tag {
 
 // ===== 预设样式系统 =====
 
-/**
- * 节点预设样式（持久化到 localStorage）。
- * 仅存储边框颜色——文字色随主题、背景色由边框色派生。
- */
+/** 节点预设样式（持久化到 localStorage）：仅存边框颜色，文字色随主题、背景色由边框色派生。 */
 export interface NodePresetStyle {
   id: string
   name: string
@@ -120,10 +102,7 @@ export interface ConnectionPresetStyle {
 /** 预设样式统一类型 */
 export type PresetStyleItem = NodePresetStyle | ConnectionPresetStyle
 
-/**
- * 预设分组。
- * 内置预设默认归入"内置"保留分组（builtin=true，不可删除/改名）。
- */
+/** 预设分组；内置保留分组 builtin=true，不可删除/改名。 */
 export interface PresetGroup {
   id: string
   name: string

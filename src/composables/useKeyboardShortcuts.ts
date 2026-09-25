@@ -16,32 +16,11 @@ import { toChordString, normalizeKey } from '@/utils/shortcuts'
 import type { ShortcutScope } from '@/types/shortcuts'
 
 /**
- * 全局键盘快捷键
- *
- * 采用「规范化 chord + 单一运行时 Map」匹配：
- * - 每次 keydown 用 toChordString(e) 归一到字符串，直接 O(1) 查 Map 得到
- *   该键对应的条目 { id, scope, run }，结构上保证「一个键至多命中一个动作」。
- * - scope 决定触发时机：'always' 在输入框/编辑守卫之前执行（保存/打开/新建/搜索，
- *   与既有行为一致）；'canvas' 在守卫之后执行（其余全部可改动作 + 锁定动作）。
- * - 锁定键（撤销/重做、复制/剪切/粘贴、删除、Escape、方向键、Enter）与可改动作同进一个 Map，
- *   冲突由 shortcuts store 的 assign 在设置时挡住，无需额外判断。
- * - 序号键 1-9：按住「序号修饰键」(默认 T) 时打标签，否则应用可见预设。
- *
- * Ctrl/Cmd + Z       - 撤销（锁定）
- * Ctrl/Cmd + Shift+Z / Y - 重做（锁定）
- * Ctrl/Cmd + C / X / V  - 复制 / 剪切 / 粘贴（锁定）
- * Delete / Backspace / D- 删除选中（锁定）
- * Escape             - 取消选中（锁定）
- * 方向键（规范化 chord up/down/left/right）- 移动选中节点（锁定，不可自定义）
- * Enter              - 编辑选中节点（锁定，不可自定义）
- * 1-9                - 应用预设 / 序号修饰键+1-9 打标签（锁定）
- *
- * S/O/N/F/G/A/Q/Tab/R/D   - 可自定义（见 constants/shortcuts.ts）
- *
- * 事件顺序契约（与网格层 useGridMode 协作）：Vue 子组件 onMounted 先于父组件触发，
- * CanvasStage（子）的网格监听先于本文件（由 AppShell 父级挂载）的快捷键监听执行。
- * 网格层调用 stopImmediatePropagation = 独占该键（本层收不到）；
- * 不调用 = 放行给本层（如非预览 Esc、有选中 Enter、无修饰方向键的节点移动）。
+ * 全局键盘快捷键：规范化 chord + 单一运行时 Map，O(1) 匹配一个动作。
+ * scope 'always' 在输入/编辑守卫前执行（文件/搜索），'canvas' 在守卫后执行。
+ * 锁定键与可改动作同进一 Map，冲突由 shortcuts store 的 assign 挡住；
+ * 1-9 按住序号修饰键（默认 T）打标签，否则应用可见预设。
+ * 与网格层契约：子组件 onMounted 先于父级，网格层 stopImmediatePropagation = 独占，本层收不到。
  */
 export function useKeyboardShortcuts(
   isEditing: Ref<boolean>,

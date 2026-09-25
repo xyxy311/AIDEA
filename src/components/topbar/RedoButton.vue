@@ -1,7 +1,5 @@
 <script setup lang="ts">
-/**
- * RedoButton - 重做按钮（注册于左顶部条）
- */
+// RedoButton - 重做按钮（左顶条），无可重做时禁用。
 import { ArrowRedoOutline } from '@vicons/ionicons5'
 import { useCommands } from '@/composables/useCommands'
 import { t } from '@/composables/useT'

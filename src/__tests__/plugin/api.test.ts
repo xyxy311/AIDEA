@@ -10,12 +10,7 @@ import { ROOT_NODE_ID } from '@/stores/node'
 /** 测试用最小插件模态内容组件 */
 const DummyComp = defineComponent(() => () => null)
 
-/**
- * 适配层单例契约 + 分类 api 测试（node / connection / tag / project / view）。
- * 单例契约：十域 api（无 additions）、for(id) 校验与缓存、scope.additions 前缀隔离、
- * scope.modal 与 ctx.modal 同工厂（短 id 拼前缀，随 for 缓存同一实例）。
- * 只读方法如实反映 store；写方法产生可撤销历史（undo/redo）；batch 合并单条历史。
- */
+/** 适配层单例契约 + 分类 api 测试（单例、for(id) 作用域、undo/redo、batch） */
 function makeApi() {
   return adapter.api
 }

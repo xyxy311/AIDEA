@@ -1,16 +1,6 @@
 <script setup lang="ts">
 /**
- * PluginErrorBoundary — 插件 UI 渲染错误边界
- *
- * 把插件面板 / 设置栏目运行时抛出的渲染错误隔离到本边界占位，
- * 避免单个插件异常拖垮整个应用界面。
- *
- * - onErrorCaptured 捕获后置 error=true，并返回 false 阻断错误继续向上冒泡。
- * - 占位内「重试」调用 reset() 复位 error=false，届时错误子树已被卸载，
- *   重新渲染即为一轮干净的挂载尝试。
- * - 渲染错误记录日志（activityItemHint 展示最小占位，符合当前设计语言）。
- *
- * ⚠ 本波不 provide 插件适配器；后续增量在此补 `provide('aidea-plugin-adapter', ...)`。
+ * PluginErrorBoundary — 插件 UI 渲染错误边界：拦截渲染错误置占位并记日志，避免单个插件拖垮界面。
  */
 import { ref, onErrorCaptured } from 'vue'
 import { t } from '@/composables/useT'
@@ -28,11 +18,7 @@ const error = ref(false)
 /** 错误摘要（展示在占位内，截图即可排障，无需翻 console） */
 const message = ref('')
 
-/**
- * 捕获渲染错误并落 console（真机排障唯一入口——插件产物的渲染错误
- * 之前仅置占位不打印，用户与开发者都拿不到堆栈）。
- * 返回 false 阻断错误继续向上冒泡（true/不返回则继续传播）。
- */
+/** 捕获渲染错误落 console 并置占位；返回 false 阻断错误向上冒泡。 */
 function onCapture(err: unknown, _instance: unknown, info: string): boolean {
   message.value = err instanceof Error ? err.message : String(err)
   console.error(`[plugin] 组件渲染错误（${info}）`, err)
@@ -41,7 +27,7 @@ function onCapture(err: unknown, _instance: unknown, info: string): boolean {
 }
 onErrorCaptured(onCapture)
 
-/** 「重试」复位错误标记 → 重挂子树（错误组件已被卸载，重挂即重试） */
+/** 「重试」复位错误标记并重挂子树（错误组件已卸载）。 */
 function reset(): void {
   error.value = false
   message.value = ''

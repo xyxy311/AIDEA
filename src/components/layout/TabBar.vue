@@ -1,16 +1,8 @@
 <script setup lang="ts">
 /**
- * TabBar - 多标签页栏（并入顶部图标条中段，由 AppShell 居中、定宽放置）
- *
- * 功能：
- * - 渲染 project.tabs 每个标签，标题 = 观察节点 text 首行（trim，`#` 参考名规则一致；根节点即项目名）
- * - 活动标签高亮（主色底部指示条 + 淡背景，与 TopBarButton 活动态一致）；点击 switchToTab
- * - 每标签 hover 显示关闭 ×（tabs<=1 时隐藏），点击 closeTab
- * - 最右侧 "+" 主色按钮 addTab，固定覆盖在标签带右端之上（不随滚轮滚动，标签过多时遮住滑过的标签）
- * - 标签带经 `common/WheelScroll` 提供滚轮横向滚动，隐藏滚动条（与左/右两区滚动方式一致）
- * - HTML5 拖拽排序 → moveTab（复用活动栏拖拽抑制误触 click 模式）
- * - 双击标签标题行内改名（useNodeTree.renameNode，保留 2..n 行 body，只改标题行）
- * - 监听 tabFallbackNotice，true 时 toast 提示并复位为 false
+ * TabBar - 多标签页栏（AppShell 居中定宽放置）：渲染 project.tabs 标签（活动高亮、
+ * 双击行内改名、hover 关闭），右侧 "+" 新增；标签带 HTML5 拖拽排序 + 滚轮横滚，
+ * 观察节点被删时监听 tabFallbackNotice 提示。
  */
 import { ref, watch, nextTick } from 'vue'
 import { NTooltip, useMessage } from 'naive-ui'
@@ -80,13 +72,12 @@ function onDragEnd(): void {
 function endDrag(): void {
   dragIndex.value = null
   dropIndex.value = null
-  // 本 tick 后放开 click 抑制（拖拽结束若顺带触发 click 会被忽略）
+  // 本 tick 后放开 click 抑制
   setTimeout(() => {
     suppressClick.value = false
   }, 0)
 }
 
-/** 点击标签切换（拖拽刚结束时忽略该次 click） */
 function onTabClick(tab: TabItem): void {
   if (suppressClick.value) {
     suppressClick.value = false

@@ -1,15 +1,8 @@
 /**
  * api/shortcuts.ts —— 快捷键域：只读查询
- * 接口类型由实现派生（`ShortcutsApi = ReturnType<typeof createShortcutsApi>`）。
- *
- * 安全面说明：
- * - 本域只暴露键位 / 登记查询，不改写用户绑定，也不承载动作注册——插件动作注册已移至
- *   注册面（ctx.register.registerShortcutAction，见 plugin/ui.ts）；覆盖绑定属全局偏好，
- *   交由 UI 设置面板管理，避免插件意外篡改。
- * - pluginActions(pluginId) 为只读登记查询：返回该插件在 uiRegistry.shortcutActions 中
- *   登记的动作（key = 完整登记 key、label = 成品字符串），供插件自身设置栏目渲染改键行。
- * - 无注册逻辑后共享实例与插件实例无作用域差异，故 createShortcutsApi 无参数；
- *   api.shortcuts 仅经共享 adapter.api 提供（无 per-plugin 版本）。
+ * 本域不改写用户绑定（覆盖绑定属全局偏好，由 UI 设置面板管理），也不承载动作注册
+ * （插件动作注册在注册面 ctx.register.registerShortcutAction）。createShortcutsApi 无参数，
+ * 仅经共享 adapter.api 提供。
  */
 import { useShortcutsStore } from '@/stores/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
@@ -51,9 +44,7 @@ export function createShortcutsApi() {
     },
     /**
      * 列出某插件登记的全部快捷键动作（按 `${pluginId}:` 前缀过滤）。
-     * key = 完整登记 key（可直接传 getBinding / ShortcutActionRow 的 actionKey），
-     * label = 成品字符串（插件不接主 i18n）。只读查询，无命中返回空数组。
-     * 供插件自身设置栏目经 ShortcutActionRow 渲染改键行（主应用快捷键栏目不显示插件动作）。
+     * key = 完整登记 key（可直接传 getBinding），label = 成品字符串；供插件设置栏目渲染改键行。
      */
     pluginActions(pluginId: string): Array<{ key: string; label: string }> {
       const registry = useUiRegistryStore()

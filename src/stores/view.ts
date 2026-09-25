@@ -26,16 +26,9 @@ export interface ViewStoreInit {
 const viewStoreInits = new Map<string, ViewStoreInit>()
 
 /**
- * 视图 Store 工厂
- *
- * viewId 区分：
- * - 'main'：单一主视图实例，常驻。切换查看的节点通过改 viewedNodeId 实现。
- * - 其他值：内联视图实例，每个独立。
- *
- * 仅管理视图状态：视口（平移 / 缩放）、选中、编辑、连线创建中、内联视图列表。
- * 不存储任何节点 / 连线数据（数据归全局 nodeStore）。
- *
- * @param init 首次创建时传入的初始化参数（后续调用忽略）
+ * 视图 Store 工厂：'main' 单一主视图常驻（切换节点经改 viewedNodeId）；其他 viewId 为独立内联视图实例。
+ * 仅管理视图状态（视口 / 选中 / 编辑 / 连线创建中 / 内联视图列表），不存任何节点/连线数据。
+ * 内联视图的选中经 computed 共享主视图，使快捷键与属性面板能作用于内联选中的节点。
  */
 export function useViewStore(viewId: string, init?: ViewStoreInit) {
   const storeId = `view-${viewId}`

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 /**
- * NodePropertyEditor — 节点属性编辑面板
- *
- * 当选中节点时，可修改节点的文本内容和外观样式。
+ * NodePropertyEditor - 节点属性编辑面板：修改选中节点的文本与外观样式。
  * 预设管理已移至左侧「预设管理」面板与浮动编辑器，此处不再展示。
  */
 import { ref, computed, nextTick, h } from 'vue'
@@ -31,17 +29,14 @@ const tagsStore = useTagsStore()
 const message = useMessage()
 const nodeStore = useNodeStore()
 
-// ── @ 补全 ──
-/** 补全下拉共享逻辑 */
+// ── @ 补全（共享逻辑 + 输入框 ref / 下拉定位） ──
 const autocomplete = useReferenceAutocomplete()
-/** naive NInput 实例 ref（暴露内部 textareaElRef） */
 const inputRef = ref()
-/** 下拉定位（视口坐标） */
 const dropdownPos = ref({ x: 0, y: 0 })
 /** 重名冲突时强制 NInput 重建重读 get 值 */
 const forceTextKey = ref(0)
 
-/** 计算下拉位置：定位在内部 textarea 元素下方 */
+/** 定位在内部 textarea 元素下方 */
 function updateDropdownPos(): void {
   const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
   if (!ta) return
@@ -57,7 +52,7 @@ function onNInputInput(value: string): void {
   if (autocomplete.visible.value) updateDropdownPos()
 }
 
-/** 点击补全候选：插入引用名 */
+/** 点击补全候选：插入引用名并重置光标 */
 function handleAutocompleteSelect(candidate: AutocompleteCandidate): void {
   const ta = inputRef.value?.textareaElRef as HTMLTextAreaElement | undefined
   const text = node.value?.text ?? ''

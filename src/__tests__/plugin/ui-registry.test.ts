@@ -15,18 +15,8 @@ import type { ModalRegistration } from '@/types/modal'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 
 /**
- * 插件注册面契约测试（ui-registry）：
- * 针对 createPluginRegister + uiRegistry 登记总表（stores/uiRegistry.ts）的实际行为。
- *
- * 关键事实（以实代码为准，勿臆测）：
- * - createPluginRegister 的方法**返回 void**（右键菜单项 / 快捷键动作除外，返回 {ok, conflict?}）；
- *   冲突 / 非法 id 由 uiRegistry 内建校验（registerPlugin* 返回 false + console.warn），
- *   api 层据此 warn 并跳过，不抛错。
- * - 注册去向为 uiRegistry：key = `${pluginId}:${id}`，origin='plugin'，含 pluginId 归因；
- *   defaultPlacement 缺省 'right'、顶栏 defaultZone 缺省 'left' 在 registry 写入时兜底。
- * - 顶栏按钮：api 层先 wrapTopBarButton 包装为逻辑组件，再连同 { id, title, defaultZone } 传入 registry。
- * - 回滚：rollbackPluginUi → registry.removePlugin(pluginId)，三表 demo:* 全部清除。
- * - 排布（layout）由 uiRegistry 派生，注册后自动生效，本测试不涉及 layout，只验 uiRegistry 契约。
+ * 插件注册面契约测试：createPluginRegister + uiRegistry 登记总表
+ * （注册去向、id 校验、冲突拒绝、removePlugin 回滚）。
  */
 const Icon = defineComponent(() => () => h('div'))
 

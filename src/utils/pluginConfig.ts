@@ -1,21 +1,13 @@
 /**
- * pluginConfig.ts —— 插件配置持久化（纯 localStorage 层，不 import store）
- *
- * 每个插件一个独立配置文件：`aidea-plugin-config.<pluginId>`，结构：
- *   { version: 1, data: Record<string, unknown>, shortcuts: Record<string, string> }
- * - data：插件自定义配置（任意 JSON 值；plugin/api/config 的 get/set/remove 段）。
- * - shortcuts：插件快捷键动作的用户覆盖（key = 动作短 id，value = 规范化 chord）——
- *   插件覆盖不再混存于主应用快捷键持久化（aidea-shortcuts），随插件独立保存：
- *   插件禁用 / 重启期间覆盖仍在，重装后自动恢复。
- *
- * 自愈对齐 presets 的 resetStorage：JSON 解析失败或结构不符 → removeItem 坏文件 + 回退默认。
- * migrateShortcutOverrides：一次性存量迁移——把旧混存在 aidea-shortcuts 中的插件覆盖
- * （`${pluginId}:${actionId}` 条目）搬入各插件文件，aidea-shortcuts 写回裁剪版（仅内置覆盖）。
+ * 插件配置持久化（纯 localStorage 层，不 import store）。
+ * 每插件一个独立文件 `aidea-plugin-config.<pluginId>`，结构为 { version, data, shortcuts }；
+ * shortcuts 存插件快捷键动作的用户覆盖（不再混存主应用快捷键），随插件独立保存。
+ * 自愈对齐 presets resetStorage：坏 JSON / 结构不符 → removeItem + 回退默认。
  */
 
 /** 插件配置存储 key 前缀（完整 key = `${STORAGE_PREFIX}${pluginId}`） */
 const STORAGE_PREFIX = 'aidea-plugin-config.'
-/** 旧版快捷键覆盖混存 key（迁移源；沿用主应用快捷键持久化 key） */
+/** 旧版快捷键覆盖混存 key（迁移源） */
 const LEGACY_BINDINGS_KEY = 'aidea-shortcuts'
 
 /** 插件配置文件结构（持久化单文件） */
@@ -51,8 +43,7 @@ function isValidConfigFile(value: unknown): value is PluginConfigFile {
 }
 
 /**
- * 读某插件配置：文件缺失回退空文件；坏 JSON / 结构不符 → removeItem 坏文件 + 回退空文件
- * （对齐 presets 的 removeItem + 回退默认自愈）。
+ * 读某插件配置：文件缺失回退空文件；坏 JSON / 结构不符 → removeItem + 回退空文件。
  */
 export function readPluginConfig(pluginId: string): PluginConfigFile {
   const key = storageKey(pluginId)
@@ -62,7 +53,7 @@ export function readPluginConfig(pluginId: string): PluginConfigFile {
     if (raw === null) return emptyConfigFile()
     parsed = JSON.parse(raw)
   } catch {
-    // 坏 JSON：删除坏文件并回退默认
+    // 坏 JSON：删文件并回退默认
     localStorage.removeItem(key)
     return emptyConfigFile()
   }
@@ -79,16 +70,9 @@ export function writePluginConfig(pluginId: string, cfg: PluginConfigFile): void
 }
 
 /**
- * 一次性存量迁移：旧版把插件快捷键覆盖混存在 aidea-shortcuts（`${pluginId}:${actionId}` 条目）。
- * 处理路径：
- * 1. 读 aidea-shortcuts（解析失败 / 结构不符按空处理）；
- * 2. 含 ':' 的 key 按首个 ':' 拆为 pluginId / actionId（pluginId 为空的非法 key 留在裁剪集），
- *    合并写入各 `aidea-plugin-config.<pluginId>.shortcuts`——读-改-写：保留该插件文件
- *    已有 shortcuts 条目，迁移值优先；
- * 3. aidea-shortcuts 写回不含 ':' 条目的裁剪版（仅剩内置覆盖；坏 JSON 场景写回空对象自愈）；
- *    旧文件不存在时不写回（不凭空创建空文件）。
- * 纯 localStorage 层操作，须在 shortcuts store 的覆盖读取（useStorage）与 validate（丢规则）
- * 之前调用，否则迁移前 validate 的丢弃规则会误删存量 / 残留内存导致写回污染。
+ * 一次性存量迁移：把旧混存在 aidea-shortcuts（`${pluginId}:${actionId}` 条目）的插件覆盖
+ * 搬入各插件文件，aidea-shortcuts 写回仅含内置覆盖的裁剪版（坏 JSON 场景写回空对象）。
+ * 须在 shortcuts store 的覆盖读取与 validate 之前调用，否则 validate 丢弃规则会误删存量。
  */
 export function migrateShortcutOverrides(): void {
   // 1. 读旧混存（解析失败 / 结构不符按空处理）

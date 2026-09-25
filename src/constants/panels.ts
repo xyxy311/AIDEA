@@ -14,10 +14,7 @@ import PresetManagerPanel from '@/components/panels/PresetManagerPanel.vue'
 import TagsPanel from '@/components/panels/TagsPanel.vue'
 import PropertyPanel from '@/components/panels/PropertyPanel.vue'
 
-/**
- * 引用定义图标（#）。
- * ionicons5 无 hash 图标，用内联 SVG（stroke=currentColor，可随主题/激活态着色）。
- */
+/** 引用定义图标（#）。ionicons5 无 hash 图标，用内联 SVG（stroke=currentColor 随主题着色）。 */
 const HashIcon = defineComponent({
   name: 'HashIcon',
   render() {
@@ -43,18 +40,9 @@ const HashIcon = defineComponent({
 })
 
 /**
- * 全量面板品类表（单一数据源）
- *
- * 所有面板地位等价，仅在布局层决定放左侧还是右侧。本表只描述「面板是什么」，
- * 不绑定任何布局区：
- * - id：面板标识
- * - titleKey：标题 i18n key（经 t() 读取显示文案）
- * - icon：活动栏 / 面板标题栏共用的图标（单一来源）
- * - component：面板内容组件（纯内容，无自带 header）
- * - defaultPlacement：默认放置侧（'left' 活动栏单面板区 / 'right' 多面板 dock）
- *
- * 新增面板只需在此登记，活动栏图标、左侧面板区、右侧 dock、左右互通自动生效。
- * 面板归属 / 顺序 / 激活等布局状态由 layout store 管理，不在此持久化。
+ * 全量面板品类表（单一数据源）：只描述「面板是什么」，不绑定布局区。
+ * 新增面板只需在此登记，活动栏图标、左右面板区、dock、左右互通自动生效；
+ * 归属/顺序/激活等布局状态由 layout store 管理。
  */
 export type PanelId = 'nodeTree' | 'references' | 'search' | 'presets' | 'tags' | 'property'
 

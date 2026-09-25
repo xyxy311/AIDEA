@@ -1,12 +1,7 @@
 /**
- * 插件系统：共享数据与配置契约（纯类型，不含插件实现）。
- *
- * 说明：插件侧的类型（PluginApi 分类、PluginContext / PluginAdapter / AideaPlugin）
- * 不再在此手写——它们过度冗余且与实现重复。分类 api 的接口类型**从实现派生**
- * （`ReturnType<typeof createXxxApi>`），并集中在 `src/plugin/api/`；插件运行时契约定
- * 在稳定壳 `src/plugin/adapter.ts`。本文件只保留**无依赖的共享快照 / 配置形状**：
- * - `SDK_VERSION`、`PluginManifest`
- * - 只读快照（ActiveViewInfo / SelectionInfo / TreeVisitInfo / ViewStats / ProjectStats）
+ * 插件系统共享数据与配置契约（纯类型，不含插件实现）。
+ * 插件侧 API 类型从实现派生并集中在 src/plugin/api/，运行时契约在 src/plugin/adapter.ts；
+ * 本文件只保留无依赖的共享快照/配置形状。
  */
 import type { WhiteboardNode } from './node'
 

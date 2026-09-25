@@ -15,39 +15,10 @@ import {
 } from '@/utils/grid'
 
 /**
- * 网格模式 - 键盘交互状态机（网格特有语义）
- *
- * 职责：在网格模式下注册 window keydown/keyup，实现"活动网格（焦点）"相关操作。
- * 只承载逻辑与状态，渲染（网格线、活动格高亮、临时连线）由 CanvasStage 后续消费
- * （通过本 composable 暴露的 computed/ref：gridTempConn / isGridConnecting）。
- *
- * 节点级动作已上移为 useKeyboardShortcuts 的锁定绑定，本 composable 不再承载：
- * - 方向键移动选中节点 → 快捷键层 arrowMove*（useActiveView.moveSelectedNodesByArrow）
- * - Enter 编辑选中节点 → 快捷键层 editSelected
- * - Esc 清空选中 → 快捷键层 escape（clearSelection）
- *
- * 本 composable 只承载网格特有语义：
- * - 活动网格光标移动（方向键 ±G）
- * - Ctrl+方向键最近节点导航（ctrlDirection）
- * - Shift 连线预览（startGridConnection / releaseGridConnection / cancelGridConnection）
- * - 焦点处建节点 / 命中仅选中（handleEnter，仅无选中时）
- *
- * 触发条件（守卫）：
- * - 仅主视图（view.type === 'main'）启用
- * - 当前视图开启网格模式（view.gridMode）
- * - 是当前活动视图（project.activeViewId === viewId）
- * - 焦点不在输入框 / 文本域（e.target instanceof HTMLInputElement/HTMLTextAreaElement）
- * - 未处于文本编辑（view.editingNodeId === null）
- *
- * 独占 / 放行事件顺序契约（与 useKeyboardShortcuts 协作）：
- * - Vue 子组件 onMounted 先于父组件触发：CanvasStage（子）的网格监听先于
- *   AppShell（父）挂载的快捷键监听执行。
- * - 本层调用 stopImmediatePropagation = 独占该键（快捷键层收不到）；
- *   不调用 = 放行给快捷键层（如非预览 Esc 清选中、有选中 Enter 进编辑、
- *   无修饰方向键的节点移动——本层只移动活动网格）。
- * - 不接管：Delete/Backspace、1-9、T+1-9、Ctrl+C/V 等（照常放行给快捷键层）。
- *
- * @param viewId - 视图 ID（仅主视图启用，调用方传 'main'）
+ * 网格模式键盘状态机：注册 window keydown/keyup，承载活动网格（焦点）移动、
+ * Ctrl+方向键最近节点导航、Shift 连线预览与焦点建节点。仅主视图 + 开启网格 + 活动视图生效。
+ * 节点级动作（方向键移动/Enter 编辑/Esc 清选）已上移给快捷键层；本层与快捷键层以
+ * stopImmediatePropagation 表"独占"、否则放行，事件顺序依赖子组件 onMounted 先于父级。
  */
 export function useGridMode(viewId: string) {
   const view = useViewStore(viewId)

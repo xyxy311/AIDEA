@@ -6,14 +6,8 @@ import { deepClone } from '@/utils/command'
 const KEY_PREFIX = /^[^:]+:/
 
 /**
- * additions Store —— 项目级插件扩展数据的单一数据源
- *
- * 设计要点：
- * - 顶层键值对（归一化完整键 `pluginId:key`），值与节点/连线完全隔离。
- * - 用 reactive(Map) 沿用 nodeStore 惯例，保持深度响应式。
- * - `applyValue` 是 history undo/redo 直接调用的底层写入：
- *   只改数据、**不经命令层、不入栈、不标 dirty**（由 pushCommand 完成）。
- * - 写操作唯一入口在 api（additions.set/remove 经 useHistoryStore().pushCommand 入栈）。
+ * additions Store —— 项目级插件扩展数据的单一数据源（顶层键 `${pluginId}:key`）。
+ * applyValue 为 history undo/redo 底层写入：只改数据，不经命令层、不入栈、不标 dirty。
  */
 export const useAdditionsStore = defineStore('additions', () => {
   // ── State ──

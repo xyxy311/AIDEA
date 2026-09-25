@@ -1,15 +1,8 @@
 <script setup lang="ts">
 /**
- * ReferencesPanel - 引用面板（左侧活动栏面板之一）
- *
- * 只展示所有可引用节点（text 以 `#` 开头、定义过引用名的节点）：
- * - 显示用 `#名`（# = 引用定义符号）
- * - 单击 → 进入该节点子视图（查看其子级）
- * - 双击 → 行内重命名（编辑首行，保留 `#` 定义符号与正文，含重名校验）
- * - 每行删除按钮 + 确认 → 递归删除该节点及其子树
- *
- * 语义澄清：#A 表示节点 A 可被引用；@A 表示在另一节点中引用 A。
- * 数据源：nodeStore.referenceableNodes()（派生索引，按引用名字典序排序）。
+ * ReferencesPanel - 引用面板：展示所有可引用节点（text 以 `#` 开头）。
+ * 单击进入其子视图、双击行内重命名（保留 # 与正文）需含重名校验、行删除递归删节点。
+ * 语义：#A 表示 A 可被引用；@A 表示在另一节点中引用 A。数据源 nodeStore.referenceableNodes()。
  */
 import { ref, computed, nextTick } from 'vue'
 import { NButton, NInput, NScrollbar, NPopconfirm, NEmpty } from 'naive-ui'
@@ -26,13 +19,13 @@ const nodeStore = useNodeStore()
 const { deleteNodeRecursive, renameNode, rootViewId } = useNodeTree()
 const message = useMessage()
 
-/** 所有可引用节点（引用名 -> 节点），按引用名排序 */
+/** 所有可引用节点（按引用名排序） */
 const refs = computed(() => nodeStore.referenceableNodes())
 
 // ── 行内重命名状态 ──
 const editingNodeId = ref<string | null>(null)
 const renameText = ref('')
-/** 非首行正文（编辑第一行时暂存，保存时拼回，避免数据丢失） */
+/** 非首行正文（编辑第一行时暂存，保存时拼回） */
 const pendingBody = ref('')
 
 function handleSwitch(nodeId: string): void {
@@ -76,11 +69,7 @@ function cancelRename(): void {
   editingNodeId.value = null
 }
 
-/**
- * 引用名首行中 `#名` 之后的剩余部分。
- * 语义：text 以 `#` 开头，`#` 后首行 trim 即为 name（extractReferenceName 语义），
- * 因此 `#名` 在首行开头；slice(1 + name.length) 即得剩余。空串表示无剩余、不渲染。
- */
+/** 首行 `#名` 之后的剩余部分（name 为 extractReferenceName 语义；空串不渲染） */
 function refNameSuffix(nodeId: string, name: string): string {
   const firstLine = (nodeStore.getNode(nodeId)?.text ?? '').split('\n')[0].trim()
   return firstLine.slice(1 + name.length)
@@ -103,7 +92,7 @@ function refNameSuffix(nodeId: string, name: string): string {
           @click="handleSwitch(ref.nodeId)"
           @dblclick.stop="handleDblClick(ref.nodeId)"
         >
-          <!-- 编辑态：仍用 NInput 替换整行内容 -->
+          <!-- 编辑态：NInput 替换整行 -->
           <NInput
             v-if="editingNodeId === ref.nodeId"
             v-model:value="renameText"
@@ -114,12 +103,10 @@ function refNameSuffix(nodeId: string, name: string): string {
             @keydown.enter.prevent="finishRename"
             @keydown.escape.prevent="cancelRename"
           />
-          <!-- 展示态：NodeItem 渲染标题 + 标签 + 路径（行内省略、含悬停提示） -->
+          <!-- 展示态：NodeItem 渲染标题 + 标签 + 路径 -->
           <NodeItem v-else :node="nodeStore.getNode(ref.nodeId)!">
             <template #title>
-              <!-- 引用名 `#名` 主色高亮（同画布语义） -->
               <span class="ref-name-hi">#{{ ref.name }}</span>
-              <!-- `#名` 之后的正文剩余部分（无则省略） -->
               <span v-if="refNameSuffix(ref.nodeId, ref.name)">{{ refNameSuffix(ref.nodeId, ref.name) }}</span>
             </template>
           </NodeItem>

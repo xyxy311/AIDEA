@@ -1,3 +1,4 @@
+// composables 统一出口：聚合画布事件/导航/节点/命令等可复用逻辑
 export {
   useStageSize,
   registerStageContainer,

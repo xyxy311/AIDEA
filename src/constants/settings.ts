@@ -11,14 +11,8 @@ import ShortcutsSection from '@/components/settings/ShortcutsSection.vue'
 import PluginsSection from '@/components/settings/PluginsSection.vue'
 
 /**
- * 内置设置分类品类表（单一数据源）
- *
- * 与 PANEL_CATALOG / TOP_BAR_CATALOG 同角色：只描述「分类是什么」，
- * 由 uiRegistry store 在初始化时 seed 进统一登记表；插件设置栏目经
- * 适配层注册进同一张表（key = `${pluginId}:${id}`）。
- *
- * 新增设置分类只需在此登记 + 提供对应 Section 组件（纯内容，import settings-shared.css），
- * SettingsModal 左侧导航与右侧内容区自动生效。
+ * 内置设置分类品类表（单一数据源）：只描述「分类是什么」，由 uiRegistry 初始化时 seed 进登记表，
+ * 插件栏目经适配层注册（key = `${pluginId}:${id}`）。新增分类只需在此登记 + 提供 Section 组件。
  */
 
 /** 内置设置分类 id */

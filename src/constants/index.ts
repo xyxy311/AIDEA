@@ -1,3 +1,4 @@
+// 画布与数据层设计 token：节点尺寸/内边距/网格、占位与缩放、连线样式、预设样式、内联视图与标签胶囊尺寸。
 import type { NodeStyle, LineStyle, NodePresetStyle, ConnectionPresetStyle } from '@/types'
 
 // ── 节点默认尺寸 ──
@@ -92,9 +93,7 @@ export const DEFAULT_CONNECTION_DIRECTED = true
 export const CONNECTION_MAX_STROKE_WIDTH = 10
 
 /**
- * 线型选项（用于 UI 下拉）。
- * labelKey 为 i18n key：消费处经 t() 翻译（须包一层 computed 保证切语言热更新），
- * 常量本身不落中文文案。
+ * 线型下拉选项，labelKey 经 t() 翻译，不落中文文案。
  */
 export const LINE_STYLE_OPTIONS: { labelKey: string; value: LineStyle }[] = [
   { labelKey: 'connection.lineStyleSolid', value: 'solid' },
@@ -144,11 +143,7 @@ export const BUILTIN_PRESET_GROUP_ID: string = 'builtin'
 /** 内置保留分组名称的 i18n key（仅 store 初始化建组时经 t() 固化为数据文本） */
 export const BUILTIN_PRESET_GROUP_KEY: string = 'presets.groupBuiltin'
 
-/**
- * 默认节点预设（不含 id/type/groupId/name，由 store 初始化时分配 id 并归入内置分组）。
- * nameKey 为 i18n key：仅初始化时机经 t(nameKey) 固化为当前语言文本写入数据，
- * 已持久化的旧数据不追溯重译（有意行为）。
- */
+/** 默认节点预设（不含 id/type/groupId/name，store 初始化时分配 id 并归入内置分组）；nameKey 仅初始化时经 t() 固化为当前语言文本 */
 export const DEFAULT_NODE_PRESETS: (Omit<NodePresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
   { nameKey: 'presets.nodeDefault', borderColor: '#7d7d7dff' },
   { nameKey: 'presets.nodeBlue', borderColor: '#3b82f6' },
@@ -159,10 +154,7 @@ export const DEFAULT_NODE_PRESETS: (Omit<NodePresetStyle, 'id' | 'type' | 'group
   { nameKey: 'presets.nodePink', borderColor: '#ec4899' },
 ]
 
-/**
- * 默认连线预设（不含 id/type/groupId/name，由 store 初始化时分配 id 并归入内置分组）。
- * nameKey 语义同 DEFAULT_NODE_PRESETS。
- */
+/** 默认连线预设（同 DEFAULT_NODE_PRESETS，store 初始化时分配 id 并归入内置分组） */
 export const DEFAULT_CONNECTION_PRESETS: (Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
   { nameKey: 'presets.connDefault', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
   { nameKey: 'presets.connBlueArrow', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },

@@ -1,17 +1,7 @@
 <script setup lang="ts">
 /**
- * WhiteboardNode - 白板节点组件
- *
- * 单个可调整大小的白板节点，使用 vue-konva 的 v-group + v-rect + 多片段 v-text 组合渲染。
- *
- * 文本渲染：将节点文本解析为多行多片段（`@引用` 片段高亮、下划线、可点击跳转），
- * 普通文本片段 `listening:false` 不拦截节点拖动/选中。
- *
- * 交互：
- * - 选中与拖动由 canvas 层的 useNodeDragging 统一处理
- * - 双击 → 开始文本编辑（emit dblclick）
- * - 点击引用片段 → 跳转到被引用节点（emit referenceClick）
- * - Transformer → 调整大小（transformend 时同步尺寸到 store）
+ * WhiteboardNode - 白板节点组件：用 v-group + v-rect + 多片段 v-text 渲染，文本按 `@引用` 分段高亮，
+ * 双击编辑、点击引用跳转、右下角渲染标签胶囊。
  */
 import { ref, computed } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
@@ -51,7 +41,6 @@ const props = defineProps<{
 // ── Emits ──
 const emit = defineEmits<{
   dblclick: [nodeId: string]
-  /** 点击引用片段时触发，携带被引用节点 ID（由 CanvasStage 处理跳转） */
   referenceClick: [targetNodeId: string]
 }>()
 
@@ -65,13 +54,10 @@ const rectRef = ref<VueKonvaRef<Konva.Rect> | null>(null)
 /** 节点组引用（供父组件选中时调用 moveToTop 调整层级） */
 const groupRef = ref<VueKonvaRef<Konva.Group> | null>(null)
 
-// ── Computed: 从 reactive Map 直接获取节点代理 ──
-// reactive Map 的 get 返回 reactive 代理，属性变化自动触发下游 computed
+// 从 reactive Map 获取节点代理，属性变化自动触发下游 computed
 const node = computed(() => nodeStore.getNode(props.nodeId))
 
 // ── Konva 节点配置 ──
-
-/** 节点组的拖拽配置 */
 const groupConfig = {
   name: props.nodeId,
 }
@@ -94,19 +80,14 @@ const rectConfig = computed(() => {
 })
 
 /**
- * 文本布局：把节点文本解析并布局为多行多片段，叠加 padding 与垂直居中偏移，
- * 产出可直接给 v-text 用的绝对坐标（相对 group）。
- *
- * 每行内片段 x 由"行起点 + 该片段前所有片段宽度之和"累加计算。
- *
- * 当节点带标签时，为底部标签胶囊预留空间（胶囊高度 + 下间距），
- * 使文本垂直居中于胶囊上方的可用区域，避免与胶囊重叠。
+ * 文本布局：解析多行多片段并叠加 padding 与垂直居中偏移，产出相对 group 的绝对坐标。
+ * 每行片段 x 由行起点 + 该片段前所有片段宽度之和累加；带标签时底部预留胶囊空间。
  */
 const layoutLines = computed(() => {
   const n = node.value
   if (!n) return []
   const isPlaceholder = !n.text
-  // 占位符不解析引用（整体作为普通文本）；文案经 t() 实时翻译（computed 内，切语言热更新）
+  // 占位符不解析引用（整体作普通文本），文案经 t() 实时翻译
   const paragraphs = isPlaceholder
     ? [[{ type: 'text' as const, text: t(PLACEHOLDER_TEXT_KEY) }]]
     : parseReferenceSegments(n.text)
@@ -114,7 +95,7 @@ const layoutLines = computed(() => {
   const fontSize = DEFAULT_NODE_STYLE.fontSize
   const fontFamily = DEFAULT_NODE_STYLE.fontFamily
   const lines = layoutReferenceText(paragraphs, contentWidth, fontSize, fontFamily, NODE_LINE_HEIGHT)
-  // 垂直居中：总高度，起始 y = (可用高度 - 总高度)/2（至少留 padding）
+  // 垂直居中：起始 y = (可用高度 - 总高度)/2（至少留 padding）
   const totalHeight = lines.length * (fontSize * NODE_LINE_HEIGHT)
   // 底部预留：有标签时让出胶囊高度 + 与文本的间距
   const reservedBottom = hasTags.value
@@ -136,11 +117,7 @@ const layoutLines = computed(() => {
 })
 
 // ── 标签（节点右下角胶囊） ──
-
-/**
- * 节点有效标签（悬空引用容错）：node.tagIds 中可能含已删除标签的 id
- * （undo 跨删标签边界场景），渲染时用 tagsStore.getTag 过滤 undefined。
- */
+/** 节点有效标签：过滤 tagIds 中已删除标签的 id（undo 跨删标签边界场景） */
 const nodeTags = computed(() => {
   const tagIds = node.value?.tagIds ?? []
   return tagIds.map((id) => tagsStore.getTag(id)).filter((t): t is NonNullable<typeof t> => !!t)
@@ -180,13 +157,10 @@ const capsuleLayout = computed(() => {
 
   const capsuleY = n.height - NODE_PADDING - TAG_CAPSULE_HEIGHT
 
-  // 溢出计数会改变溢出胶囊宽度 → 影响可放置标签数 → 又反过来影响溢出计数，
-  // 迭代至稳定（溢出计数单调不减，收敛于 total 上限）。
-  // 保持右对齐、最多显示 TAG_CAPSULE_MAX 个标签 + 可选溢出 "+M" 胶囊。
   let overflow = 0
   let laid: CapsulePiece[] = []
   for (;;) {
-    // 从右往左：先放溢出胶囊（占最右），其左侧空间放标签
+    // 溢出计数改变溢出胶囊宽度 → 影响可放置标签数 → 又反哺计数，迭代至稳定
     let cursorX = n.width - NODE_PADDING
     const temp: CapsulePiece[] = []
     if (overflow > 0) {
@@ -208,7 +182,7 @@ const capsuleLayout = computed(() => {
       cursorX = x - TAG_CAPSULE_GAP
       placedCount++
     }
-    // 溢出数 = 总标签数 - 实际放置的标签胶囊数（不含溢出胶囊本身）
+    // 溢出数 = 总标签数 - 实际放置数（不含溢出胶囊）
     const newOverflow = nodeTags.value.length - placedCount
     if (newOverflow === overflow) {
       laid = temp
@@ -216,7 +190,7 @@ const capsuleLayout = computed(() => {
     }
     overflow = newOverflow
   }
-  // 从右往左收集，反转回从左到右（渲染顺序不影响，仅为可读性）
+  // 从右往左收集，反转回从左到右
   return laid.reverse()
 })
 
@@ -238,21 +212,21 @@ function buildSegConfig(item: { seg: Segment; x: number }, y: number) {
     fontSize,
     fontFamily,
     lineHeight: NODE_LINE_HEIGHT,
-    // 单片段不换行（布局已拆好），禁用 wrap 避免重复换行
+    // 单片段不换行（布局已拆好），禁用 wrap
     wrap: 'none' as const,
     fill: isPlaceholder
       ? PLACEHOLDER_TEXT_COLOR
       : isRef
         ? refColor.value
         : themeStore.scheme.canvas.nodeTextColor,
-    // 引用片段加下划线（Konva Text 支持 textDecoration）
+    // 引用片段加下划线
     textDecoration: isRef ? ('underline' as const) : ('none' as const),
-    // 仅引用片段响应事件，普通文本穿透（避免影响节点拖动/选中）
+    // 仅引用片段响应事件，普通文本穿透（不拦截节点拖动/选中）
     listening: isRef,
   }
 }
 
-/** 单个标签胶囊的 Konva.Rect 配置（胶囊为纯装饰，不响应事件） */
+/** 标签胶囊 Konva.Rect 配置（纯装饰，不响应事件） */
 function buildCapsuleRectConfig(piece: (typeof capsuleLayout.value)[number]) {
   return {
     x: piece.x,
@@ -266,7 +240,7 @@ function buildCapsuleRectConfig(piece: (typeof capsuleLayout.value)[number]) {
   }
 }
 
-/** 单个标签胶囊的 Konva.Text 配置（文字对比色由背景亮度决定） */
+/** 标签胶囊 Konva.Text 配置（文字对比色由背景亮度决定） */
 function buildCapsuleTextConfig(piece: (typeof capsuleLayout.value)[number]) {
   return {
     text: piece.text,
@@ -278,7 +252,6 @@ function buildCapsuleTextConfig(piece: (typeof capsuleLayout.value)[number]) {
       piece.type === 'tag'
         ? getContrastTextColor(piece.color ?? '#ffffff')
         : overflowText.value,
-    // 胶囊文字不响应事件，避免拦截节点拖动/选中
     listening: false,
   }
 }

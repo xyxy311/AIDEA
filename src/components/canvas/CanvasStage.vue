@@ -1,18 +1,7 @@
 <script setup lang="ts">
 /**
- * CanvasStage - 通用画布组件
- *
- * 核心集成组件，负责：
- * 1. 渲染 Konva Stage 和所有节点 / 连线
- * 2. 管理内联文本编辑器的生命周期（editingNodeId 状态）
- * 3. 连接所有 composables 到 Store
- * 4. 编排节点、连线与编辑器之间的交互
- *
- * 通用化设计：通过 props.viewId 绑定任意视图实例（主视图 'main' 或内联视图）。
- * 主视图 / 内联视图的差异由 props（allowExpand / showOverviewMap）控制，组件内部无特判。
- *
- * 数据源：nodeStore（全局节点树 + 连线）+ viewStore（props.viewId 对应视图的视口/选中/编辑）。
- * 当前视图渲染的是 view.viewedNodeId 节点的直接子节点与它们之间的连线。
+ * CanvasStage - 通用画布组件。渲染 Konva Stage 与节点/连线，连接各 composables 到 Store，
+ * 管理文本编辑器生命周期。经 props.viewId 绑定任一视图（主/内联），内部无特判。
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useViewStore } from '@/stores/view'
@@ -56,15 +45,14 @@ import type { ContextMenuItem } from '@/composables/useContextMenu'
 
 // ── Props ──
 const props = defineProps<{
-  /** 此画布绑定的视图 ID（'main' 为主视图，其他为内联视图） */
+  /** 视图 ID（'main' 主视图，其他内联视图） */
   viewId: string
-  /** 是否允许"展开/收起"右键菜单（主视图 true，内联视图 false） */
+  /** 是否允许"展开/收起"右键菜单（仅主视图） */
   allowExpand?: boolean
-  /** 是否显示右下角小地图（主视图 true，内联视图 false） */
+  /** 是否显示右下角小地图（仅主视图） */
   showOverviewMap?: boolean
-  /** 画布宽度（内联视图用容器尺寸；不传则用窗口尺寸） */
+  /** 画布宽/高（内联视图用容器尺寸；不传则用窗口尺寸） */
   width?: number
-  /** 画布高度（内联视图用容器尺寸；不传则用窗口尺寸） */
   height?: number
 }>()
 
@@ -93,10 +81,8 @@ const conn = useConnectionCreation(props.viewId)
 // ── Stage 容器引用（用于 NodeTextEditor 坐标转换） ──
 const stageContainerRef = ref<HTMLDivElement | null>(null)
 
-// 挂载/卸载时设置/清理 containerEl（供跨视图拖拽坐标映射）
-// 主视图（未传 width props）：注册真实容器尺寸供 useStageSize 全局共享——
-// 画布实际宽度受侧边栏挤压，按窗口估算会导致小地图视口指示、网格边界、
-// 新增节点定位等整体偏移（左缘对齐、右缘超出）
+// 主视图注册真实容器尺寸供 useStageSize 全局共享：
+// 画布实际宽度受侧边栏挤压，按窗口估算会导致小地图视口指示、网格边界、新增节点定位偏移
 onMounted(() => {
   view.containerEl = stageContainerRef.value
   if (props.width == null && stageContainerRef.value) {
@@ -130,10 +116,8 @@ const grid = props.viewId === 'main' ? useGridMode('main') : null
 // ── 网格层（仅主视图启用）──
 
 /**
- * 网格线：仅绘制视口可见范围内的网格线（世界坐标）。
- * 每条线为 [x1, y1, x2, y2]，供 v-line 的 points 使用。
- * 随 viewport / 缩放 / gridMode 变化重绘。
- * 仅主视图启用：非主视图直接返回空（不绘制）。
+ * 网格线：仅绘制视口可见范围内的网格线（世界坐标），随 viewport/缩放/gridMode 重绘。
+ * 仅主视图启用，非主视图返回空。
  */
 const gridLines = computed(() => {
   const vert: number[][] = []

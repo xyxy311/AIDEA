@@ -1,12 +1,6 @@
 /**
- * 快捷键注册表元数据
- *
- * - CUSTOM_SHORTCUTS：可被用户自定义的动作（id / labelKey / scope / 默认绑定）
- * - RESERVED_CHORDS：锁定键占用的 chord（OS 级、删除、Escape、方向键、Enter、数字序号），
- *   不可被自定义动作占用。
- *
- * 键名一律为 utils/shortcuts.ts 的规范化字符串（'mod+s' / 'a' / 'tab' …）。
- * 注意：Delete 键在 e.key 下既可能是 'Delete' 也可能是 'Backspace'，故两者都加入锁定集合。
+ * 快捷键注册表元数据：CUSTOM_SHORTCUTS 为可自定义动作，RESERVED_CHORDS 为锁定 key（不可占用）。
+ * 键名为 utils/shortcuts.ts 的规范化字符串；Delete 键在 e.key 可能是 'Delete' 或 'Backspace'，故都锁定。
  */
 import type { ShortcutScope } from '@/types/shortcuts'
 
@@ -42,12 +36,8 @@ export const CUSTOM_SHORTCUT_IDS: string[] = CUSTOM_SHORTCUTS.map((s) => s.id)
 export const DEFAULT_SEQ_MOD_KEY = 't'
 
 /**
- * 锁定键占用的 chord，不可被自定义动作占用。
- * 含：撤销/重做、复制/剪切/粘贴、删除键（Delete/Backspace）、Escape、
- *     方向键（移动选中节点）、Enter（编辑选中节点）、数字序号 1-9。
- * 注意：字母 `d` 的删除已作为可自定义动作 deleteSelected（默认 d），不在锁定集合内。
- * 注意：方向键 chord 为 utils/shortcuts.ts 规范化后的 'up'/'down'/'left'/'right'
- *      （KEY_ALIAS 将 ArrowUp→'up' 等），而非 'arrowup' 字面。
+ * 锁定键占用的 chord，不可被自定义动作占用（撤销/重做、剪贴板、删除键、Escape、方向键、Enter、数字 1-9）。
+ * 字母 `d` 的可自定义删除不在锁定集合内；方向键为规范化后的 'up'/'down'/'left'/'right'。
  */
 export const RESERVED_CHORDS: string[] = [
   // 撤销 / 重做

@@ -12,9 +12,6 @@ import {
 } from '../../utils/grid'
 import type { WhiteboardNode } from '../../types'
 
-// ===================================================================
-// snapPosition / snapSize（取整语义）
-// ===================================================================
 describe('snapPosition', () => {
   it('四舍五入到 100 的倍数', () => {
     expect(snapPosition(0)).toBe(0)
@@ -75,9 +72,6 @@ describe('snapSize', () => {
   })
 })
 
-// ===================================================================
-// worldToGrid / gridToWorld / cellCenterToWorld
-// ===================================================================
 describe('worldToGrid / gridToWorld', () => {
   it('worldToGrid 向下取整得到单元索引', () => {
     expect(worldToGrid(0)).toBe(0)
@@ -109,9 +103,6 @@ describe('cellCenterToWorld', () => {
   })
 })
 
-// ===================================================================
-// findNodeAtCell
-// ===================================================================
 const rectNodes = [
   { id: 'a', x: 100, y: 100, width: 200, height: 100 },
   { id: 'b', x: 400, y: 300, width: 100, height: 100 },
@@ -141,9 +132,6 @@ describe('findNodeAtCell', () => {
   })
 })
 
-// ===================================================================
-// nearestNodeInDirection
-// ===================================================================
 function makeNode(partial: Partial<WhiteboardNode> & { id: string }): WhiteboardNode {
   return {
     text: '',

@@ -29,15 +29,8 @@ export interface FlatNodeItem {
 }
 
 /**
- * 节点树 composable
- *
- * 基于 nodeStore 的 parentId 构建节点树（替代原白板树）：
- * - 根节点（项目节点）无父级，不可删除
- * - 子节点 = parentId 指向当前节点的节点（通过 nodeStore 派生索引查询）
- * - 任意节点均可"进入"查看其子级（无需关联白板标记）
- *
- * 提供：树构建、扁平化（带展开状态）、新建子节点、递归删除、重命名。
- * 展开状态存于 project store（全局导航态）。
+ * 节点树 composable：基于 nodeStore 的 parentId 构建树（根=项目节点不可删）。
+ * 提供树构建、扁平化（带展开态，存于 project store）、新建子节点、递归删除、重命名。
  */
 export function useNodeTree() {
   const project = useProjectStore()

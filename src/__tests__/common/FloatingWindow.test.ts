@@ -11,11 +11,7 @@ function mountWindow(props: { show: boolean; title?: string }) {
   })
 }
 
-/**
- * FloatingWindow（components/common 通用窗口壳）挂载冒烟：
- * 纯 props 驱动（show / title），无 store 依赖——
- * 断言显隐渲染、把手条与标题、拖动偏移更新与 show 卸载即重置。
- */
+/** FloatingWindow 通用窗口壳冒烟：props 驱动显隐、把手条/标题、拖拽偏移与卸载重置 */
 describe('FloatingWindow（通用浮动窗口壳）挂载冒烟', () => {
   it('show=false 不渲染窗口；show=true 渲染窗口 + 把手条 + 标题文本', () => {
     const hidden = mountWindow({ show: false, title: '演示浮窗' })

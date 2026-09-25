@@ -1,10 +1,6 @@
 /**
- * api/view.ts —— 视图域：活动视图 / 选中 / 视图切换 + 视图统计
- * 接口类型由实现派生（`ViewApi = ReturnType<typeof createViewApi>`）。
- *
- * 本文件全部为**视图状态操作**（不入历史、不带 user），直接委托 view store。
- * - 内联视图状态仅主视图持有，故内联视图操作（add / remove / update）统一走 `mainView()`。
- * - 返回一律为结构化快照（普通对象 / 字符串 / 数字），不暴露内部 reactive 引用。
+ * api/view.ts —— 视图域：活动视图 / 选中 / 视图切换 + 视图统计。
+ * 全为视图状态操作（不入历史、不带 user），直接委托 view store；返回结构化快照，不暴露 reactive 引用。
  */
 import type { ActiveViewInfo, SelectionInfo, ViewStats } from '@/types/plugin'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'

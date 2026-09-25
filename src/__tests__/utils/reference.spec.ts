@@ -8,9 +8,6 @@ import {
   type LayoutLine,
 } from '../../utils/reference'
 
-// ===================================================================
-// extractReferenceName
-// ===================================================================
 describe('extractReferenceName', () => {
   it('等号开头提取第一行', () => {
     expect(extractReferenceName('#需求')).toBe('需求')
@@ -41,9 +38,6 @@ describe('extractReferenceName', () => {
   })
 })
 
-// ===================================================================
-// parseReferenceSegments
-// ===================================================================
 describe('parseReferenceSegments', () => {
   it('@需求 其他 -> ref + text', () => {
     const result = parseReferenceSegments('@需求 其他')
@@ -100,9 +94,6 @@ describe('parseReferenceSegments', () => {
   })
 })
 
-// ===================================================================
-// findReferenceAt
-// ===================================================================
 describe('findReferenceAt', () => {
   it('光标在 @名 末尾', () => {
     expect(findReferenceAt('@需求', 3)).toEqual({ start: 0, name: '需求' })
@@ -129,9 +120,6 @@ describe('findReferenceAt', () => {
   })
 })
 
-// ===================================================================
-// layoutReferenceText
-// ===================================================================
 describe('layoutReferenceText', () => {
   const fontSize = 16
   const fontFamily = 'sans-serif'

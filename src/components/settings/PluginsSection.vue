@@ -1,13 +1,6 @@
 <script setup lang="ts">
 /**
- * PluginsSection — 设置面板「插件」栏目：插件管理（纯内容组件，无 header）
- *
- * 展示已发现插件清单：名称 / 版本 / 作者 / 描述 / 运行时状态（运行中·已安装·错误），
- * 每项提供「启用」开关。启停**仅持久化 → 重启应用生效**（不做动态卸载注册），
- * 开关反映持久化意愿即可。records 随 init 异步逐步填充，直接响应式遍历。
- *
- * M2：目录变更徽标（dirDirty）——由桌面桥推送置位（main watch 检测插件目录），
- * web 形态无桥 → dirDirty 恒 false，徽标永不出现。
+ * PluginsSection — 设置面板「插件」栏目：展示插件清单与运行时状态，启停仅持久化→重启生效。
  */
 import { NEmpty, NSwitch, NTag } from 'naive-ui'
 import { storeToRefs } from 'pinia'
@@ -97,7 +90,7 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
   color: var(--color-text-muted);
 }
 
-/* 目录变更徽标（M2）：风格对齐 .plugin-source 小徽标 */
+/* 目录变更徽标：风格对齐 .plugin-source 小徽标 */
 .plugin-dirty {
   --n-font-size: 11px;
   flex-shrink: 0;

@@ -1,15 +1,7 @@
 <script setup lang="ts">
 /**
- * NodeTreePanel - 节点树面板（左侧活动栏面板之一）
- *
- * 展示节点树结构（基于 nodeStore 的 parentId 构建），支持：
- * - 展开/收起子树
- * - 单击切换活跃视图（查看该节点的子级）
- * - 双击重命名节点（根节点文本即项目名，显示在顶部工具栏，可双击编辑）
- * - 纯图标按钮：在当前活跃视图下新建子节点 / 递归删除当前节点
- * - 逐节点删除（hover 显示）
- *
- * 叶子节点（无子节点且非根）颜色减淡，提示其不可展开。
+ * NodeTreePanel - 节点树面板：基于 parentId 展示节点树，支持展开/收起、单击切换视图、
+ * 双击重命名（根节点文本即项目名）、新建/递归删除，叶子节点颜色减淡。
  */
 import { ref, nextTick, computed, watch } from 'vue'
 import {
@@ -48,10 +40,7 @@ const message = useMessage()
 /** 根节点名称（即项目名，单一数据源） */
 const rootName = computed(() => nodeStore.getNode(rootViewId.value)?.text ?? '')
 
-/**
- * 渲染到列表的节点树：过滤掉根节点（根节点名称已放顶部工具栏），
- * 并把子级深度左移 1，使首层子级从 0 对齐（缩进竖线同步随深度变化，不会错位）。
- */
+/** 列表节点树：过滤根节点（名称在顶部工具栏）并将子级深度左移 1，使首层子级对齐 */
 const treeItems = computed(() =>
   flatTree.value
     .filter((item) => !item.isRoot)
@@ -135,21 +124,14 @@ function cancelRename(): void {
 }
 
 // ── 根节点名称：单击即时切换根视图 / 双击编辑项目名 ──
-//
-// 单击立即切换（与点击其它节点/标签一致、无延迟）。
-// 注意：双击会先触发两次 click，故双击编辑前会先切到根视图（闪切一次）。
-// 受限于「单击即时响应」与「双击编辑」无法在不延时下两全，此处选择即时切换。
+// 双击会先触发两次 click 切到根视图（闪切一次）；「即时响应」与「双击编辑」难两全，此处选即时切换。
 
-/**
- * 单击根节点名称 → 立即切换到项目根节点视图。
- */
+/** 单击根节点名称 → 立即切换到项目根节点视图 */
 function handleRootClick(): void {
   project.switchView(rootViewId.value)
 }
 
-/**
- * 双击根节点名称 → 编辑项目名。
- */
+/** 双击根节点名称 → 编辑项目名 */
 function handleRootDblClick(): void {
   handleDblClick(rootViewId.value, rootName.value)
 }

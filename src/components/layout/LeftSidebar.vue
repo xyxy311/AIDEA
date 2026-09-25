@@ -1,14 +1,8 @@
 <script setup lang="ts">
 /**
- * LeftSidebar - 左侧面板容器（单面板区）
- *
- * 通用面板容器：根据 layout store 的激活面板，渲染对应面板。
- * 面板统一由 DockPanel 外壳包裹（标题栏 / 图标 / 关闭 / 拖拽手柄），
- * 面板内容组件由品类表 PANEL_INDEX 提供，本组件不持有面板业务。
- * - 收起/展开由 layout store 的 activePanelId 驱动（null = 收起）
- * - 关闭按钮（×）= 收起面板区（活动栏图标保留，可随时重新打开）；
- *   「移除到未放置」仅适用于右侧 dock 面板
- * - 拖拽：把手柄拖到右侧 dock 即跨容器移动（dataTransfer 协议见 utils/dock）
+ * LeftSidebar - 左侧面板容器（单面板区）：按 layout store 激活面板渲染对应面板，
+ * 统一由 DockPanel 外壳包裹（标题/图标/关闭/拖拽手柄），内容组件靠品类表提供。
+ * 关闭 = 收起面板区（保留活动栏图标）；把手柄拖到右侧 dock 即跨容器移动。
  */
 import { computed } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
@@ -25,10 +19,10 @@ defineProps<{
 
 const layout = useLayoutStore()
 
-/** 激活面板 id（收起时为 null；可为插件面板 key） */
+/** 激活面板 id（收起时为 null，可为插件面板 key） */
 const activeId = computed(() => layout.activeId)
 
-/** 关闭按钮：收起左侧面板区（保留活动栏图标，面板不会被移除） */
+/** 关闭：收起左侧面板区（活动栏图标保留，面板不移除） */
 function onClose(): void {
   layout.collapse()
 }

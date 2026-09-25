@@ -1,23 +1,6 @@
+// Dock 布局纯函数（delta 模型）：登记表回答"有哪些面板及默认侧"，用户排布只存显式改动，
+// 渲染目录 = deriveDockLayout(登记表, delta) 实时派生；附带统一 HTML5 面板拖拽协议。
 import type { PanelKey } from '@/constants/panels'
-
-/**
- * Dock 布局纯函数（delta 模型）
- *
- * 统一管理「左侧活动栏」与「右侧多面板 dock」的面板归属与顺序。
- *
- * 数据模型（存在性与排布分离）：
- * - 登记表（uiRegistry store）回答「有哪些面板、默认放哪侧」（defaultPlacement）；
- * - 用户排布（本文件的 DockDelta）只存**用户显式改动**：顺序覆盖、跨侧移动、关闭（未放置）、尺寸；
- * - 渲染目录 = deriveDockLayout(登记表, delta) 实时派生，派生结果永不包含未登记 id。
- *
- * 收益：
- * - 新增内置面板 / 插件注册后自动按默认侧出现（无需归一化补齐 / ensurePanel）；
- * - 插件禁用→启用：delta 未清理则位置保留；仅「彻底移除插件」（isKnown false）才清记录；
- * - 恢复默认 = 清空 delta。
- *
- * 兼容性：持久化沿用旧 key（aidea-dock-left / right / sizes）——旧数据存的是
- * 完整顺序列表，按 delta 读取语义等价（完整列表即完整覆盖），无需迁移。
- */
 
 /** 默认高度比例 */
 export const DEFAULT_SIZE = 1
@@ -61,13 +44,7 @@ function parseSeq(raw: unknown, isKnown: (key: string) => boolean): string[] | u
   return out
 }
 
-/**
- * 解析并清洗 dock delta（读取 localStorage 后调用一次）：
- * - 形状不符的字段丢弃；
- * - 序列内未知键（未登记 + 插件前缀不在已发现集合）与重复项过滤（isKnown 由
- *   layout store 组合「登记表 ∪ 已发现插件前缀」提供）；
- * - 尺寸仅保留正数。
- */
+/** 解析并清洗 dock delta（读取 localStorage 后调用一次）：形状不符丢弃、未知/重复键过滤（isKnown）、尺寸仅保留正数。 */
 export function parseDockDelta(raw: unknown, isKnown: (key: string) => boolean): DockDelta {
   if (typeof raw !== 'object' || raw === null) return {}
   const src = raw as Record<string, unknown>
@@ -110,11 +87,8 @@ function orderedUnion(base: string[] | undefined, pool: string[]): string[] {
 }
 
 /**
- * 派生两侧实时目录：
- * - 每个登记面板的归属：rightOrder 命中 → 右；leftOrder 命中 → 左；否则 defaultPlacement
- *   （同现两侧时右优先，与旧归一化语义一致）；
- * - removed 中的面板排除（未放置）；
- * - 顺序：该侧用户顺序（leftOrder / rightOrder）优先，未覆盖的按登记顺序追加。
+ * 派生两侧实时目录：归属按 rightOrder/leftOrder 命中优先于 defaultPlacement（同现时右优先），
+ * removed 中的面板排除；顺序 = 该侧用户顺序优先，未覆盖的按登记顺序追加。
  */
 export function deriveDockLayout(defs: PlacementDef[], delta: DockDelta): DockPlacement {
   const removed = new Set<string>(delta.removed ?? [])
@@ -138,10 +112,7 @@ export function deriveDockLayout(defs: PlacementDef[], delta: DockDelta): DockPl
 
 // ── 顺序纯操作（layout store 写 delta 用）──
 
-/**
- * 序列内换位：把 from 位移动到 to 位（越界钳制；from === to 返回原数组）。
- * 通用工具：dock 面板与顶栏按钮的 reorder 共用。
- */
+/** 序列内换位：把 from 位移动到 to 位（越界钳制；from === to 返回原数组）。dock 面板与顶栏按钮 reorder 共用。 */
 export function reorderSeq<T>(seq: T[], from: number, to: number): T[] {
   if (from === to || from < 0 || from >= seq.length) return seq
   const next = [...seq]

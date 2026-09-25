@@ -15,23 +15,9 @@ import { useUiRegistryStore } from '@/stores/uiRegistry'
 import type { UiPanelEntry, UiTopBarEntry } from '@/stores/uiRegistry'
 
 /**
- * 布局 Store —— 排布层（delta 模型）
- *
- * 职责链：uiRegistry（登记总表：有什么、默认放哪侧）→ 本 store（用户排布 +
- * 持久化）→ 渲染组件（ActivityBar / LeftSidebar / DockContainer / TopBarZone
- * 直读本 store 的派生目录）。
- *
- * delta 持久化：localStorage 只存「用户显式改动」（顺序覆盖 / 跨侧移动 / 关闭 /
- * 尺寸覆盖），不存全量目录——新增内置面板、插件注册后**自动**按默认侧出现在派生
- * 目录里，无需归一化补齐与 ensure* 落位；「恢复默认布局」= 清空 delta。
- * 旧版完整列表数据按 delta 读取语义等价，无需迁移（沿用旧 key）。
- *
- * 插件布局保留：delta 清洗分两段——初始 parse 用「不依赖插件发现集」的谓词（插件
- * 前缀键一律保留，插件装载是异步的，setup 时发现集尚为空）；发现集经
- * setDiscoveredPluginIds 回填（plugin store 在注册 UI 前调用）后再用完整谓词重清洗
- * 并持久化——禁用→启用循环不丢位置；彻底移除插件才清除残留键。
- *
- * 纯状态转换在 utils/dock.ts / utils/topbar.ts（可单测）。
+ * 布局 Store —— 排布层（delta 模型）：uiRegistry（登记总表）→ 本 store（用户排布 + 持久化）→ 渲染组件。
+ * localStorage 只存用户显式改动 delta（清空 = 恢复默认）；初始 parse 用不依赖插件发现集的谓词，
+ * 插件发现集经 setDiscoveredPluginIds 回填后再重清洗（禁用→启用不丢布局）。纯状态转换在 utils/dock.ts / utils/topbar.ts。
  */
 export const useLayoutStore = defineStore('layout', () => {
   // ── 登记总表（内置已 seed；插件注册后派生目录自动更新）──

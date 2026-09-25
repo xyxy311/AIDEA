@@ -1,15 +1,8 @@
 <script setup lang="ts">
 /**
- * ContextMenu - 右键上下文菜单组件
- *
- * 以 position:fixed 定位在视口坐标 (x, y) 处，
- * 超出视口边界时自动翻转方向。
- * 使用 Teleport 渲染到 body 避免被父级 overflow:hidden 裁切。
- *
- * 支持带 children 的父级项展开二级（及更深）子菜单：
- * - 父级项 hover 时在其右侧展开子菜单，子菜单超出视口右/下边缘时向左/上翻转；
- * - 父级项本身点击不触发 select/close，仅子菜单叶子项才 select；
- * - 子菜单通过递归组件渲染，结构上支持任意层级。
+ * ContextMenu - 右键上下文菜单：position:fixed 定位在视口坐标，超出边界自动翻转；
+ * 经 Teleport 到 body 避免被父级 overflow 裁切；父级项 hover 展开任意层子菜单，
+ * 递归组件仅叶子项触发 select/close。
  */
 import {
   ref,
@@ -26,11 +19,8 @@ import type { ContextMenuItem } from '@/composables/useContextMenu'
 // ── Props ──
 const props = defineProps<{
   visible: boolean
-  /** 浏览器视口坐标 clientX */
   x: number
-  /** 浏览器视口坐标 clientY */
   y: number
-  /** 菜单项列表 */
   items: ContextMenuItem[]
 }>()
 
@@ -41,20 +31,14 @@ const emit = defineEmits<{
 }>()
 
 // ── Refs ──
-/** 菜单 DOM 元素引用，用于尺寸测量和外部点击判断 */
+/** 菜单 DOM 元素引用 */
 const menuRef = ref<HTMLElement | null>(null)
 
 /** 翻转后的定位样式 */
 const positionStyle = ref({ left: '0px', top: '0px' })
 
 // ── 事件处理 ──
-
-/**
- * 点击菜单项：
- * - disabled 项不响应；
- * - 有 children 的父级项只负责展开子菜单，不触发选中/关闭；
- * - 叶子项（无 children）才 emit select 和 close。
- */
+/** 点击菜单项：disabled 不响应；父级项只负责展开子菜单，叶子项才 select + close */
 function handleItemClick(item: ContextMenuItem): void {
   if (item.disabled) return
   if (item.children && item.children.length > 0) return
@@ -63,11 +47,7 @@ function handleItemClick(item: ContextMenuItem): void {
 }
 
 /**
- * 边界翻转计算
- *
- * 测量菜单实际尺寸，若超出视口右侧则向左展开（left 对齐右边界），
- * 若超出视口底部则向上展开（top 对齐下边界）。
- * 保留 8px 边距避免贴边。
+ * 边界翻转：测量菜单实际尺寸，超出视口右侧/底部则向左/上展开（保留 8px 边距）。
  */
 function updatePosition(): void {
   if (!menuRef.value) return
@@ -106,9 +86,7 @@ function onDocumentKeyDown(e: KeyboardEvent): void {
 }
 
 // ── 递归子菜单渲染 ──
-// 用 render 函数实现任意层级子菜单（结构上支持更深层级，当前使用到二级）。
-// 子菜单始终挂载但默认隐藏（visibility:hidden），父项 hover 时显示，
-// 这样展开时无需重新挂载，边界翻转测量也只在挂载时进行一次。
+// 子菜单始终挂载但默认 visibility:hidden，父项 hover 时显示（避免切换挂载、仅在挂载时测翻转）。
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 let SubMenu: ReturnType<typeof defineComponent>
@@ -144,14 +122,14 @@ SubMenu = defineComponent({
   name: 'SubMenu',
   props: {
     items: { type: Array as PropType<ContextMenuItem[]>, required: true },
-    /** 是否为最外层列表（最外层不参与子菜单翻转定位） */
+    /** 最外层列表不参与子菜单翻转定位 */
     isRoot: { type: Boolean, default: false },
   },
   setup(subProps) {
     const listRef = ref<HTMLElement | null>(null)
     const flip = ref({ x: false, y: false })
 
-    /** 测量子菜单是否超出视口右/下边缘，超出则向左/上翻转，保持 8px 边距 */
+    /** 测量子菜单是否超出视口右/下边缘，超出则向左/上翻转（8px 边距） */
     function calcFlip(): void {
       const el = listRef.value
       if (!el || subProps.isRoot) return
@@ -182,13 +160,7 @@ SubMenu = defineComponent({
 })
 
 // ── 生命周期与监听 ──
-
-/**
- * 监听 visible / x / y 变化：
- * - visible 变为 true 时，测量并计算翻转后的位置
- * - x/y 变化时重新计算位置
- * 同时添加/移除全局事件监听
- */
+/** visible/x/y 变化时测量并计算位置；同步添加/移除全局事件监听 */
 watch(
   [() => props.visible, () => props.x, () => props.y],
   ([visible]) => {
@@ -204,7 +176,7 @@ watch(
   },
 )
 
-/** 组件卸载时清理全局事件 */
+/** 卸载时清理全局事件 */
 onUnmounted(() => {
   document.removeEventListener('mousedown', onDocumentMouseDown)
   document.removeEventListener('keydown', onDocumentKeyDown)
@@ -220,7 +192,7 @@ onUnmounted(() => {
         class="context-menu"
         :style="positionStyle"
       >
-        <!-- 递归渲染菜单项（含任意层级子菜单） -->
+        <!-- 递归渲染菜单项 -->
         <SubMenu :items="items" is-root />
       </div>
     </Transition>
@@ -238,12 +210,10 @@ onUnmounted(() => {
   z-index: 9999;
   font-size: 14px;
   user-select: none;
-  /* 子菜单以绝对定位向右展开，需允许溢出，不能裁剪子菜单 */
-  overflow: visible;
+  overflow: visible; /* 子菜单绝对定位向右展开，需允许溢出 */
 }
 
-/* 以下规则命中的元素均由 render 函数 h() 动态创建（非模板元素），
-   拿不到本组件 scopeId，故统一用 :deep(...) 穿透。 */
+/* 以下元素由 render 函数 h() 动态创建（非模板元素），无 scopeId，统一用 :deep(...) 穿透 */
 :deep(.context-menu-item) {
   position: relative;
   display: flex;
@@ -293,7 +263,7 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
 }
 
-/* 子菜单容器：默认隐藏，父项 hover 时显示；向右展开并按需翻转 */
+/* 子菜单容器：默认隐藏、父项 hover 时显示；向右展开并按需翻转 */
 :deep(.context-menu-sub) {
   position: absolute;
   left: 100%;
@@ -305,7 +275,7 @@ onUnmounted(() => {
   box-shadow: var(--shadow-lg);
   z-index: 1;
   font-size: 14px;
-  /* 默认隐藏，父项 hover 时显示（保持布局以利于测量） */
+  /* 默认隐藏保持布局以利测量 */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -331,8 +301,7 @@ onUnmounted(() => {
   bottom: 0;
 }
 
-/* ── 过渡动画 ── */
-/* 淡入 + 轻微上移 */
+/* ── 过渡动画：淡入 + 轻微上移 ── */
 .context-menu-enter-active {
   transition:
     opacity 0.15s ease-out,

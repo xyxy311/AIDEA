@@ -1,10 +1,6 @@
 <script setup lang="ts">
 /**
- * AppearanceSection — 设置面板「外观」分区
- *
- * 深色模式开关 + 内置主色（内置色）单选 + 界面语言下拉框。
- * 语言切换写 themeStore（locale 持久化到 localStorage('aidea-locale')），
- * 界面文案（useT）与 naive-ui 自带文案（NConfigProvider locale）随切换热更新。
+ * AppearanceSection — 设置面板「外观」分区：深色模式开关 + 内置主色单选 + 界面语言下拉框。
  */
 import { NSwitch, NRadioGroup, NRadioButton, NSelect } from 'naive-ui'
 import { computed } from 'vue'

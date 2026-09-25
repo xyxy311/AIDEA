@@ -1,16 +1,7 @@
 <script setup lang="ts">
 /**
- * ShortcutsSection — 设置面板「快捷键」分区
- *
- * 罗列**内置**可自定义动作（CUSTOM_SHORTCUTS），每个动作一行：显示当前绑定键
- * （点击进入「按键录制」——下一次按键即设置为新绑定），并提供「恢复默认」。
- * 底部提供序号修饰键（seq）行与「恢复全部默认」。
- * 动作行的录制 / 冲突 / 恢复逻辑封装在 ShortcutActionRow 组件（本区仅传 actionKey + label）。
- *
- * **插件动作已独占转移**：uiRegistry.shortcutActions 的插件动作不再出现在本区，
- * 改由插件自身设置栏目经 `adapter.api.shortcuts.pluginActions(pluginId)` +
- * ShortcutActionRow 渲染（主应用快捷键栏目只管内置动作）。
- * resetAll 仍为全局操作：清空全部覆盖（含插件动作的覆盖），语义不变。
+ * ShortcutsSection — 设置面板「快捷键」分区：罗列内置可自定义动作，录制新键 + 恢复默认；
+ * 插件动作已由插件自身设置栏目渲染。resetAll 仍为全局操作（含插件动作覆盖）。
  */
 import { NButton, NIcon, useDialog } from 'naive-ui'
 import { onMounted, onUnmounted, ref, computed } from 'vue'

@@ -1,17 +1,4 @@
-/**
- * useProjectFile - 原生文件对话框流程测试（纯 Electron 桌面形态）
- *
- * 覆盖文件 IO 从「浏览器 File System Access API / Blob 下载」切换为「main 进程
- * dialog + fs（经 aideaFile 桥）」后的编排行为：
- * - openProject：成功（parse + 载入 + 记路径 + 记最近）/ 取消 / 取消不报错
- * - saveProject：有记忆路径 → writeFile 覆盖；无路径 → 走 saveAsProject
- * - saveAsProject：成功（记路径 + 记最近）/ 取消
- * - openRecentFile：按持久化路径经 readFile 重读载入
- *
- * 由于 useProjectFile 经 useNativeFile 在「模块加载时」读取 window.aideaFile，
- * 每个用例先置假桥，再 vi.resetModules() + 动态 import 被测组合式函数。
- * naive-ui 仅被本组合式函数直接消费（useMessage），mock 为共享桩便于断言提示调用。
- */
+/** useProjectFile 原生文件对话框流程测试：open/save/saveAs/recentFile 各分支与桥读取时序 */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 

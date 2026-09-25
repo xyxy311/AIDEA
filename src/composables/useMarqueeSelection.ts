@@ -28,21 +28,8 @@ interface MarqueeRectConfig {
 const INVISIBLE_CONFIG = { visible: false } as const
 
 /**
- * 框选（Marquee Selection）交互 Composable
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 交互流程：
- *   1. handleMouseDown：在 Stage 空白处按下，记录起点（暂不激活）
- *   2. handleMouseMove：移动超过阈值才激活框选并绘制矩形
- *   3. handleMouseUp：对相交节点做 AABB 命中检测，批量选中；清空状态
- *
- * 事件分流由 WhiteboardCanvas 负责：Shift 模式走连线创建，PanMode 走平移，其余空白走框选。
- *
- * 坐标系：stage.getRelativePointerPosition() 返回世界坐标，与 node.x/y 同系，直接做 AABB。
- *
- * 响应式注意：startPoint / currentPoint 必须是 ref，否则 marqueeRectConfig（computed）
- * 无法追踪其变化，框选框将不会随鼠标实时更新。
+ * 框选（Marquee）交互：mousedown 记起点，超过阈值激活矩形，mouseup AABB 命中批量选中。
+ * startPoint/currentPoint 必须是 ref，否则 computed 无法追踪，选框不随鼠标实时更新。
  */
 export function useMarqueeSelection(viewId: string) {
   const view = useViewStore(viewId)

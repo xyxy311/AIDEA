@@ -1,15 +1,8 @@
 <script setup lang="ts">
 /**
- * RightTopBar - 右顶部条（原 Toolbar 更名为）
- *
- * 顶部右侧图标栏，存放右向功能按钮（调试 / AI 展示模式 / 网格 / 新建节点，从右到左，
- * 新建节点 primary 最右最醒目）。按钮由品类表 constants/topbar.ts 注册，
- * 顺序与拖拽由通用容器 TopBarZone 承担，本组件只是固定 zone='right' 的薄封装。
- *
- * 节点计数保留为右顶部条末端的纯文字弱显示（纯信息，不属于可拖拽按钮）。
- * 其后的 WindowControls 是固定窗口 chrome（Electron 无边框窗口的最小化/最大化-还原/
- * 关闭按钮组）：不参与品类表注册与拖拽排序（被拖走/移除会导致窗口失控），
- * 由本组件直接固定渲染在最右端。
+ * RightTopBar - 右顶部条（原 Toolbar 更名为）：顶部右侧图标栏，按钮经品类表
+ * constants/topbar.ts 注册，顺序与拖拽由 TopBarZone 承担（固定 zone='right' 薄封装）。
+ * 尾部节点计数为纯文字弱显示；WindowControls 是固定窗口 chrome（不参与拖拽排序，强制最右）。
  */
 import { computed } from 'vue'
 import { useActiveView } from '@/composables/useActiveView'

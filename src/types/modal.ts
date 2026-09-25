@@ -1,10 +1,6 @@
 /**
- * 插件模态面板注册类型定义
- *
- * 模态面板是「登记进 uiRegistry 但不走 dock/活动栏布局派生」的 UI 元素：
- * 插件经 ctx.register.registerModal 登记描述符（key = `${pluginId}:${id}`），
- * 主程序的模态外壳按登记渲染。本文件只定义登记描述，
- * 不含打开/关闭运行时（运行时 API 后续提供）。
+ * 插件模态面板注册描述：登记进 uiRegistry 但不走 dock 布局派生，
+ * 插件经 ctx.register.registerModal 登记，主程序模态外壳按登记渲染。仅含登记描述，不含打开/关闭运行时。
  */
 import type { Component } from 'vue'
 

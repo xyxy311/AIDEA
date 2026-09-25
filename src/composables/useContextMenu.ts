@@ -1,3 +1,4 @@
+// 右键菜单状态管理：维护菜单可见性、视口坐标与菜单项列表
 import { ref } from 'vue'
 import type { Component } from 'vue'
 

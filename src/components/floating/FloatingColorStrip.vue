@@ -1,13 +1,8 @@
 <script setup lang="ts">
 /**
- * FloatingColorStrip — 浮动编辑器水平预设横条
- *
- * 按选中类型渲染：
- * - 节点：纯色圆点色块
- * - 连线：迷你线段小样（实线/虚线/点线 + 有向箭头）
- *
- * 点击应用预设；右键色块弹出上下文菜单（编辑/删除）；尾部 + 添加预设。
- * 删除动作在组件内直接调 presetsStore，编辑/添加通过事件上抛。
+ * FloatingColorStrip — 浮动编辑器水平预设横条：按选中类型渲染预设小样
+ * （节点=色点，连线=线段小样 + 箭头），点击应用，右键出编辑/删除菜单，尾部 + 添加。
+ * 删除在组件内直接调 presetsStore，编辑/添加经事件上抛。
  */
 import { computed } from 'vue'
 import { NScrollbar } from 'naive-ui'
@@ -39,7 +34,7 @@ const list = computed(() =>
     : (presetsStore.visibleConnectionPresets as ConnectionPresetStyle[]),
 )
 
-/** 连线预设迷你小样的 dasharray（小尺寸线段需较小 dash） */
+/** 连线预设迷你小样的 dasharray（小尺寸需较小 dash） */
 function getDashArray(style: LineStyle): string {
   if (style === 'solid') return ''
   if (style === 'dashed') return '6,4'
@@ -56,7 +51,7 @@ function onSwatchClick(preset: NodePresetStyle | ConnectionPresetStyle): void {
   emit('apply', preset)
 }
 
-/** 右键色块 → 上下文菜单（编辑 / 删除） */
+/** 右键色块 → 编辑 / 删除上下文菜单 */
 function onSwatchContext(e: MouseEvent, preset: NodePresetStyle | ConnectionPresetStyle): void {
   e.preventDefault()
   e.stopPropagation()

@@ -1,16 +1,7 @@
 /**
- * ShortcutActionRow —— 快捷键动作改键行的真实挂载测试
- *
- * 用 @vue/test-utils mount + happy-dom + 真实 pinia（createPinia / setActivePinia），
- * 验证从 ShortcutsSection 抽出的单行改键行为保持不变：
- * - 渲染 label 与当前绑定键（kbd 文本 = formatChord(store.getBinding(actionKey))）。
- * - 点击键帽进入录制态（显示「请按键…」+ is-recording 高亮）；录制按键经 store.assign
- *   写入覆盖并退出录制；纯修饰键继续等待；Esc 取消不改绑定。
- * - 恢复默认按钮清除用户覆盖（回 defaultChord）。
- * - 冲突提示：录制成已被内置动作占用的键 → 显示 assign 的冲突文案
- *   （插件动作 conflict.labelKey 实为成品 label，t() 幂等显示）。
- *
- * 说明：插件动作须先登记进 uiRegistry（store.assign 的 known 校验依赖登记表）。
+ * ShortcutActionRow — 快捷键动作改键行的真实挂载测试：
+ * 验证渲染、录制态、恢复默认、冲突提示及多实例隔离。
+ * 说明：插件动作须先登记进 uiRegistry（store.assign 依赖登记表）。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'

@@ -7,18 +7,7 @@ import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useModalStore, SETTINGS_MODAL_KEY } from '@/stores/modal'
 import PluginModalHost from '@/components/layout/PluginModalHost.vue'
 
-/**
- * 插件模态运行时契约测试（ctx.modal = createPluginModalApi 工厂 + PluginModalHost 宿主）：
- * - open 收插件内短 id，先查登记表：未登记 → warn + false（fail fast，杜绝幽灵 key——
- *   modal store 不校验登记表，若放行会挂上 hasOpenModal=true 且无可见模态）；
- *   已登记 → 拼 `${pluginId}:${id}` 落 modalStore.activeKey；
- * - 单实例策略沿用 modal store：同 key 幂等 true；已有其他模态打开 → warn + false；
- * - close 幂等；
- * - 宿主渲染契约：只渲染登记在册条目（v-if），无任何清理逻辑——未登记 key / 条目被
- *   清理时 activeKey 保持原样（store 层状态归调用方管）。运行期注册表不变（启停仅
- *   持久化重启生效；removePlugin 运行期唯一触发为启动期 setup 回滚，此时无模态打开），
- *   故宿主无需孤儿兜底。
- */
+/** 插件模态运行时契约：open 短 id 拼前缀登记、单实例幂等、close 幂等、宿主只渲染在册条目 */
 const DummyComp = defineComponent(() => () => h('div'))
 
 describe('ctx.modal（createPluginModalApi）', () => {

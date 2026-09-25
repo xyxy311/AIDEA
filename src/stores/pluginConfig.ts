@@ -1,18 +1,7 @@
 /**
- * pluginConfig —— 插件配置持久化（内存层，setup store）
- *
- * 单一数据源：`configs`（reactive Map，深度响应式——本仓约定，非 shallowRef），
- * key = pluginId，value = PluginConfigFile（{ version: 1, data, shortcuts }）。
- * - 启动加载：遍历 localStorage 收集 `aidea-plugin-config.` 前缀文件全量读入（经
- *   utils/pluginConfig.readPluginConfig 自愈）。
- * - 即改即写：深度 watch configs → 逐文件 writePluginConfig 写回（对齐 useStorage 的
- *   自动落盘行为：flush 默认 'pre'，微任务内落盘，测试断言前 await nextTick()）。
- * - data 段：插件自定义配置（plugin/api/config 的 get/set/remove 底座）。
- * - shortcuts 段：插件快捷键动作的用户覆盖（shortcuts store 路由写入方；key = 动作短 id）。
- *
- * 单向依赖：本 store 只依赖 utils/pluginConfig，不得 import shortcuts store（防环）；
- * shortcuts store 单向消费本 store。
- * 未知插件首次写入自动建文件（内存与 localStorage 同步出现）；只读不建文件。
+ * pluginConfig —— 插件配置持久化（内存层，setup store）。借助 reactive Map 深度响应式，深度 watch 即改即写回 localStorage
+ * （`aidea-plugin-config.` 前缀逐文件落盘）。data 段为插件自定义配置；shortcuts 段为插件快捷键用户覆盖（本 store 只路由，
+ * 不依赖 shortcuts store 防环）。
  */
 import { reactive, watch } from 'vue'
 import { defineStore } from 'pinia'

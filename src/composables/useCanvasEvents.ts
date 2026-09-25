@@ -23,21 +23,8 @@ const DBL_CLICK_WINDOW = 400
 const DBL_CLICK_DISTANCE = 12
 
 /**
- * 画布事件处理
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 提供针对 v-stage 事件的回调：
- * - handleStageClick：点击空白区域取消选中；两次快速且邻近的空白单击视为「空白双击」，创建新节点（并进入编辑态）
- * - handleStageContextMenu：右键弹出上下文菜单（按选中数量生成菜单项）
- *
- * 右键菜单内容：
- * - 复制 / 剪切：有选中节点时可用
- * - 粘贴：剪贴板有内容时可用
- * - 单选节点：进入子视图 / 清空子级（有子节点时）
- * - 多选节点：组合
- * - 插件注册项（uiRegistry.contextMenuItems）：按 scope（canvas / selection）追加在
- *   内置项之后（登记序），经 when 守卫过滤，run 收到选中节点 id 的展开拷贝
+ * 画布事件处理：空白单击取消选中、空白双击建节点、右键上下文菜单。
+ * 右键菜单按选中状态生成内置项，并追加插件注册项（scope 过滤 + when 守卫）。
  */
 export function useCanvasEvents(viewId: string) {
   const view = useViewStore(viewId)
@@ -55,11 +42,8 @@ export function useCanvasEvents(viewId: string) {
   let lastEmptyClick: { time: number; screenX: number; screenY: number } | null = null
 
   /**
-   * 把插件注册的右键菜单项追加到 items 末尾（登记序，位于内置项之后；不加分隔线）。
-   * 按 scope 过滤 + when 守卫（when 返回 false 的项不出现）；
-   * 带 children 工厂的注册项产出分组父项（父项仅作分组入口不产生 action，子项经工厂
-   * 现场求值映射为叶子项）；其余转换为扁平 ContextMenuItem：key 为完整登记 key，
-   * action 闭包内对 selectedNodeIds 再展开拷贝。
+   * 把插件注册的右键菜单项追加到 items 末尾：按 scope 过滤 + when 守卫；
+   * 带 children 工厂的产出分组父项（子项经工厂现场求值）；其余转为扁平项。
    */
   function appendPluginContextMenuItems(
     target: ContextMenuItem[],
@@ -173,13 +157,7 @@ export function useCanvasEvents(viewId: string) {
   }
 
   /**
-   * 处理画布右键菜单事件
-   *
-   * 阻止浏览器默认菜单，并根据当前选中状态弹出上下文菜单：
-   * - 复制 / 剪切：有选中节点时可用
-   * - 粘贴：剪贴板有内容时可用
-   * - 单选节点：进入子视图 / 清空子级（有子节点时）
-   * - 多选节点：组合
+   * 处理画布右键菜单事件：阻止默认菜单，按选中状态弹出对应菜单项。
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     e.evt.preventDefault()
@@ -282,8 +260,7 @@ export function useCanvasEvents(viewId: string) {
       })
     }
 
-    // ── 插件注册的选中级（scope='selection'）菜单项：追加在内置项之后（登记序）──
-    // 插件可带 children 工厂产出分组子菜单（如 ai 插件注册的「发散」父项）
+    // ── 插件注册的选中级（scope='selection'）菜单项：追加在内置项之后 ──
     appendPluginContextMenuItems(items, 'selection', Array.from(view.selectedNodeIds))
 
     contextMenu.open(e.evt.clientX, e.evt.clientY, items)

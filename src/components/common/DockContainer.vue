@@ -1,16 +1,8 @@
 <script setup lang="ts">
 /**
- * DockContainer — 通用右侧 dock 容器
- *
- * 垂直堆叠多个 DockPanel，提供：
- * - 面板间可上下拖拽的 resize handle（pointer events，保持相邻两块 flex 之和不变）
- * - 面板可拖拽换位（同容器 reorder / 来自左侧活动栏的 moveToRight）
- * - 作为跨容器 drop zone 接收来自左侧活动栏的面板
- * - 空态提示
- *
- * 每个面板由 DockPanel 统一外壳渲染（标题/图标/关闭/拖拽手柄），
- * 状态全部来自 layout store（派生实时目录 rightPanels / rightSizes），
- * 本组件不持有布局数据、不用再过滤残留（派生目录已是干净条目数组）。
+ * DockContainer — 通用右侧 dock 容器：垂直堆叠多个 DockPanel，支持面板间 resize
+ * （pointer events，保持相邻 flex 之和不变）与同容器/跨容器拖拽换位（HTML5 drag MIME）。
+ * 布局状态全来自 layout store 派生目录，本组件不持有布局数据；空态仍可作 drop zone。
  */
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -26,7 +18,6 @@ const layout = useLayoutStore()
 /** 容器根元素（用于测量高度换算 flex） */
 const containerEl = ref<HTMLElement | null>(null)
 
-/** 右侧可见面板与空态：storeToRefs 取响应式 ref（layout 为 setup store，成员默认已解包） */
 const { rightPanels: visible, rightEmpty } = storeToRefs(layout)
 
 // ── 拖拽换位状态 ──

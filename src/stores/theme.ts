@@ -1,16 +1,6 @@
 /**
- * themeStore - 主题状态管理
- *
- * 管理亮/暗模式 + 主色调切换，单一数据源驱动三处：
- *   1. Naive UI：App.vue 的 n-config-provider 读取 scheme.theme / scheme.naiveOverrides
- *   2. CSS 变量：watchEffect 将 scheme.cssVars 注入 :root，自定义组件 var(--color-*) 自动响应
- *   3. Konva 画布：组件读取 scheme.canvas.* 绑定到 Konva config，响应式重绘
- *
- * 持久化：
- *   - mode：useColorMode 内置 localStorage（key: 'aidea-theme'），仅 light/dark 两态手动切换
- *   - accentId：useStorage 持久化到 localStorage（key: 'aidea-accent'），默认 'emerald'
- *   - locale：useStorage 持久化到 localStorage（key: 'aidea-locale'），默认 'zh-CN'，
- *     界面语言偏好；文案经 useT 响应式读取该值，切换语言即热更新
+ * themeStore —— 主题状态管理（亮/暗 + 主色调 + 界面语言）。单一数据源 drive Naive UI / CSS 变量(:root) / Konva 画布三处。
+ * mode 持久化到 localStorage('aidea-theme')，仅 light/dark；accentId 存 'aidea-accent'（默认 emerald）；locale 存 'aidea-locale'。
  */
 import { computed, watchEffect } from 'vue'
 import { defineStore } from 'pinia'

@@ -1,3 +1,4 @@
+// 内联视图坐标映射工具：主世界/屏幕坐标与内联视图内部世界坐标互转，及节点包围盒与视口适配（公共逻辑）。
 import type { WhiteboardNode } from '@/types'
 import { MIN_SCALE, MAX_SCALE, INLINE_VIEW_TITLE_HEIGHT, INLINE_VIEW_MIN_HEIGHT, INLINE_VIEW_FIT_PADDING } from '@/constants'
 import type { useNodeStore } from '@/stores/node'
@@ -6,16 +7,7 @@ import type { useViewStore } from '@/stores/view'
 type NodeStore = ReturnType<typeof useNodeStore>
 type ViewStore = ReturnType<typeof useViewStore>
 
-/**
- * 用主视图世界坐标 hit-test 所有内联视图的内容区矩形。
- * 内容区 = { x: node.x, y: node.y + TITLE_H, width: rect.width, height: rect.height - TITLE_H }
- *
- * @param worldX - 主视图世界坐标 X
- * @param worldY - 主视图世界坐标 Y
- * @param hostView - 宿主视图 store 实例
- * @param nodeStore - 节点 store 实例
- * @returns 命中的内联视图宿主节点 ID，未命中返回 null
- */
+/** 用主视图世界坐标 hit-test 各内联视图内容区（内容区 = 宿主节点矩形扣去标题栏高度）；返回命中的宿主节点 ID。 */
 export function hitTestInlineViewWorld(
   worldX: number,
   worldY: number,
@@ -40,20 +32,7 @@ export function hitTestInlineViewWorld(
   return null
 }
 
-/**
- * 将主视图世界坐标映射为内联视图内部世界坐标（用于 reparent 后节点落点）。
- *
- * 内部像素 = 主世界相对宿主节点内容区左上角的偏移；
- * 内部世界 = (内部像素 - inlineStage) / inlineScale
- *
- * @param worldX - 主视图世界坐标 X
- * @param worldY - 主视图世界坐标 Y
- * @param inlineNodeId - 内联视图宿主节点 ID
- * @param inlineView - 内联视图 store 实例
- * @param hostView - 宿主视图 store 实例
- * @param nodeStore - 节点 store 实例
- * @returns 内联视图内部世界坐标
- */
+/** 主视图世界坐标 → 内联视图内部世界坐标（用于 reparent 落点）：内部像素 = 相对宿主内容区左上角偏移，再经 inline stage 变换。 */
 export function mapMainWorldToInlineWorld(
   worldX: number,
   worldY: number,
@@ -78,16 +57,7 @@ export function mapMainWorldToInlineWorld(
   }
 }
 
-/**
- * 用屏幕坐标（clientX/clientY）hit-test 所有内联视图覆盖层的内容区。
- *
- * @param clientX - 屏幕 X 坐标
- * @param clientY - 屏幕 Y 坐标
- * @param hostView - 宿主视图 store 实例
- * @param hostContainerRect - 宿主视图 Stage 容器的 getBoundingClientRect()
- * @param nodeStore - 节点 store 实例
- * @returns 命中的内联视图宿主节点 ID，未命中返回 null
- */
+/** 用屏幕坐标 hit-test 内联视图覆盖层内容区（经宿主 stage 变换与容器偏移）；返回命中的宿主节点 ID。 */
 export function hitTestInlineViewScreen(
   clientX: number,
   clientY: number,
@@ -115,15 +85,7 @@ export function hitTestInlineViewScreen(
   return null
 }
 
-/**
- * 屏幕坐标 -> 主视图世界坐标。
- *
- * @param clientX - 屏幕 X 坐标
- * @param clientY - 屏幕 Y 坐标
- * @param mainContainerRect - 主视图 Stage 容器的 getBoundingClientRect()
- * @param mainView - 主视图 store 实例
- * @returns 主视图世界坐标
- */
+/** 屏幕坐标 → 主视图世界坐标（按主视图缩放与偏移逆变换）。 */
 export function screenToMainWorld(
   clientX: number,
   clientY: number,
@@ -137,18 +99,7 @@ export function screenToMainWorld(
   }
 }
 
-/**
- * 屏幕坐标 -> 内联视图内部世界坐标。
- *
- * @param clientX - 屏幕 X 坐标
- * @param clientY - 屏幕 Y 坐标
- * @param inlineNodeId - 内联视图宿主节点 ID
- * @param inlineView - 内联视图 store 实例
- * @param hostView - 宿主视图 store 实例
- * @param hostContainerRect - 宿主视图 Stage 容器的 getBoundingClientRect()
- * @param nodeStore - 节点 store 实例
- * @returns 内联视图内部世界坐标
- */
+/** 屏幕坐标 → 内联视图内部世界坐标（先经宿主 stage 反算内部像素，再经内联 stage 变换）。 */
 export function screenToInlineWorld(
   clientX: number,
   clientY: number,
@@ -188,11 +139,7 @@ export interface BoundsRect {
   height: number
 }
 
-/**
- * 计算节点的世界坐标包围盒。
- * @param nodes 节点列表
- * @returns 包围盒；无节点时返回 null
- */
+/** 计算节点列表的世界坐标包围盒；无节点时返回 null。 */
 export function getNodesBounds(nodes: WhiteboardNode[]): BoundsRect | null {
   if (nodes.length === 0) return null
   let minX = Infinity
@@ -208,10 +155,7 @@ export function getNodesBounds(nodes: WhiteboardNode[]): BoundsRect | null {
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
 
-/**
- * 计算使包围盒双向适应视口的缩放倍率（取宽高方向较小者，clamp 到 [minScale, maxScale]）。
- * padding 为比例值（如 0.12 表示四周各留 12%）。
- */
+/** 计算使包围盒双向适应视口的缩放倍率（取宽高较小者，clamp 到 [minScale, maxScale]）；padding 为边距比例（如 0.12）。 */
 export function computeFitScale(
   boundsWidth: number,
   boundsHeight: number,
@@ -229,9 +173,7 @@ export function computeFitScale(
   return Math.max(minScale, Math.min(maxScale, Math.min(scaleX, scaleY)))
 }
 
-/**
- * 计算使包围盒在视口中居中的视口偏移（stageX / stageY）。
- */
+/** 计算使包围盒在视口内居中的视口偏移（stageX / stageY）。 */
 export function computeCenteredViewport(
   bounds: BoundsRect,
   scale: number,
@@ -247,23 +189,8 @@ export function computeCenteredViewport(
 }
 
 /**
- * 内联视图自适应：以视口宽度为基准计算缩放倍率，并据节点高度自适应新视口高度。
- *
- * 算法：
- * - 缩放 scale = viewportWidth / (boundsWidth * (1 + padding))，clamp 到 [minScale, maxScale]
- *   （超出范围则整体放大/缩小到边界）
- * - 新内容区高度 = boundsHeight * scale * (1 + padding)
- * - 新总高度 newHeight = 内容区高度 + titleHeight（不小于 minHeight）
- * - 视口居中（基于实际内容区高度）
- *
- * @param nodes 内联视图宿主节点的子节点列表
- * @param viewportWidth 内联视图当前宽度（inlineRect.width，保持不变）
- * @param padding 边距比例
- * @param minScale 最小缩放倍率
- * @param maxScale 最大缩放倍率
- * @param titleHeight 内联视图标题栏高度
- * @param minHeight 内联视图最小总高度
- * @returns 自适应结果（scale / newHeight / stageX / stageY）；无节点或宽度无效时返回 null
+ * 内联视图自适应：以视口宽为基准求缩放（clamp），据节点高度重算内容区高度，
+ * 再据实际内容区高度垂直居中；新总高度 = 内容区高度 + 标题栏，不小于 minHeight。
  */
 export function computeInlineFit(
   nodes: WhiteboardNode[],

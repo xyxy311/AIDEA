@@ -1,10 +1,6 @@
 <script setup lang="ts">
 /**
- * WhiteboardCanvas - 主视图画布入口（薄壳）
- *
- * 主视图 viewId 固定为 'main'。
- * 键盘快捷键全局单份，在 AppShell 挂载（作用主视图与文件操作）。
- * 内联视图使用 CanvasStage 直接渲染，不经过此组件。
+ * WhiteboardCanvas - 主视图画布入口（viewId 固定 'main'，内联视图直接经 CanvasStage 渲染）。
  */
 import CanvasStage from './CanvasStage.vue'
 </script>

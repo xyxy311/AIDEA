@@ -1,8 +1,6 @@
 // @vitest-environment node
 /**
  * pluginScan.test.ts —— 插件扫描纯逻辑单测（IO 注入，不触真实文件系统、不 import electron）。
- * 覆盖：入口优先级 / 非法目录名跳过 / manifest 损坏与字段缺失 → error 条目 / 无入口跳过 /
- *       根不存在空集 / 白名单 Map 产出。
  */
 import { describe, expect, it } from 'vitest'
 import path from 'node:path'

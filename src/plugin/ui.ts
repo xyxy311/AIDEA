@@ -1,31 +1,11 @@
 /**
- * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板 / 浮动层）
- *
- * 插件 setup(ctx) 经 ctx.register 现场注册**运行时组件对象**。
- * 注册去向统一为 **uiRegistry 登记总表**（stores/uiRegistry.ts）：
- * 内置目录（PANEL_CATALOG / TOP_BAR_CATALOG / SETTINGS_CATALOG）已在 store 初始化时
- * seed 进同一张表；插件条目（origin='plugin'，key = `${pluginId}:${id}`）经本模块
- * 转发写入 uiRegistry，排布（顺序 / 归类 / 持久化）由 layout store 纯派生，无需任何落位调用。
- * 快捷键动作与右键菜单项两表只收插件条目（内置动作 / 菜单项不走登记表）；
- * 模态面板同样只收插件条目，且只登记不派生布局（打开/关闭经 ctx.modal 运行时 API 走
- * modal store，应用级宿主 PluginModalHost 按登记条目渲染）。浮动层同只收插件条目且
- * 只登记不派生布局（显隐经 ctx.floating / adapter.for(id).floating 运行时 API 走
- * pluginFloating store；应用级宿主 PluginFloatingHost 逐条渲染，窗口壳由通用件
- * FloatingWindow（components/common）提供，插件注册只填内容 + 可选标题）。
- *
- * 本模块负责：
- * - 定义插件注册项类型（Registration）——条目类型（Ui*Entry）已移至 uiRegistry 统一导出。
- * - 按插件作用域组装 PluginRegisterApi（createPluginRegister）：校验短 id，冲突/非法时
- *   console.warn 并跳过（不抛错，其余注册项继续生效）。
- * - 按插件作用域组装模态运行时 PluginModalApi（createPluginModalApi）：open 收插件内
- *   短 id，内部拼 `${pluginId}:${id}` 转发 modal store（单实例策略由 store 统一裁决）。
- * - 快捷键动作注册（registerShortcutAction）：承接原 api.shortcuts.registerAction 的
- *   实现与四级校验；api/shortcuts.ts 本体只留只读查询。
- * - 顶栏按钮描述符 → 等价逻辑组件（wrapTopBarButton），供 uiRegistry 存储，TopBarZone 零改动渲染。
- * - setup 抛错时的批量回滚（rollbackPluginUi → registry.removePlugin）。
- *
- * 命名空间约束：pluginId 与各注册短 id 不得含 ':'（归一用 ':' 连接）。
- * 本模块只接收插件 setup 现场传入的运行对象，不持有任何编译期模块引用。
+ * ui.ts —— 插件注册面（面板 / 顶栏按钮 / 设置栏目 / 右键菜单项 / 快捷键动作 / 模态面板 / 浮动层）。
+ * 插件 setup(ctx) 经 ctx.register 现场注册运行组件对象，转发写入 **uiRegistry 登记总表**
+ * （stores/uiRegistry.ts，key = `${pluginId}:${id}`，排布由 layout store 纯派生）。
+ * 本模块还负责：组装 PluginRegisterApi（短 id 校验，冲突/非法 → warn 并跳过）、模态与浮动层
+ * 运行时 API（open 收短 id，内部拼前缀转发 modal / pluginFloating store）、顶栏按钮 → 等价逻辑
+ * 组件（wrapTopBarButton）与 setup 抛错时的批量回滚（rollbackPluginUi）。
+ * 命名空间约束：pluginId 与各注册短 id 不得含 ':'，归一用 ':' 连接。
  */
 import { defineComponent, h } from 'vue'
 import type { Component } from 'vue'
@@ -42,14 +22,9 @@ import { isValidChord } from '@/utils/shortcuts'
 
 /**
  * 下拉菜单单项（结构上与 TopBarButton 的 TopBarMenuOption 兼容）。
- *
- * 两个原因改用自包含结构、不直接引用 naive-ui 的 DropdownOption：
- * 1. 全局 `declare module '*.vue'` 环境声明只暴露 default，无法 `import type` 自
- *    TopBarButton.vue 的具名类型。
- * 2. naive-ui 的 DropdownOption 为递归联合（自引用 children），若经由类型交集
- *    （Entry 归因 extends 等）进入 Map 存储，会在结构性验算上触发 TS「过深实例化」。
- *    自包含接口的递归是惰性展开的，不会触发该上限。
- * 渲染侧（wrapTopBarButton）把它交给 TopBarButton.menu 时经 unknown 桥接。
+ * 改用自包含结构而非 naive-ui 的 DropdownOption：全局 `declare module '*.vue'` 只暴露 default，
+ * 无法具名 import；且 DropdownOption 为递归联合，经类型交集进 Map 存储会触发 TS「过深实例化」。
+ * 渲染侧（wrapTopBarButton）经 unknown 桥接给 TopBarButton.menu。
  */
 export interface PluginTopBarMenuOption {
   key?: string | number
@@ -200,11 +175,8 @@ export interface PluginRegisterApi {
 export interface PluginModalApi {
   /**
    * 打开本插件经 registerModal 登记的模态面板（id 为插件内短 id）。
-   * 未登记的短 id → console.warn + false（fail fast，杜绝「幽灵 key 挂上后
-   * hasOpenModal=true 却无可见模态」——modal store 本身不校验登记表，应用路径
-   * SETTINGS_MODAL_KEY 有意不校验）。
-   * 已登记 → 拼 key 转发 modal store，打开裁决沿用其单实例策略：同 key 幂等 true；
-   * 已有其他模态打开 → console.warn + false（不做栈）。
+   * 未登记 → console.warn + false（fail fast，防幽灵 key）；已登记 → 拼 key 转发 modal store，
+   * 沿用其单实例策略：同 key 幂等 true，已有其他模态打开 → warn + false。
    */
   open(id: string): boolean
   /** 关闭当前打开的模态（无模态打开时幂等） */
@@ -220,10 +192,8 @@ export interface PluginModalApi {
 export interface PluginFloatingApi {
   /**
    * 打开本插件经 registerFloatingLayer 登记的浮动层（id 为插件内短 id）。
-   * 未登记的短 id → console.warn + false（fail fast，对齐 createPluginModalApi.open 的
-   * 措辞：pluginFloating store 本身不校验登记表，若放行会挂上可见窗口却无登记条目，
-   * 宿主窗口仍会渲染（宿主只按 store 显隐渲染），但登记表与状态失配——入口拦截杜绝）。
-   * 已登记 → 拼 key 转发 pluginFloating store：open 幂等 true（多实例无冲突裁决）。
+   * 未登记 → console.warn + false（fail fast，防登记表与状态失配）；已登记 → 拼 key 转发
+   * pluginFloating store：open 幂等 true（多实例无冲突裁决）。
    */
   open(id: string): boolean
   /** 关闭浮动层（幂等：未打开 / 未登记均无副作用，不做登记表校验——close 语义本就允许无害失败） */
@@ -372,14 +342,10 @@ export function createPluginRegister(pluginId: string): PluginRegisterApi {
 }
 
 /**
- * 按插件作用域组装模态运行时 PluginModalApi（两个注入位共用同一工厂：
- * manager 组装 PluginContext 注入 ctx.modal——setup 内逻辑用；
- * adapter.for(id) 注入 scope.modal——插件 UI 组件内用，与 additions/config 同源同构）。
- * 与 createPluginRegister 同构：方法体内才触碰 pinia（惰性 useStore），模块加载期无副作用。
- * open 先查登记表：未登记 → warn + false（fail fast），杜绝幽灵 key（modal store
- * 不校验登记表，若放行会挂上 hasOpenModal=true 且无任何可见模态，画布快捷键全失效）；
- * teardown 后误调同理被入口拒绝（运行期注册表不变：启停仅持久化重启生效，
- * removePlugin 运行期唯一触发为启动期 setup 回滚，此时无模态打开），无需显式失效。
+ * 按插件作用域组装模态运行时 PluginModalApi（两个注入位共用同一工厂：manager 注入 ctx.modal，
+ * adapter.for(id) 注入 scope.modal）。方法体内才触碰 pinia（惰性 useStore）。
+ * open 先查登记表：未登记 → warn + false（fail fast）；teardown 后误调被入口拒绝（运行期
+ * 注册表不变：启停仅持久化重启生效），无需显式失效。
  */
 export function createPluginModalApi(pluginId: string): PluginModalApi {
   return {
@@ -399,15 +365,10 @@ export function createPluginModalApi(pluginId: string): PluginModalApi {
 }
 
 /**
- * 按插件作用域组装浮动层运行时 PluginFloatingApi（两个注入位共用同一工厂：
- * manager 组装 PluginContext 注入 ctx.floating——setup 内逻辑用；
- * adapter.for(id) 注入 scope.floating——插件 UI 组件 / composables 内用，
- * 与 createPluginModalApi 同源同构）。方法体内才触碰 pinia（惰性 useStore），
- * 模块加载期无副作用。
- * open / toggle 先查登记表：未登记 → warn + false（fail fast，对齐 createPluginModalApi
- * ——pluginFloating store 本身不校验登记表，入口拦截杜绝「未登记 key 直接挂显隐状态」的
- * 失配）；close / isVisible 幂等只读，不做校验（无害失败语义天然成立）。
- * teardown 后误调同理被入口拒绝（运行期注册表不变，同模态的时序论证，见上）。
+ * 按插件作用域组装浮动层运行时 PluginFloatingApi（两个注入位共用同一工厂，与
+ * createPluginModalApi 同构）。方法体内才触碰 pinia（惰性 useStore）。
+ * open / toggle 先查登记表：未登记 → warn + false（fail fast）；close / isVisible 幂等只读，
+ * 不做校验（无害失败语义天然成立）。
  */
 export function createPluginFloatingApi(pluginId: string): PluginFloatingApi {
   return {

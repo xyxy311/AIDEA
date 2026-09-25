@@ -1,8 +1,6 @@
 <script setup lang="ts">
 /**
- * ConnectionPropertyEditor — 连线属性编辑面板
- *
- * 当选中连线时，可修改该连线的线型、粗细、颜色和箭头开关。
+ * ConnectionPropertyEditor - 连线属性编辑面板：修改选中连线的线型、粗细、颜色和箭头开关。
  * 预设管理已移至左侧「预设管理」面板与浮动编辑器，此处不再展示。
  */
 import { ref, computed } from 'vue'
@@ -29,7 +27,7 @@ import {
 const active = useActiveView()
 
 // 选中的连线信息
-// 跨视图选中：选中连线可能来自主视图或任一内联视图宿主节点，按 ID 全局查找
+// 跨视图选中：连线可能来自主视图或任一内联视图宿主节点，按 ID 全局查找
 const conn = computed(() => {
   const id = active.view.selectedConnectionId
   if (!id) return undefined

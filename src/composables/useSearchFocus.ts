@@ -1,12 +1,8 @@
 import { ref } from 'vue'
 
 /**
- * 搜索输入框聚焦请求信号（模块级单例）
- *
- * 供快捷键（Ctrl/Cmd + F）与 SearchPanel 通信。
- * 面板收起时 SearchPanel 未挂载（v-if），watch 未注册，计数式信号会在面板挂载前丢失。
- * 因此改用"待处理标志"：快捷键置 true，SearchPanel 在挂载（onMounted）或运行时（watch）
- * 读取并消费（复位）该标志后聚焦，保证面板未打开时按一次 Ctrl+F 即可进入聚焦状态。
+ * 搜索输入框聚焦请求信号（模块级单例）。面板收起未挂载时 watch 不生效，
+ * 故用"待处理标志"：快捷键置 true，SearchPanel 挂载/运行时读取并复位后聚焦。
  */
 export const pendingSearchFocus = ref(false)
 

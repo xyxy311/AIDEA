@@ -1,18 +1,12 @@
 // @vitest-environment node
 /**
  * pluginWatch.test.ts —— 插件 watch 纯逻辑单测（指纹 / 快照比对 / debounce）。
- *
- * 只覆盖纯逻辑三导出：fingerprintInfo / diffPluginSnapshots / createDebouncer。
- * 接线层 startPluginWatching 依赖 electron BrowserWindow 与真实文件系统 watch，
- * 渲染推送行为无法在本环境验证（main 侧渲染不可验证 = 人工浏览器/壳层确认），
- * 故顶部 mock 掉 electron——pluginWatch.ts 及其依赖 plugins.ts 顶层 import electron，
- * vitest(node) 下必须 mock 才能加载被测模块（纯逻辑本身不触 electron 运行时）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DesktopPluginInfo } from '../../shared/bridge'
 import { createDebouncer, diffPluginSnapshots, fingerprintInfo } from '../pluginWatch'
 
-// electron 在 vitest(node) 下不可加载（其入口动态导出可执行文件路径）：mock 掉顶层 import
+// electron 在 vitest(node) 下不可加载：mock 掉顶层 import
 vi.mock('electron', () => ({ app: {}, BrowserWindow: { getAllWindows: () => [] } }))
 
 /** 构造 DesktopPluginInfo（形状对齐 shared/bridge.ts：id/entry/manifest/error?） */

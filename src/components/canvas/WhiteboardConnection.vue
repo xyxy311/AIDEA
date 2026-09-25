@@ -1,16 +1,7 @@
 <script setup lang="ts">
 /**
- * WhiteboardConnection - 白板连线组件
- *
- * 渲染单条节点之间的连线，包含：
- * - 从 fromNode 中心到 toNode 中心的线段
- * - 有向连线中点三角形箭头
- * - 连线中点文字标签（conn.text 非 null 时渲染，带背景"切断"连线）
- * - 选中态高亮
- *
- * 交互：
- * - 单击 -> 选中/取消选中连线（emit click -> Canvas 处理 toggle）
- * - 双击 -> 触发连线文字编辑（emit dblclick）
+ * WhiteboardConnection - 白板连线组件：渲染 fromNode→toNode 线段、1/4 与 3/4 处箭头、
+ * 中点文字标签（切断连线）、选中态衬线高亮；单击选中、双击编辑文字。
  */
 import { computed } from 'vue'
 import type { KonvaEventObject } from 'konva/lib/Node'
@@ -32,7 +23,6 @@ import {
 // ── Props ──
 const props = defineProps<{
   connectionId: string
-  /** 持有此连线的父节点 ID（视图关联节点） */
   parentId: string
   isSelected: boolean
 }>()
@@ -47,14 +37,12 @@ const emit = defineEmits<{
 const nodeStore = useNodeStore()
 const theme = useThemeStore()
 
-// ── Computed: 连线数据 ──
-// 从父节点的连接数组中查找该连线
+// ── Computed: 连线数据与两端节点 ──
+// 从父节点的连接数组中查找该连线；conn 先赋局部变量，避免回调内 TS 窄化失效
 const connection = computed(() =>
   nodeStore.getConnections(props.parentId).find(c => c.id === props.connectionId)
 )
 
-// ── Computed: 两端节点 ──
-// 注意：先将 connection.value 赋值给局部变量，避免回调内 TypeScript 窄化失效
 const fromNode = computed(() => {
   const conn = connection.value
   if (!conn) return undefined
@@ -81,8 +69,7 @@ const geometry = computed(() => {
 })
 
 // ── 连线主体 Konva 配置 ──
-// 始终使用用户原色原粗细；选中态高亮由底层衬线（linerConfig）承担，
-// 不再用主题色替换本条线，避免干扰用户原样式。
+// 始终用用户原色原粗细；选中态高亮由底层衬线承担，不替换本条线以免干扰原样式
 const lineConfig = computed(() => {
   const conn = connection.value
   const g = geometry.value
@@ -100,14 +87,10 @@ const lineConfig = computed(() => {
   }
 })
 
-// ── 选中态高亮衬线（方案 A · 高亮衬里） ──
+// ── 选中态高亮衬线（始终渲染 + visible 切换） ──
 /**
- * 选中时在用户原线下方叠加一层加粗、半透明的主题选中色衬线作为选中标识；
- * 未选中时通过 visible 隐藏。宽度 = 用户粗细 + 四周扩展增量，且不低于最小选中标识宽度。
- * 虚线样式与上层原线保持一致，保证虚实对齐、整体协调。
- * 注意：必须"始终渲染"本节点并用 visible 切换，而非 v-if 动态创建/销毁——
- * 否则选中时新创建的节点会被 Konva add 到 layer 末尾（最上层），高亮反而覆盖用户原线。
- * listening:false —— 点击仍命中上层原线（事件监听保留在用户可点击的原线上）。
+ * 选中时在原线下叠加加粗半透明主题色作为标识。必须始终渲染用 visible 切换而非 v-if，
+ * 否则选中时新建节点会被加到 layer 末尾（最上层）覆盖原线；listening:false 使点击仍命中上层原线。
  */
 const linerConfig = computed(() => {
   const conn = connection.value
@@ -133,11 +116,8 @@ const linerConfig = computed(() => {
   }
 })
 
-// ── 箭头 Konva 配置（沿连线方向的 1/4 与 3/4 处各一个，避开中点文字） ──
-/**
- * 计算沿线方向比例 t（0=起点, 1=终点）处的三角形箭头配置。
- * 两个箭头分别位于 1/4 与 3/4 处，中点留给文字标签，避免互相遮挡。
- */
+// ── 箭头 Konva 配置（沿连线 1/4 与 3/4 处，避开中点文字） ──
+/** 计算沿线方向比例 t（0=起点, 1=终点）处的三角形箭头配置 */
 function arrowConfigAt(t: number) {
   const conn = connection.value
   const g = geometry.value
@@ -154,7 +134,7 @@ function arrowConfigAt(t: number) {
   const px = -ndy // 垂直方向 X
   const py = ndx // 垂直方向 Y
 
-  // 箭头大小根据粗细动态缩放
+  // 箭头大小随粗细动态缩放
   const size = Math.max(
     CONNECTION_ARROW_SIZE,
     CONNECTION_ARROW_SIZE + (conn.strokeWidth - 2) * 2,
@@ -196,10 +176,7 @@ function getMeasureCtx(): CanvasRenderingContext2D | null {
 }
 
 // ── 中点文字标签配置 ──
-/**
- * 测量文字并计算标签矩形 / 文字定位（居中于连线中点）。
- * conn.text 为 null 时不渲染（返回 null）。
- */
+/** 测量文字并计算标签矩形 / 文字定位（居中于连线中点）；conn.text 为空时不渲染 */
 const labelConfig = computed(() => {
   const conn = connection.value
   const g = geometry.value
@@ -212,7 +189,7 @@ const labelConfig = computed(() => {
     ctx.font = `${fontSize}px ${DEFAULT_NODE_STYLE.fontFamily}`
     textWidth = ctx.measureText(conn.text).width
   } else {
-    // 测量不可用时（如 SSR / 测试环境）按字符数估算
+    // 测量不可用（SSR/测试环境）时按字符数估算
     textWidth = conn.text.length * fontSize
   }
 
@@ -231,7 +208,7 @@ const labelConfig = computed(() => {
   }
 })
 
-/** 标签背景矩形（用画布背景色"切断"连线，使文字可读） */
+/** 标签背景矩形（用画布背景色"切断"连线，保证文字可读） */
 const labelRectConfig = computed(() => {
   const lc = labelConfig.value
   if (!lc) return { visible: false }
@@ -264,16 +241,15 @@ const labelTextConfig = computed(() => {
 
 // ── 事件处理 ──
 
-/** 单击 -> emit 给 Canvas 处理选中/取消选中（支持 Ctrl 多选） */
+/** 单击 → emit 给 Canvas 处理选中/取消（支持 Ctrl 多选；仅左键） */
 function onClick(e: KonvaEventObject<MouseEvent>): void {
   const ctrl = e.evt.ctrlKey || e.evt.metaKey
-  // 仅响应左键
   if (e.evt.button !== 0) return
 
   emit('click', props.connectionId, ctrl)
 }
 
-/** 双击 -> emit 触发连线文字编辑（仅响应左键） */
+/** 双击 → emit 触发连线文字编辑（仅左键） */
 function onDblClick(e: KonvaEventObject<MouseEvent>): void {
   if (e.evt.button !== 0) return
   emit('dblclick', props.connectionId)

@@ -1,11 +1,6 @@
 /**
  * api/project.ts —— 项目域：历史控制 + 批量 + 项目统计 + 项目信息 + 树展开 + 标签页 + 视图导航 + 项目级操作
- * 接口类型由实现派生（`ProjectApi = ReturnType<typeof createProjectApi>`）。
- *
- * 约定：
- * - 命令层写（入历史）方法可带可选 `user` 参数；本文件新增方法均为项目级 / 视图态操作，
- *   不经命令层，故不带 user。
- * - 所有读取方法返回结构化快照（普通对象 / 字符串 / 数组，深拷贝形态，非响应式引用）。
+ * 本文件方法均为项目级 / 视图态操作（不经命令层，不带 user）；读取返回结构化快照（非响应式引用）。
  */
 import type { ProjectStats } from '@/types/plugin'
 import { useNodeStore } from '@/stores/node'

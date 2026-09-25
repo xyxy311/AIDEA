@@ -2,13 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePluginFloatingStore } from '@/stores/pluginFloating'
 
-/**
- * 插件浮动层运行时状态（stores/pluginFloating.ts）契约测试：
- * - 多实例：states 按完整登记 key（`${pluginId}:${layerId}`）逐条独立显隐；
- * - 默认隐藏：无条目 isVisible=false（纯查询不初始化条目），open 才可见；
- * - open 幂等 true / close 幂等 void / toggle 返回切换后 visible；
- * - 不存位置（拖动偏移是窗口组件本地状态，本 store 无位置字段——类型层面保证）。
- */
+/** 插件浮动层运行时状态契约：按登记 key 多实例独立显隐、open/close/toggle 幂等、不存位置 */
 describe('pluginFloating store（插件浮动层运行时状态）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

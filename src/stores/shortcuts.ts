@@ -1,36 +1,6 @@
 /**
- * 快捷键 Store
- *
- * 职责：
- * - 保存用户对可自定义动作的覆盖绑定（仅存覆盖，未覆盖回退默认）
- * - 序号修饰键（seqModKey，默认 't'）：决定 "1-9" 是应用预设还是打标签
- * - 持久化到 localStorage，并进行自愈（坏值/非法/冗余条目回退默认、清理冲突）
- * - assign(id, chord)：冲突校验（全局唯一），冲突则拒绝并返回冲突方
- * - reset(id) / resetAll()：恢复默认
- *
- * 纯字符串表示：值为 utils/shortcuts.ts 的规范化 chord 字符串。
- *
- * 冲突检测覆盖三处：
- *   1. assign：候选键与锁定键（RESERVED_CHORDS）冲突 → 拒绝
- *   2. assign：候选裸单键与序号修饰键冲突 → 拒绝
- *   3. setSeqModKey：序号修饰键与锁定键单键或自定义动作裸单键冲突 → 拒绝
- *
- * 插件动作合并：uiRegistry.shortcutActions 中的插件动作（key = `${pluginId}:${id}`）
- * 并入有效绑定表（有 defaultChord 的作默认，覆盖优先）；assign 的冲突校验范围同样
- * 覆盖插件动作。
- *
- * 插件覆盖存储路由（本 store 只路由不托管）：含 ':' 的覆盖条目由 pluginConfig 独立
- * 存储（`aidea-plugin-config.<pluginId>.shortcuts`，key = 动作短 id），不混存本 store
- * 的内置覆盖持久化（aidea-shortcuts）——插件禁用/重启期间覆盖随插件文件保留，重装
- * 自动恢复：
- *   - setup 顶部先跑 migrateShortcutOverrides()（须先于 overrides 的 useStorage 读取，
- *     否则旧混存条目会先被读入内存、经 validate/写回污染回归）；
- *   - validate 丢弃 overrides 中含 ':' 的残留条目（本 key 只承载内置覆盖，插件覆盖
- *     独立存储且不受本 validate 影响）；
- *   - bindings 合并各插件文件的 shortcuts 段（`${pluginId}:${actionId}` 归属，与默认
- *     表未知 key 同规则过滤）；
- *   - assign / reset / resetAll 按首个 ':' 路由：插件动作写 pluginConfig，内置动作写
- *     本 overrides；resetAll 同时清两源（含未启用插件）。
+ * 快捷键 Store —— 保存动作覆盖绑定（仅存覆盖，未覆盖回退默认）、序号修饰键 setSeqModKey（默认 't'），持久化带自愈。
+ * 冲突检测覆盖三处（锁定键 / 序号修饰键 / 其它动作）；含 ':' 的插件覆盖由 pluginConfig 独立存储，本 store 只路由不托管。
  */
 import { computed } from 'vue'
 import { defineStore } from 'pinia'

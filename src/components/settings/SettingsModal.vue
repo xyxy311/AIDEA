@@ -1,14 +1,6 @@
 <script setup lang="ts">
 /**
- * SettingsModal — 设置面板页面骨架
- *
- * 窗口式外观，不可拖拽移动。内部为经典「左分类导航 + 右内容」两栏结构：
- * - 左侧：竖向分类导航（数据驱动，见 categories 表，来源 uiRegistry 登记总表），可滚动
- * - 右侧：当前选中分类的具体设置内容（各分类抽离为独立 Section 组件），独立可滚动
- *
- * 数据源：uiRegistry store 的 settingsCategories 登记总表（内置已 seed，顺序 =
- * 品类表顺序；插件注册进同一张表并追加其后）。新增设置分类只需在
- * constants/settings.ts 登记 + 提供对应 Section 组件即可，导航 / 内容自动生效。
+ * SettingsModal — 设置面板骨架：「左分类导航 + 右内容」两栏结构，分类数据驱动自 uiRegistry 登记表。
  */
 import { NIcon, NScrollbar } from 'naive-ui'
 import { computed, ref } from 'vue'

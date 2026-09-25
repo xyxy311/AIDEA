@@ -1,13 +1,8 @@
 <script setup lang="ts">
 /**
- * ModalShell — 模态公共外壳
- *
- * 统一 NModal + NCard 模态外观与关闭行为：
- * - 遮罩点击关闭与标题栏关闭钮由 closable 统一控制
- * - 关闭一律经 emit('close') 上抛，开关状态由外部 :show 驱动（单一数据源）
- * - Esc 关闭走 NModal 默认行为（update:show(false) → emit('close')）
- *
- * 内部只承载 default 内容与可选 footer（确定/取消类操作行）。
+ * ModalShell — 模态公共外壳：统一 NModal + NCard 外观与关闭行为。
+ * 关闭一律经 emit('close') 上抛，开关状态由外部 :show 驱动（单一数据源）；
+ * Esc/遮罩/标题栏关闭均由 closable 控制。内部承载 default 内容与可选 footer。
  */
 import { NModal, NCard } from 'naive-ui'
 

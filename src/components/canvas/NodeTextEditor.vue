@@ -1,19 +1,7 @@
 <script setup lang="ts">
 /**
- * NodeTextEditor - 节点文本内联编辑器
- *
- * 一个绝对定位的 DOM textarea 覆盖层，渲染在 Konva Stage 上方。
- * 用于节点的双击文本编辑场景。
- *
- * 定位计算：
- * - Konva Stage 使用自己的坐标系统
- * - 需要将 Konva 坐标转换为页面像素坐标用于 CSS 定位
- * - 通过 stage.getContainer().getBoundingClientRect() 获取偏移量
- *
- * 键盘行为：
- * - Enter（非 Shift）→ 保存并关闭
- * - Escape → 取消并关闭
- * - Blur（失焦）→ 保存并关闭
+ * NodeTextEditor - 节点文本内联编辑器：绝对定位 DOM textarea 覆盖在 Konva Stage 上方，
+ * 通过 stage 偏移/缩放换算为像素坐标；Enter 保存、Escape 取消、blur 保存，支持 @引用补全。
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useMessage } from 'naive-ui'
@@ -28,25 +16,16 @@ import TextAutocomplete from './TextAutocomplete.vue'
 
 // ── Props ──
 const props = defineProps<{
-  /** 节点 ID */
   nodeId: string
-  /** 初始文本内容 */
   initialText: string
-  /** 节点在 Konva Stage 中的 x 坐标 */
   nodeX: number
-  /** 节点在 Konva Stage 中的 y 坐标 */
   nodeY: number
-  /** 节点宽度 */
   nodeWidth: number
-  /** 节点高度 */
   nodeHeight: number
-  /** Stage 容器 DOM 元素（用于坐标转换） */
+  /** Stage 容器 DOM 元素（坐标换算基准） */
   stageContainer: HTMLDivElement
-  /** 当前 Stage 缩放倍率 */
   stageScale: number
-  /** 当前 Stage X 偏移 */
   stageX: number
-  /** 当前 Stage Y 偏移 */
   stageY: number
 }>()
 
@@ -61,14 +40,12 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const currentText = ref(props.initialText)
 
 // ── @ 补全 ──
-/** 补全共享逻辑实例 */
 const autocomplete = useReferenceAutocomplete()
-/** 全局消息（用于重名冲突提示） */
 const message = useMessage()
 /** 下拉定位（视口坐标） */
 const dropdownPos = ref({ x: 0, y: 0 })
 
-/** 计算下拉位置：定位在 textarea 元素下方 */
+/** 定位到 textarea 元素下方 */
 function updateDropdownPos(): void {
   const ta = textareaRef.value
   if (!ta) return
@@ -77,16 +54,10 @@ function updateDropdownPos(): void {
 }
 
 // ── 计算编辑器位置 ──
-/** themeStore 实例，用于读取当前主色 */
 const themeStore = useThemeStore()
-/** nodeStore 实例，用于读取节点边框色以派生背景色 */
 const nodeStore = useNodeStore()
 
-/**
- * 编辑器 CSS 定位样式（相对于 Stage 容器）
- * 需要将 Konva 坐标转换为屏幕像素坐标：
- *   屏幕坐标 = Konva坐标 × 缩放倍率 + Stage偏移
- */
+/** 编辑器 CSS 定位：屏幕像素 = Konva 坐标 × 缩放 + Stage 偏移 */
 const editorStyle = computed(() => ({
   position: 'absolute' as const,
   left: `${props.nodeX * props.stageScale + props.stageX}px`,
@@ -126,11 +97,10 @@ onMounted(async () => {
 let saved = false
 
 // ── 事件处理 ──
-
 /** 保存编辑内容 */
 function save() {
   if (saved) return
-  // 校验引用名重名：编辑器内预先校验，冲突则弹窗并保持编辑态
+  // 预先校验引用名重名，冲突则弹窗并保持编辑态
   const refName = extractReferenceName(currentText.value)
   if (refName && nodeStore.isReferenceNameTaken(refName, props.nodeId)) {
     autocomplete.close()
@@ -170,9 +140,8 @@ function handleAutocompleteSelect(candidate: AutocompleteCandidate) {
   })
 }
 
-/** 键盘事件处理 */
+/** 键盘事件：优先交给补全处理，未占用则走 Enter 保存 / Escape 取消 */
 function onKeydown(e: KeyboardEvent) {
-  // 优先处理补全键
   const result = autocomplete.handleKeydown(
     e,
     currentText.value,
@@ -180,7 +149,7 @@ function onKeydown(e: KeyboardEvent) {
   )
   if (result === 'handled') return
   if (result !== 'unhandled' && typeof result === 'object') {
-    // 插入了候选
+    // 补全插入候选
     currentText.value = result.insertedText
     nextTick(() => {
       const ta = textareaRef.value
@@ -188,7 +157,6 @@ function onKeydown(e: KeyboardEvent) {
     })
     return
   }
-  // 原有 Enter/Escape 逻辑
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     save()
@@ -199,12 +167,12 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-/** 失焦时自动保存（Enter 保存后组件卸载引发的 blur 会被 saved 守卫拦截） */
+/**
+ * 失焦自动保存。延迟执行让 Enter 的 save() 先置 saved 标志，防 blur 二次触发；
+ * 补全下拉打开时不保存（下拉项 mousedown.prevent 已阻止 blur，此处兜底）。
+ */
 function onBlur() {
-  // 延迟执行，让 Enter 的 save() 先设置 saved 标志
-  // 避免 blur 在 save 之前触发
   setTimeout(() => {
-    // 补全下拉打开时不因 blur 保存（下拉项用 mousedown.prevent 阻止 blur，此处兜底）
     if (autocomplete.visible.value) return
     save()
   }, 0)

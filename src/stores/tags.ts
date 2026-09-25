@@ -6,14 +6,9 @@ import { useNodeStore } from '@/stores/node'
 import { markDataDirty } from '@/utils/dirtyMarker'
 
 /**
- * 标签定义 Store - 项目级标签定义
- *
- * 标签定义（Tag）是项目级数据，随项目文件序列化（不 localStorage 持久化）：
- * - CRUD 不可撤销：直接改 tags Map + markDataDirty()（属项目级操作，不经命令层）
- * - 仅"节点打标签"可撤销：走命令层 nodeChanges.modify 的 tagIds 字段
- *
- * 依赖方向：本 store 单向 import nodeStore（stripTagFromAllNodes 清关联），
- * node store 不 import tags store，因此不构成循环依赖。
+ * 标签定义 Store —— 项目级标签定义（随项目文件序列化，不 localStorage 持久化）。
+ * 标签定义 CRUD 不可撤销（直接改 tags + markDataDirty，不经命令层）；仅"节点打标签"可撤销（走 nodeChanges.modify 的 tagIds）。
+ * 单向依赖 nodeStore 清关联，nodeStore 不 import 本 store，故无循环依赖。
  */
 export const useTagsStore = defineStore('tags', () => {
   const nodeStore = useNodeStore()

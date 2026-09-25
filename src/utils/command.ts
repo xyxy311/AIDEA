@@ -1,8 +1,8 @@
+// 命令层数据结构与捕获函数：定义节点/连线/插件扩展数据变更补丁类型，
+// 以及撤销栈所需的深拷贝与旧值捕获。
 import { toRaw } from 'vue'
 import type { WhiteboardNode, Connection } from '@/types'
 import type { useNodeStore } from '@/stores/node'
-
-// ===== 命令数据结构 =====
 
 /** 节点变更（add/remove/modify） */
 export interface NodeChange {
@@ -27,10 +27,7 @@ export interface ConnectionChange {
   new?: Partial<Connection>
 }
 
-/**
- * 项目扩展数据（additions）变更：插件项目级键值的写 / 删。
- * 键为归一化的完整键（`${pluginId}:${key}`）；undo/redo 直接按 old/new 恢复。
- */
+/** 插件项目级扩展数据变更：键为 `${pluginId}:${key}`，undo/redo 直接按 old/new 恢复。 */
 export interface AdditionChange {
   type: 'set' | 'remove'
   key: string
@@ -55,24 +52,16 @@ export interface HistoryEntry {
   timestamp: number
 }
 
-// ===== 纯辅助函数 =====
-
 /**
- * 深拷贝（穿透 Vue reactive 代理）。
- * 项目数据均为 JSON 可序列化的 plain data，用 JSON 方式安全可靠。
- *
- * 注意：undefined / null 直接返回（JSON.stringify(undefined) 返回 undefined
- * 而非字符串，JSON.parse(undefined) 会抛 SyntaxError）。
+ * 深拷贝（穿透 Vue reactive 代理）：项目数据为 JSON plain data；
+ * undefined/null 直接返回（JSON.stringify(undefined) 返回 undefined，JSON.parse 会抛错）。
  */
 export function deepClone<T>(obj: T): T {
   if (obj === undefined || obj === null) return obj
   return JSON.parse(JSON.stringify(toRaw(obj)))
 }
 
-/**
- * 捕获节点指定字段的当前值（用于 modify 命令的 old）。
- * fields 指定要捕获的属性名。
- */
+/** 捕获节点指定字段的当前值（供 modify 命令的 old）。 */
 export function captureNodeFields(
   nodeStore: ReturnType<typeof useNodeStore>,
   id: string,
@@ -88,10 +77,7 @@ export function captureNodeFields(
   return result
 }
 
-/**
- * 捕获完整节点（深拷贝，含 connections 数组）。
- * 用于 add/remove 命令。
- */
+/** 捕获完整节点深拷贝（含 connections 数组，供 add/remove 命令）。 */
 export function captureNodeFull(
   nodeStore: ReturnType<typeof useNodeStore>,
   id: string,
@@ -102,17 +88,8 @@ export function captureNodeFull(
 }
 
 /**
- * 捕获子树：递归收集所有后代节点（深拷贝）+ 被清理的父级连线。
- *
- * 删除节点时，nodeStore.deleteNode 会：
- * 1. 递归删除子节点
- * 2. 从父节点 connections 清除涉及该节点的连线
- *
- * 因此需要收集：
- * - 子树中所有节点（含各自的 connections 数组，随节点深拷贝）
- * - 被删节点的父节点中，涉及被删节点的连线（会被 deleteNode 清理）
- *
- * @returns nodes: 被删节点深拷贝列表; connections: 被清理的父级连线; removedIds: 所有被删节点 id
+ * 捕获被删子树（节点深拷贝）+ 被清理的父级连线。
+ * deleteNode 会递归删除子节点并从父 connections 清理相关连线，故需一并收集供 undo。
  */
 export function captureSubtree(
   nodeStore: ReturnType<typeof useNodeStore>,
@@ -161,10 +138,7 @@ export function captureSubtree(
   return { nodes, connections, removedIds: [...removedIds] }
 }
 
-/**
- * 捕获指定父节点中的连线（深拷贝）。
- * 用于连线删除/迁移命令的 old。
- */
+/** 捕获指定父节点中的连线深拷贝（供连线删除/迁移命令的 old）。 */
 export function captureConnections(
   nodeStore: ReturnType<typeof useNodeStore>,
   parentId: string,

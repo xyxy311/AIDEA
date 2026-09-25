@@ -5,16 +5,8 @@ import { useModalStore } from '@/stores/modal'
 import { MIN_SCALE, MAX_SCALE, ZOOM_STEP } from '@/constants'
 
 /**
- * 画布导航（平移 + 缩放）
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 提供无限画布的平移和缩放能力：
- * - 按住空格键 + 鼠标拖拽 -> 平移画布
- * - Ctrl + 滚轮 -> 缩放画布（以鼠标位置为中心）
- *
- * 导航状态存储在当前视图的 viewStore 中，以便 RightTopBar 等组件
- * 读取当前视口状态来计算"视口中央"的世界坐标。
+ * 画布导航（平移 + 缩放）：空格键 + 拖拽平移，Ctrl + 滚轮以鼠标为中心缩放。
+ * 导航状态存于 viewStore，供 RightTopBar 读取视口计算"视口中央"的世界坐标。
  */
 export function useCanvasNavigation(viewId: string) {
   const view = useViewStore(viewId)

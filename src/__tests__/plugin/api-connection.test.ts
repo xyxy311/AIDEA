@@ -3,11 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createPluginAdapter } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
 
-/**
- * 插件 connection 域 api 测试。
- * 覆盖新增/扩展的写方法（add / remove / removeByIds / delete / move / update /
- * updateStyle / updateStyleByIds / applyPreset）与撤销回退，以及只读查询的深拷贝隔离。
- */
+/** 插件 connection 域 api 测试：写方法（增删改/样式/预设）可撤销，只读查询深拷贝隔离。 */
 function makeApi() {
   return createPluginAdapter().api
 }

@@ -1,14 +1,8 @@
 /**
- * shortcuts.ts —— 无边框窗口的快捷键兜底（attachWindowShortcuts）。
- *
- * 背景：main/index.ts 里 Menu.setApplicationMenu(null) 移除了默认菜单 role 的
- * accelerator——编辑快捷键（复制/剪切/粘贴/全选/撤销/重做）与 devtools（F12 等）
- * 全部失效（Electron issue #15373 同类问题：默认菜单删除后 accelerator 随之消失）。
- * 此处按官方 keyboard-shortcuts 教程的 before-input-event 方案，在 webContents 层
- * 拦截并转发到对应 webContents 方法，恢复被菜单删除带走的快捷键。
- *
- * 原则：只处理确需兜底的按键，其余一律放行（不调用 preventDefault，不影响输入法、
- * 页面自身快捷键与系统组合键）。
+ * shortcuts.ts —— 无边框窗口的快捷键兜底（attachWindowShortcuts）：
+ * Menu.setApplicationMenu(null) 会带走默认菜单 role 的 accelerator，使编辑快捷键与
+ * devtools 失效；此处用 before-input-event 在 webContents 层拦截并转发恢复。
+ * 原则：只处理确需兜底的按键，其余一律放行。
  */
 import { app } from 'electron'
 import type { BrowserWindow } from 'electron'
@@ -30,8 +24,8 @@ export function attachWindowShortcuts(win: BrowserWindow): void {
     // 只处理按下动作（keyUp 不拦截）
     if (input.type !== 'keyDown') return
 
-    // —— 开发期 devtools：用 app.isPackaged 而非 NODE_ENV（esbuild 打包后 NODE_ENV 不可靠，
-    //    packaged 产物才是真正用户手里的形态；F12 与 Ctrl+Shift+I 两套习惯都支持）——
+    // 开发期 devtools：用 app.isPackaged 而非 NODE_ENV（打包后 NODE_ENV 不可靠）；
+    // 支持 F12 与 Ctrl+Shift+I 两套习惯。
     if (!app.isPackaged) {
       const isDevtoolsKey = input.code === 'F12' || (input.control && input.shift && input.code === 'KeyI')
       if (isDevtoolsKey) {
@@ -41,7 +35,7 @@ export function attachWindowShortcuts(win: BrowserWindow): void {
       }
     }
 
-    // —— 编辑快捷键：Ctrl（Windows/Linux）/ Meta（macOS）+ 编辑键 ——
+    // 编辑快捷键：Ctrl（Windows/Linux）/ Meta（macOS）+ 编辑键
     const modifier = process.platform === 'darwin' ? input.meta : input.control
     if (!modifier) return
 

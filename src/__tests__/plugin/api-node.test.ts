@@ -5,10 +5,7 @@ import { createPluginAdapter } from '@/plugin/adapter'
 import { ROOT_NODE_ID } from '@/stores/node'
 import { DEFAULT_NODE_STYLE, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 
-/**
- * 节点域新增 API 测试（命令层写 + 查询扩展）。
- * 写方法应为可撤销历史（undo/redo）；查询方法只读、返回快照。
- */
+/** 节点域新增 API 测试（命令层写可撤销 + 只读查询）。 */
 function makeApi() {
   return createPluginAdapter().api
 }

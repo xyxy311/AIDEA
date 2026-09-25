@@ -1,15 +1,5 @@
-/**
- * 节点搜索 - 纯函数层
- *
- * 背景语义：
- * - 搜索整个 node.text（含多行），不区分大小写。
- * - 根节点（parentId === null，即项目名）不参与搜索。
- * - 结果展示两行：
- *   标题行（首行）+ 命中行片段（命中在首行时不重复展示 body）。
- * - 高亮：把命中片段与普通片段切分开，供 UI 分别着色。
- *
- * 本文件只包含纯函数与类型，不依赖 store，便于单测与复用。
- */
+// 节点搜索纯函数层：搜索 node.text（含多行）不区分大小写，根节点不参与；
+// 结果按两行展示（标题首行 + 命中片段），并提供高亮分段供 UI 分开着色。
 import type { WhiteboardNode } from '@/types'
 
 /** 高亮分段：match=true 表示命中查询的片段 */
@@ -27,10 +17,7 @@ export interface SearchNodeResult {
   body: HighlightSegment[] | null
 }
 
-/**
- * 把整行按命中切成分段（不截断，保留原始大小写）。
- * query 为空或 line 为空时返回单个非命中分段。
- */
+/** 把整行按命中切成分段（不截断，保留原始大小写）；query 或 line 为空返回单个非命中分段。 */
 export function highlightLine(line: string, query: string): HighlightSegment[] {
   if (!line || !query) return line ? [{ text: line, match: false }] : []
   const lower = line.toLowerCase()
@@ -61,20 +48,13 @@ export interface SearchOptions {
   scope?: SearchScope
   /** scope='view' 时，当前查看的节点 ID（取其直接子级作为搜索结果集） */
   viewedNodeId?: string
-  /**
-   * 按标签过滤：节点须同时包含全部所选标签（AND 语义）。
-   * 空数组 / undefined 表示不过滤。
-   */
+  /** 按标签过滤（AND：节点须同时包含全部所选标签）；空数组/undefined 不过滤。 */
   tagIds?: string[]
   /** 最长可显示字符数 */
   maxChars?: number
 }
 
-/**
- * 构建单行展示用的分段。
- * 长度 ≤ maxChars 时直接返回整行高亮；超长时以命中点为中心取窗口，
- * 两侧补 '…'（命中完整可见）。无命中时截尾补 '…'。
- */
+/** 构建单行展示分段：≤ maxChars 整行高亮；超长以命中为中心取窗口，两侧补 '…'；无命中截尾补 '…'。 */
 export function buildDisplayLine(
   line: string,
   query: string,
@@ -113,11 +93,7 @@ export function buildDisplayLine(
   return segments
 }
 
-/**
- * 组装两行展示分段：
- * - title = 首行（命中在首行时高亮并截断，否则普通截断）
- * - body  = 命中行以命中点为中心的片段；命中在首行时 null
- */
+/** 组装两行分段：title = 首行；body = 命中行以命中点为中心的片段，命中在首行时为 null。 */
 export function buildSearchLines(
   text: string,
   query: string,
@@ -135,11 +111,7 @@ export function buildSearchLines(
   return { title, body }
 }
 
-/**
- * 全树搜索（排除根节点），query 为空 / 全空白返回 []。
- * 搜索整个 node.text（含多行），大小写不敏感。
- * options.scope='view' 时仅搜索指定视图（viewedNodeId）的直接子级。
- */
+/** 全树搜索（排除根节点，query 空/全空白返回 []）：比较 node.text 大小写不敏感；scope='view' 时仅搜索指定视图直接子级。 */
 export function searchNodes(
   nodes: WhiteboardNode[],
   query: string,

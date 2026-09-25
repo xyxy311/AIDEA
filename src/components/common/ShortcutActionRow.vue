@@ -1,20 +1,9 @@
 <script setup lang="ts">
 /**
- * ShortcutActionRow —— 单个快捷键动作的改键行（可复用组件）。
- *
- * 从 ShortcutsSection 抽出的「动作行」单元：label + 错误提示 + 键帽点击录制 +
- * 录制中高亮 + 恢复默认按钮。内置动作（短 id）与插件动作（完整登记 key
- * `${pluginId}:${id}`）共用同一条录制 / 冲突 / 恢复流程——assign 对完整 key 直接工作。
- *
- * 录制采用 window 捕获阶段的 keydown 监听，并 stopImmediatePropagation，
- * 避免录制期间按键误触全局快捷键；`recording === false` 时监听器直接 return，
- * 多实例（内置区 / 各插件面板）共存安全——同一时刻只有一个录制中的实例消费按键。
- *
- * 错误状态为组件局部（按自身 actionKey）；冲突提示沿用 shortcuts store.assign 的
- * 结果：conflict.labelKey 对内置动作是 i18n key、对插件动作是成品 label——
- * t() 未命中回退原文，两种情况幂等显示。
- *
- * 样式沿用 settings-shared.css 的 .setting-row 结构；键帽 / 恢复 / 录制动效样式随行迁移（scoped）。
+ * ShortcutActionRow — 单个快捷键动作的改键行（可复用）：label + 错误提示 + 键帽点击录制
+ * + 录制中高亮 + 恢复默认。内置动作（短 id）与插件动作（完整 key）共用同一条录制/冲突/恢复流程。
+ * 录制用 window 捕获阶段 keydown + stopImmediatePropagation，避免录制期间误触全局快捷键；
+ * 组件局部错误状态（按自身 actionKey），多实例共存安全——同一时刻只有一个录制实例消费按键。
  */
 import { NButton, NIcon } from 'naive-ui'
 import { onMounted, onUnmounted, ref } from 'vue'

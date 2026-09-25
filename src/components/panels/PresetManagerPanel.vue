@@ -1,18 +1,8 @@
 <script setup lang="ts">
 /**
- * PresetManagerPanel — 预设管理面板（左侧活动栏面板）
- *
- * 集中管理节点预设与连线预设，额外支持"分组"：
- * - 顶部 Tab 在节点 / 连线之间切换（分组筛选共享）
- * - 下拉框切换分组视图（全部 / 未分组 / 各用户{内置分组}）
- * - 列表遍历可见预设（visibleNodePresets / visibleConnectionPresets），
- *   支持 HTML5 拖拽排序（可见列表内重排）、序号徽标（1-9 快捷键提示）、
- *   预览、分组标签、编辑 / 删除
- * - 点击行将预设应用到当前选中项
- * - 底部：新建预设 / 保存当前为预设
- * - 分组管理弹窗：新增 / 改名 / 删除分组
- *
- * 数据层全部消费 presets store，不修改 store / types / constants。
+ * PresetManagerPanel - 预设管理面板：集中管理节点预设与连线预设，支持分组。
+ * 顶部切换节点/连线、分组筛选；列表遍历可见预设，支持拖拽排序、序号徽标（1-9 快捷键）、
+ * 预览、分组标签、编辑/删除；点行应用预设；底部新建/保存当前为预设；分组管理弹窗。数据层全消费 presets store。
  */
 import { ref, computed } from 'vue'
 import {
@@ -47,7 +37,6 @@ const message = useMessage()
 
 type PresetType = 'node' | 'connection'
 
-/** 当前类型 tab */
 const activeType = ref<PresetType>('node')
 
 /** 当前类型对应的可见预设列表 */
@@ -57,7 +46,7 @@ const visiblePresets = computed<(NodePresetStyle | ConnectionPresetStyle)[]>(() 
     : presetsStore.visibleConnectionPresets,
 )
 
-/** 空状态文案：全部视图与分组视图区分（按当前类型的分组筛选判断） */
+/** 空状态文案（全部/分组视图区分，按当前类型的分组筛选判断） */
 const emptyMessage = computed(() => {
   const f =
     activeType.value === 'node'
@@ -403,14 +392,12 @@ function handleDeleteGroup(id: string): void {
         @row-click="applyPreset"
       >
         <template #default="{ item: preset }">
-          <!-- 节点色块预览 -->
           <div v-if="preset.type === 'node'" class="node-preview-block" @click.stop
             :style="previewStyle(preset)"
           >
             {{ preset.name.charAt(0) }}
           </div>
 
-          <!-- 连线迷你预览 -->
           <svg
             v-else
             class="connection-preview-svg"
@@ -429,20 +416,16 @@ function handleDeleteGroup(id: string): void {
             <polygon v-if="preset.directed" points="46,3 54,7 46,11" :fill="preset.strokeColor" />
           </svg>
 
-          <!-- 名称 -->
           <NText class="preset-name" depth="2">{{ preset.name }}</NText>
 
-          <!-- 分组标签 -->
           <NTag v-if="groupTagLabel(preset)" size="tiny" :bordered="false" class="group-tag">
             {{ groupTagLabel(preset) }}
           </NTag>
 
-          <!-- 编辑 -->
           <NButton size="tiny" quaternary class="action-btn" @click.stop="openEdit(preset)">
             ✎
           </NButton>
 
-          <!-- 删除（带确认） -->
           <NPopconfirm
             :positive-text="t('presetPanel.confirm')"
             :negative-text="t('presetPanel.cancel')"

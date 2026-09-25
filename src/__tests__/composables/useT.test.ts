@@ -1,14 +1,4 @@
-/**
- * useT —— i18n 响应式内核测试
- *
- * 语言状态归属 themeStore（useStorage 持久化到 localStorage('aidea-locale')），
- * t() 经惰性缓存的 themeStore 响应式读取 locale。本测试验证：
- * - 默认语言 zh-CN 下的点路径取值与 {name} 插值；
- * - setLocale 切换后 getLocale 跟随变化且持久化到 localStorage；
- * - en-US 完整英文包：en 下命中英文文案与插值；
- * - 未命中 key 返回 key 本身（回退链末端）；
- * - 响应性：computed 内调用 t()，setLocale 后值随语言热更新（'文件' → 'File'）。
- */
+/** useT i18n 响应式内核测试：点路径取值与 {name} 插值、setLocale 切换持久化、en 包、未命中回退 key、computed 响应 */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { computed, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'

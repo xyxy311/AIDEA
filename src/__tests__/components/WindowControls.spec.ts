@@ -1,22 +1,6 @@
 /**
- * WindowControls - 窗口控制按钮组的真实挂载测试
- *
- * 用 @vue/test-utils mount + happy-dom + 假桥（vi.fn 模拟 window.aideaWindow），
- * 验证 renderer 侧窗口 chrome 按钮组的关键行为：
- * - 有桥：渲染三个按钮，点击分别调用桥的 minimize / toggleMaximize / close；
- *   最小化与最大化切换不经未保存确认（fake projectFile 的 confirmDiscard 不被调用）；
- * - 关闭按钮：先经注入的 projectFile.confirmDiscard 统一未保存确认——
- *   确认放弃（true）→ 调桥关闭；取消（false）→ 不调桥；
- *   无 projectFile 注入（如测试环境无 AppShell）→ 跳过确认直接调桥兜底；
- * - 最大化图标随桥状态切换：isMaximized() 初值报告已最大化 → 渲染「还原图标」
- *   （CopyOutline 双框）；onMaximizedChange 事件回调触发 → 图标在
- *   「最大化（SquareOutline 方框）/ 还原（CopyOutline 双框）」间随状态切换；
- * - 卸载时取消 onMaximizedChange 订阅（防泄漏）。
- *
- * 模块加载时序说明：useWindowControls 在「模块加载时」读取一次 window.aideaWindow
- * （preload 注入先于应用脚本执行的既定语义），因此每个用例先设置
- * window.aideaWindow，再 vi.resetModules() + 动态 import 组件——组件与其依赖
- * useWindowControls 一起重新求值，重新读桥。纯桌面形态下桥部署须存在。
+ * WindowControls — 窗口控制按钮组的真实挂载测试：
+ * 验证最小化 / 最大化 / 关闭行为、未保存确认及最大化图标随主进程状态切换。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'

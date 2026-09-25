@@ -3,16 +3,8 @@ import { defineStore } from 'pinia'
 import { setMarkDirty } from '@/utils/dirtyMarker'
 
 /**
- * file store - 项目文件状态
- *
- * 职责：
- * - dirty 标记（是否有未保存改动）
- * - 建议保存文件名（suggestedName）
- * - 已记忆的保存路径（main 进程经对话框产出的路径，Ctrl+S 覆盖保存用）
- *
- * 依赖解耦：本 store 不依赖 history store（避免循环依赖）。
- * dirty 由 history 在数据变更后通过 markDataDirty() 触发，
- * 本 store 在 setup 中通过 setMarkDirty() 注入真正的置位实现。
+ * file store - 项目文件状态（dirty 标记 / 建议保存名 / 已记忆保存路径）。
+ * 不依赖 history store 避免循环依赖：dirty 经 setMarkDirty() 注入置位实现。
  */
 export const useFileStore = defineStore('file', () => {
   /** 是否有未保存改动 */

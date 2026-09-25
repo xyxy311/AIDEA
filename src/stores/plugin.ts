@@ -1,12 +1,6 @@
 /**
- * stores/plugin.ts —— 插件运行时的 pinia 状态
- *
- * 持有 PluginManager 实例与记录快照；负责 localStorage('aidea-plugins') 启停持久化。
- * 启动装载在 main.ts 的 `init()` 完成；运行时间表（setup 是否执行）由启动时的 enabled 快照决定。
- *
- * 注意：插件 UI 注册（面板 / 顶栏按钮 / 设置栏目）已不再经本 store——
- * 注册去向往 **uiRegistry 登记总表**（stores/uiRegistry.ts），layout 纯派生自动生效。
- * 本 store 从 plugin→layout→uiMerge→plugin 的环中解脱，只管「启停 + 生命周期记录」。
+ * stores/plugin.ts —— 插件运行时的 pinia 状态（持有 PluginManager 与记录快照，localStorage 启停持久化）。
+ * 插件 UI 注册已去向往 uiRegistry 登记总表，本 store 只管「启停 + 生命周期记录」。启动装载在 main.ts 的 init() 完成。
  */
 import { ref } from 'vue'
 import { defineStore } from 'pinia'

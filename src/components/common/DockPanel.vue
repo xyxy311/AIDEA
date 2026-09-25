@@ -1,19 +1,8 @@
 <script setup lang="ts">
 /**
- * DockPanel — 通用面板外壳组件（唯一面板包裹层）
- *
- * 左侧面板区、右侧 dock、活动栏图标均复用本组件来承载「面板外壳」职责：
- * - 标题栏显隐（showHeader）
- * - 活动栏图标（从 uiRegistry 登记总表读取，与 ActivityBar 同源）
- * - 标题（默认从登记条目 titleKey / 插件 title 读取，可用 title prop 覆盖）
- * - 关闭按钮显隐（showClose）
- * - 拖拽手柄（draggable），用于换位 / 跨容器移动
- * - 边距与滚动（NScrollbar x-scrollable）
- *
- * 面板内容组件由 uiRegistry 登记录入的条目 component 提供（纯内容，无自带 header），
- * 本组件不直接持有面板业务逻辑。
- *
- * 本组件不直接调用布局 store，拖拽与关闭都 emit 给父级处理，保持通用性。
+ * DockPanel — 通用面板外壳（唯一面板包裹层）：标题栏/图标/关闭/拖拽手柄/滚动，
+ * 面板内容由 uiRegistry 登记条目提供（纯内容，无自带 header）。
+ * 不直接调用布局 store，拖拽与关闭都 emit 给父级处理，保持通用性。
  */
 import { computed } from 'vue'
 import { NButton, NScrollbar } from 'naive-ui'
@@ -52,11 +41,11 @@ const emit = defineEmits<{
   (e: 'close', panelId: PanelKey): void
 }>()
 
-/** uiRegistry 登记总表（内置已 seed，插件注册进同一张表）——icon / 标题 / 内容组件单一来源 */
+/** uiRegistry 登记总表——icon/标题/内容组件单一来源 */
 const registry = useUiRegistryStore()
 const meta = computed(() => registry.panels.get(props.panelId))
 
-/** 解析标题：优先 prop 覆盖，否则插件 title 字符串，再否则内置 titleKey i18n */
+/** 标题：优先 prop 覆盖，否则插件 title，再否则内置 titleKey i18n */
 const title = computed(
   () =>
     props.title ??
@@ -64,10 +53,8 @@ const title = computed(
     (meta.value?.titleKey ? t(meta.value.titleKey) : ''),
 )
 
-/** 关闭按钮 tooltip：优先 prop 覆盖，否则默认「关闭面板」 */
 const closeHint = computed(() => props.closeHint ?? t('dock.closePanel'))
 
-/** 关闭按钮点击 → 触发 close 事件 */
 function onClose(): void {
   emit('close', props.panelId)
 }

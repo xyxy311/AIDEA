@@ -40,16 +40,8 @@ export interface ProjectTab {
 }
 
 /**
- * 项目 Store - 管理项目级导航与元数据
- *
- * 职责：
- * - 当前查看的节点 ID（currentNodeId）
- * - 项目名（根节点 text 的单一数据源派生）
- * - 节点树展开状态（左侧导航树的全局展开 / 收起）
- * - 视图快照（切走时保存/恢复各节点的独立导航状态）
- * - 内联视图实例的生命周期（销毁）
- *
- * 不存储节点 / 连线数据（归 nodeStore），不存储视口 / 选中（归 viewStore）。
+ * 项目 Store —— 管理项目级导航：当前查看的节点（currentNodeId）、项目名（根节点 text 派生）、
+ * 树展开态、视图快照、内联视图实例生命周期与多标签页。不存节点/连线数据（归 nodeStore），不存视口/选中（归 viewStore）。
  */
 export const useProjectStore = defineStore('project', () => {
   const nodeStore = useNodeStore()

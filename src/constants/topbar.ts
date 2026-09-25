@@ -9,18 +9,8 @@ import GridButton from '@/components/topbar/GridButton.vue'
 import AddNodeButton from '@/components/topbar/AddNodeButton.vue'
 
 /**
- * 顶部栏按钮品类表（单一数据源）——模仿左右侧边栏的 PANEL_CATALOG
- *
- * 原「菜单栏 MenuBar」更名为 LeftTopBar（左顶部条），
- * 原「工具栏 Toolbar」更名为 RightTopBar（右顶部条）。
- * 两侧的功能图标按钮地位等价，只在布局层决定放左还是右。本表只描述「按钮是什么」：
- * - id：按钮标识
- * - titleKey：标题 i18n key（经 t() 读取显示文案）
- * - defaultZone：默认放置侧（'left' 左顶部条 / 'right' 右顶部条）
- * - component：按钮逻辑组件（纯动作逻辑，视觉外壳由通用按钮模板 TopBarButton 提供）
- *
- * 新增顶部功能按钮只需在此登记 + 提供对应按钮组件：
- * 左/右顶部条会按 layout store 的顺序自动渲染，拖拽排序 / 跨区放置自动生效。
+ * 顶部栏按钮品类表（单一数据源）：功能按钮地位等价，只在布局层决定放左还是右。
+ * 新增按钮只需在此登记 + 提供组件，左/右顶部条按 layout store 顺序自动渲染，拖拽排序/跨区放置自动生效。
  */
 export type TopBarId =
   | 'open'

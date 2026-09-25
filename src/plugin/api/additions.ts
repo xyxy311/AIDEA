@@ -1,13 +1,7 @@
 /**
  * api/additions.ts —— 插件项目级扩展数据（additions）域
- *
- * 职责：把 additionsStore 以**插件命名空间**形式暴露（仅经 adapter.for(pluginId) 的
- * PluginScope 提供；共享 PluginApi 上无 additions 域）。
- * - 读写自动加 `pluginId:` 前缀，插件只能碰自己的 key。
- *   key 中含 `:` → 抛错（禁止嵌套前缀越界，也不能伪造其他插件的命名空间）。
- *
- * 一次 set/remove = 单条历史（进 undo 且标 dirty）；多步合并请用
- * `adapter.api.project.beginBatch() / commitBatch()` 包裹。
+ * 仅经 adapter.for(pluginId) 提供；读写自动加 `pluginId:` 前缀（key 含 `:` 抛错）。
+ * 一次 set/remove 为单条历史；多步合并用 adapter.api.project.beginBatch()/commitBatch() 包裹。
  */
 import { useAdditionsStore } from '@/stores/additions'
 import { useHistoryStore } from '@/stores/history'
@@ -23,7 +17,7 @@ export function createAdditionsApi(pluginId: string) {
   }
 
   const api = {
-    /** 读快照（深拷贝）；无对应加载函数 / 键不存在返回 undefined */
+    /** 读快照（深拷贝）；键不存在返回 undefined */
     get(key: string): unknown {
       return useAdditionsStore().get(scopedKey(key))
     },

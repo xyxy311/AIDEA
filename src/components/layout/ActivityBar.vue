@@ -1,16 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
- * ActivityBar - 左侧活动栏（VSCode 风格）
- *
- * 竖向固定条，展示左侧所有面板的图标：
- * - 悬停有 tooltip（读取面板 titleKey 的 i18n 文案）
- * - 点击切换激活面板（点击激活项的图标即收起面板区）
- * - 图标支持拖拽排序（HTML5 drag，复用 preset 列表排序模式）
- * - 拖拽结束时抑制随后的 click，避免误切换面板
- *
- * 面板列表与顺序来自 layout store（内存态，不持久化），
- * 渲染顺序 = layout.leftPanels（实时派生目录，受拖拽 reorder 影响），
- * 元信息已包含在条目内（icon / component / 标题 / pluginId 归因）。
+ * ActivityBar - 左侧活动栏（VSCode 风格）：竖向固定条展示左侧面板图标，
+ * 点击切换激活面板（激活项再点即收起）；支持 HTML5 拖拽排序并接收右侧 dock 拖入。
  */
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -31,23 +22,20 @@ const { leftPanels: orderedPanels, unplacedPanels } = storeToRefs(layout)
 
 const dragIndex = ref<number | null>(null)
 const dropIndex = ref<number | null>(null)
-/** 拖拽刚结束时抑制紧随其后的 click，避免误切换面板 */
+/** 拖拽结束时抑制紧随其后的 click，避免误切换面板 */
 const suppressClick = ref(false)
 
 function onDragStart(index: number, panel: UiPanelEntry, e: DragEvent): void {
   dragIndex.value = index
   suppressClick.value = true
-  // 写入统一跨容器拖拽协议，供右侧 dock 接收本面板
   writePanelDrag(e, { panelId: panel.key, from: 'left' })
 }
 
 // ── 活动栏容器作为拖拽目标（接收来自右侧 dock 的面板）──
 
-/** 是否高亮为可接收从右侧拖入的目标 */
 const isDropTarget = ref(false)
 
 function onContainerDragOver(e: DragEvent): void {
-  // 仅当拖拽来自右侧 dock 时高亮可投放
   isDropTarget.value = readPanelDrag(e)?.from === 'right'
 }
 
@@ -63,11 +51,8 @@ function onContainerDragLeave(): void {
   isDropTarget.value = false
 }
 
-// ── 底部「添加面板」─ 浮层列出未放置面板 ──
+// ── 底部「添加面板」浮层列出未放置面板 ──
 
-/** 未放置面板来自上方 storeToRefs 解构的 unplacedPanels（被关闭、既不属左侧也不属右侧） */
-
-/** 添加面板下拉选项（优先插件 title 字符串，否则内置 titleKey i18n） */
 const addMenuOptions = computed(() =>
   unplacedPanels.value.map((p) => ({
     label: p.title ?? t(p.titleKey ?? p.key),
@@ -101,13 +86,12 @@ function onDragEnd(): void {
 function endDrag(): void {
   dragIndex.value = null
   dropIndex.value = null
-  // 本 tick 后放开 click 抑制（拖拽结束若顺带触发 click 会被忽略）
+  // 本 tick 后放开 click 抑制
   setTimeout(() => {
     suppressClick.value = false
   }, 0)
 }
 
-/** 点击切换面板（拖拽刚结束时忽略该次 click）。layout.togglePanel 已收 PanelKey */
 function handleClick(id: PanelKey): void {
   if (suppressClick.value) {
     suppressClick.value = false

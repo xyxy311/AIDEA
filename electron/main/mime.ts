@@ -1,10 +1,7 @@
 /**
  * mime.ts —— 自定义协议（aidea-plugin:// 与 app://）响应的 MIME 推断（纯函数，可独立单测）。
- *
- * 设计依据：docs/Electron桌面化实施蓝图.md §7。
- * 硬要求：.js/.mjs 必须返回 text/javascript——ESM 模块加载对 MIME 严格校验，
- * 错误的 Content-Type 会让动态 import() 直接失败。
- * 两协议共用一张表（app 协议额外需要 .html 服务 index.html）。
+ * 硬要求：.js/.mjs 必须返回 text/javascript——ESM 对 MIME 严格校验，否则动态 import() 会失败。
+ * 两协议共用一张表（app:// 额外需要 .html 服务 index.html）。
  */
 import path from 'node:path'
 
@@ -19,7 +16,6 @@ const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
-  // renderer 载体协议（app://）需要：SPA 无路由，直接映射 dist/ 文件
   '.html': 'text/html',
   '.htm': 'text/html',
   '.ico': 'image/x-icon',

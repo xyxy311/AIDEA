@@ -25,28 +25,9 @@ import {
 export const globalIsDraggingNode = ref(false)
 
 /**
- * 节点拖动交互 Composable
- *
- * 以纯鼠标事件驱动节点拖拽（替代 Konva 原生 draggable），统一在
- * WhiteboardCanvas 的 Stage 事件中处理，与框选、连线创建等交互模式一致。
- *
- * 支持跨视图拖拽：主视图拖节点到内联视图（reparent 到内联视图观察的节点），
- * 内联视图拖节点回主视图（reparent 到主视图 viewedNodeId）。
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 交互流程：
- *   1. handleMouseDown：检测是否点中节点，记录起点（不改变选中状态）
- *   2. handleMouseMove：移动超过阈值才激活拖动；激活时若被拖节点未选中则单选它，
- *      然后按总 delta 同步移动所有选中节点；主视图拖拽中实时更新悬停的内联视图
- *   3. handleMouseUp：若未拖动（纯 click）则处理选中；若已拖动则判断跨视图 reparent
- *      或同视图提交移动
- *
- * 事件分流由 WhiteboardCanvas 负责：Shift 走连线创建，PanMode 走平移，
- * 命中节点走本 composable，空白走框选。
- *
- * 坐标系：stage.getRelativePointerPosition() 返回世界坐标，与 node.x/y 同系。
- * 跨视图判断用屏幕坐标（clientX/clientY）经 utils/view 映射，不依赖 stage 事件。
+ * 节点拖动交互：纯鼠标事件驱动（替代 Konva 原生 draggable），支持跨视图拖拽
+ * （主视图<->内联视图 reparent）。拖拽全程由 window mousemove 驱动，鼠标移入内联
+ * 覆盖层后 stage 收不到事件，用屏幕坐标经 utils/view 换算世界坐标并跟随。
  */
 export function useNodeDragging(viewId: string) {
   const view = useViewStore(viewId)

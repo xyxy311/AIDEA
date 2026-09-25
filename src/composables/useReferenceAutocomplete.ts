@@ -1,11 +1,6 @@
 /**
- * useReferenceAutocomplete - 节点引用 @ 补全共享逻辑
- *
- * 供原生 textarea（NodeTextEditor）与 naive NInput textarea（NodePropertyEditor）共用。
- * 通过 findReferenceAt 判断光标是否处于 `@...` 输入态，维护候选列表与键盘导航。
- *
- * 仅管理补全 UI 状态（visible / activeIndex / query / candidates），
- * 不感知具体编辑器实现，由调用方负责文本的读写与光标定位。
+ * 节点引用 @ 补全共享逻辑（原生 textarea 与 naive NInput 共用）。
+ * 只管理补全 UI 状态与键盘导航，不感知编辑器实现，文本读写/光标由调用方负责。
  */
 import { ref, computed } from 'vue'
 import { useNodeStore } from '@/stores/node'

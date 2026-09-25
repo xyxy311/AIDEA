@@ -15,17 +15,8 @@ import {
 import { computeInlineFit } from '@/utils/view'
 
 /**
- * 节点视图编排
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 跨 store 操作（nodeStore + viewStore + project）的统一入口：
- * - enterNodeView：进入选中节点的子级视图（任何节点均可进入）
- * - groupSelectedNodes：多选节点 -> 新建容器节点，reparent 选中节点 + 迁移内部连线
- * - clearNodeChildren：清空节点的所有子级（删除子树，保留节点本身）
- * - toggleInlineView：切换选中节点内联视图的展开/收起
- *
- * 组合和清空操作委托命令层（useCommands），自动入历史栈并处理视图协调。
+ * 节点视图编排：跨 store（nodeStore + viewStore + project）统一入口。
+ * 组合/清空委托命令层入历史栈；进入视图、展开/收起内联与自适应为纯视图操作不入栈。
  */
 export function useNodeViewLink(viewId: string) {
   const view = useViewStore(viewId)

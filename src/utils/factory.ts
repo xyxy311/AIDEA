@@ -1,3 +1,4 @@
+/** 节点与连线创建工厂：所有构造字段带默认值，保证对象字段完整。 */
 import type { WhiteboardNode, Connection, LineStyle } from '@/types'
 import {
   DEFAULT_NODE_WIDTH,
@@ -27,13 +28,7 @@ export interface CreateNodeOptions {
   tagIds?: string[]
 }
 
-/**
- * 节点工厂函数。
- *
- * 所有参数均有默认值，确保产出的节点字段完整（不为 undefined）。
- * 未来新增节点字段时，只需在此处补充默认值，所有创建点自动覆盖，
- * 避免散落在各处的对象字面量遗漏新字段。
- */
+/** 节点工厂：默认值保证字段完整；新增字段只需在此补充默认值即可全局生效。 */
 export function createNode(options: CreateNodeOptions = {}): WhiteboardNode {
   const {
     id = generateId(),
@@ -75,14 +70,7 @@ export interface CreateConnectionOptions {
   text?: string | null
 }
 
-/**
- * 连线工厂函数。
- *
- * 所有参数均有默认值，确保产出的连线字段完整。
- * 未提供 id 时，使用 fromNodeId / toNodeId 生成确定性 id（与原
- * nodeStore.addConnection 逻辑一致，避免两端互换产生重复连线）。
- * 未来新增连线字段时，只需在此处补充默认值。
- */
+/** 连线工厂：默认值保证字段完整；未提供 id 时按两端生成确定性 id（避免重复连线）。 */
 export function createConnection(options: CreateConnectionOptions = {}): Connection {
   const {
     fromNodeId = '',
@@ -93,7 +81,6 @@ export function createConnection(options: CreateConnectionOptions = {}): Connect
     directed = DEFAULT_CONNECTION_DIRECTED,
     text = null,
   } = options
-  // 确定性 id：保持与历史逻辑一致，使同两端连线不会重复创建
   const id =
     options.id ?? (fromNodeId < toNodeId ? toNodeId + fromNodeId : fromNodeId + toNodeId)
   return {

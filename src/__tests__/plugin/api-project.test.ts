@@ -5,10 +5,7 @@ import { useProjectStore } from '@/stores/project'
 import { useFileStore } from '@/stores/file'
 import { ROOT_NODE_ID } from '@/stores/node'
 
-/**
- * project 域 api 测试：项目信息 / 树展开 / 标签页 / 视图导航 / 项目级操作。
- * 新增能力均为项目级 / 视图态操作（不经命令层），测试确认其能正确读回并改变 store 状态。
- */
+/** project 域 api 测试：项目信息 / 树展开 / 标签页 / 视图导航 / 项目级操作（均不经命令层）。 */
 function makeApi() {
   return createPluginAdapter().api
 }

@@ -1,3 +1,4 @@
+/** utils 统一出口：纯函数与类型聚合。 */
 export { generateId } from './id'
 export { clampPosition, measureText, calculateTextContentSize } from './geometry'
 export { createNode, createConnection } from './factory'

@@ -19,16 +19,8 @@ import { extractReferenceName } from '@/utils/reference'
 import { snapPosition, snapSize } from '@/utils/grid'
 
 /**
- * 命令层 - 数据写操作的统一入口
- *
- * 每个语义接口内部完成：捕获旧值 -> 调用 nodeStore action -> 构造 DataPatch -> pushCommand。
- * 视图协调（destroyViews、switchView 回退）收拢到此层和 history store。
- *
- * 交互层（composables/components）应通过此 composable 执行所有数据写操作，
- * 而非直接调用 nodeStore 的写 action。
- *
- * 例外：拖拽 mousemove 中的 nodeStore.moveNode（实时渲染，不入栈），
- * mouseup 时调 commitNodeMove 入栈。
+ * 命令层 - 数据写操作统一入口：捕获旧值 -> nodeStore action -> DataPatch -> pushCommand。
+ * 交互层应经此写数据（视图协调收拢于此与 history store）；例外为拖拽/缩放实时渲染不入栈。
  */
 export function useCommands() {
   const nodeStore = useNodeStore()
@@ -135,16 +127,8 @@ export function useCommands() {
   }
 
   /**
-   * 网格对齐：将指定节点对齐到网格约束（网格模式开启时的批量吸附）。
-   *
-   * 对齐规则（与 utils/grid 一致）：
-   * 1. 先 fitNodeToText（文本自适应，可能撑大尺寸）
-   * 2. 尺寸向上取整百（snapSize）
-   * 3. 位置四舍五入（snapPosition）
-   *
-   * 捕获修改前后（x/y/width/height）为 modify patch，多节点合并为单条历史
-   * （一个 DataPatch 含若干 modify，无需 beginBatch）。
-   * 若某节点修改后无变化（本就对齐且文本未撑大）则跳过该 modify，避免污染历史。
+   * 网格对齐：先 fitNodeToText 再 snapSize/snapPosition（规则与 utils/grid 一致）。
+   * 捕获 x/y/width/height 的 modify patch，多节点合并为单条历史；无变化则跳过该 modify。
    */
   function alignNodesToGrid(ids: string[]): void {
     // 先捕获旧值（runWithViewCoord 执行前仍需读取节点）
@@ -192,14 +176,8 @@ export function useCommands() {
   // ── 节点文本 ──
 
   /**
-   * 设置节点文本。
-   * 会触发 fitNodeToText，old/new 含 fit 后的尺寸。
-   * coalesceKey 用于属性面板连续输入合并。
-   *
-   * 重名校验：若新文本以 `#` 开头且引用名已被其他节点占用，则不执行写入、不入栈，
-   * 返回 `{ ok: false, conflictRef }`。否则正常执行并入栈，返回 `{ ok: true }`。
-   *
-   * @returns 是否成功；失败时携带冲突的引用名
+   * 设置节点文本（触发 fitNodeToText，coalesce 合并连续输入）。
+   * 重名校验：新文本以 `#` 开头且引用名被其他节点占用则不入栈，返回冲突引用名。
    */
   function setNodeText(nodeId: string, text: string): { ok: boolean; conflictRef?: string } {
     const refName = extractReferenceName(text)
@@ -228,13 +206,8 @@ export function useCommands() {
   }
 
   /**
-   * 批量更新选中节点文本。
-   *
-   * 重名校验：若新文本以 `#` 开头且 ids 多于 1 个，则这些节点彼此重名，视为冲突整批失败；
-   * 若 ids 仅 1 个，则校验该节点是否与已有引用重名（排除自身）。
-   * 任一冲突都不执行写入、不入栈，返回 `{ ok: false, conflictRef }`。
-   *
-   * @returns 是否成功；失败时携带冲突的引用名
+   * 批量更新选中节点文本。重名校验：ids>1 时彼此重名视为冲突整批失败；
+   * 单个节点则校验与已有引用重名。任一冲突都不入栈。
    */
   function setNodesText(ids: string[], text: string): { ok: boolean; conflictRef?: string } {
     if (ids.length === 0) return { ok: true }
@@ -358,16 +331,8 @@ export function useCommands() {
   // ── reparent ──
 
   /**
-   * 跨视图 reparent 节点（拖拽到内联视图 / 拖回主视图）。
-   *
-   * 1. 迁移内部连线（两端均在迁移集合）到目标父级
-   * 2. 删除外部连线（仅一端在迁移集合）—— reparent 后不再是同级关系
-   * 3. reparent 每个节点到 targetParentId 并设置新位置
-   * 4. 入栈复合 DataPatch（parentId + x/y 修改 + 连线 remove/add）
-   *
-   * @param nodeIds       要迁移的节点 ID（跨视图选中时可能来自不同父级）
-   * @param targetParentId 新父级节点 ID
-   * @param newPositions   每个节点在新视图中的落点 { x, y }
+   * 跨视图 reparent 节点：迁移内部连线到目标父级、删除外部连线，reparent 到 targetParentId。
+   * 入栈复合 DataPatch（parentId + 位置修改 + 连线 remove/add）。
    */
   function reparentTo(
     nodeIds: string[],
@@ -600,10 +565,7 @@ export function useCommands() {
   }
 
   /**
-   * 批量更新连线样式（按连线 ID 全局查找，支持跨视图多父级）。
-   * 跨视图选中时，选中连线可能来自主视图或任一内联视图宿主节点，
-   * 此方法按 ID 全局查找每条连线所属父级，分组更新，合并为单条历史。
-   * coalesce 合并用同一 key（按 id 集合）。
+   * 批量更新连线样式（按连线 ID 全局查找，支持跨视图多父级），合并为单条历史。
    */
   function updateConnectionsStyleByIds(
     connIds: string[],
@@ -656,9 +618,7 @@ export function useCommands() {
   }
 
   /**
-   * 删除连线（按连线 ID 全局查找，支持跨视图多父级）。
-   * 跨视图选中时，选中连线可能来自主视图或任一内联视图宿主节点，
-   * 此方法按 ID 全局查找每条连线所属父级，分组删除，合并为单条历史。
+   * 删除连线（按连线 ID 全局查找，支持跨视图多父级），合并为单条历史。
    */
   function deleteConnectionsByIds(connIds: string[]): void {
     if (connIds.length === 0) return
@@ -694,13 +654,7 @@ export function useCommands() {
   // ── 复合操作 ──
 
   /**
-   * 组合选中节点。
-   * 1. 计算包围盒中心
-   * 2. 新建容器节点
-   * 3. 迁移内部连线
-   * 4. reparent 选中节点到容器
-   * 5. 入栈复合命令
-   *
+   * 组合选中节点：计算包围盒中心建容器，batch 合并「建容器 + reparent」为单条历史。
    * @returns 容器节点 ID（失败返回 null）
    */
   function groupNodes(ids: string[]): string | null {

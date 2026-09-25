@@ -1,8 +1,6 @@
 <script setup lang="ts">
 /**
- * LayoutSection — 设置面板「布局」分区
- *
- * 「恢复默认布局」按钮，确认后调用 layout.resetDock()。
+ * LayoutSection — 设置面板「布局」分区：「恢复默认布局」按钮，确认后调用 layout.resetDock()。
  */
 import { NButton, useDialog } from 'naive-ui'
 import { useLayoutStore } from '@/stores/layout'

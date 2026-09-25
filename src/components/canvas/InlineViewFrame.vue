@@ -1,16 +1,8 @@
 <script setup lang="ts">
 /**
- * InlineViewFrame - 内联视图宿主框架
- *
- * 当主视图中某节点被"展开"为内联视图时，用本组件替代 WhiteboardNode 渲染：
- * - 标题栏（节点样式 + 节点文本），承担原节点的交互（拖拽移动 / 选中 / 连线起点 / 双击编辑）
- * - 矩形边界（内联视图尺寸），供 Transformer 缩放
- *
- * v-group 的 name 设为节点 ID，使 useNodeDragging / useConnectionCreation 的
- * findNodeIdFromTarget 直接识别，零改动复用现有交互。
- *
- * 矩形内容区域（标题栏下方）被 InlineViewCanvas 的 DOM 覆盖层占据，
- * 标题栏区域不被覆盖，保持主 Stage 可交互。
+ * InlineViewFrame - 内联视图宿主框架：节点被展开为内联视图时替代 WhiteboardNode 渲染。
+ * 标题栏（节点样式 + 节点文本）承担原节点交互，矩形边界供 Transformer 缩放；
+ * v-group name 设为节点 ID，供 findNodeIdFromTarget 零改动识别复用现有交互。
  */
 import { ref, computed } from 'vue'
 import type { VueKonvaRef } from 'vue-konva'
@@ -106,9 +98,7 @@ function onDblClick(e: KonvaEventObject<MouseEvent>): void {
 }
 
 defineExpose({
-  /** 返回矩形边界 Konva.Rect，供父组件全局 Transformer 附着 */
   getRectNode: () => rectRef.value?.getNode() ?? null,
-  /** 返回 Konva.Group，供父组件调整层级（选中置顶） */
   getGroupNode: () => groupRef.value?.getNode() ?? null,
 })
 </script>

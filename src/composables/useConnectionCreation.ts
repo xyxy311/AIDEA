@@ -13,20 +13,8 @@ import {
 } from '@/constants'
 
 /**
- * 连线创建交互 Composable
- *
- * 管理 Shift+点击拖拽创建连线的完整交互流程：
- * - Shift 键状态追踪
- * - 鼠标事件处理（mousedown -> 标记起始节点，mousemove -> 更新临时终点，mouseup -> 创建连线）
- * - 临时连线的 Konva 渲染配置
- *
- * @param viewId - 视图 ID（主视图传 'main'）
- *
- * 用法：
- *   const conn = useConnectionCreation(viewId)
- *   onMounted(() => conn.setup())
- *   onUnmounted(() => conn.teardown())
- *   在 Stage 上绑定 @mousedown="conn.handleMouseDown" 等事件
+ * 连线创建交互：Shift+点击拖拽创建连线（mousedown 标起始节点，mousemove 更新临时终点，
+ * mouseup 建连线）；临时连线为虚线。起始/结束处无节点时自动创建节点并 batch 合并。
  */
 export function useConnectionCreation(viewId: string) {
   const view = useViewStore(viewId)

@@ -1,29 +1,8 @@
 <script setup lang="ts">
 /**
- * PluginModalHost — 插件模态宿主（应用级单实例，与 SettingsModal 同级挂载于 AppShell）
- *
- * 与 PluginFloatingHost 同层面、职责对称（插件注册都只填内容）：
- * ┌────────────┬────────────────────────────────┬──────────────────────────────────┐
- * │            │ 本宿主（模态）                  │ PluginFloatingHost（浮动层）      │
- * ├────────────┼────────────────────────────────┼──────────────────────────────────┤
- * │ 实例数     │ 单实例（modal store 裁决）      │ 可存在多个（逐条目渲染）          │
- * │ 位置       │ 固定（ModalShell 居中）         │ 可随意拖动（宿主窗口组件）        │
- * │ 关闭方     │ 主应用（ModalShell × / Esc）    │ 只由对应插件负责（运行时 API）    │
- * │ 显隐状态   │ modalStore.activeKey            │ pluginFloating store（逐 key）   │
- * └────────────┴────────────────────────────────┴──────────────────────────────────┘
- *
- * 从 uiRegistry 登记总表的 modals 表读插件模态条目，按 modalStore.activeKey 渲染当前
- * 打开的插件模态（内置模态如 settings 由各自组件承载，不经本宿主）：
- * - activeKey 为 null 或对应条目不存在 → 不渲染任何内容（v-if 卸载整棵子树）
- * - 渲染结构：ModalShell 外壳（标题栏 / 遮罩 / Esc / 宽度）+ PluginErrorBoundary
- *   （渲染错误隔离到占位，与 DockPanel / 浮动窗口对插件条目的处理一致）
- * - 本宿主无任何清理逻辑（无需孤儿兜底）：未登记 key 在插件入口
- *   createPluginModalApi.open 即被拒绝（warn + false，见 plugin/ui.ts）；
- *   运行期注册表不变——启停仅持久化、重启应用生效，removePlugin 运行期唯一触发为
- *   启动期 installAll 内 setup 抛错的 rollbackPluginUi（此时 activeKey 恒为 null，
- *   时序上不可能有模态打开）；且启停开关在设置面板内，模态独占下无法同时发生。
- *
- * 关闭一律上抛 modalStore.close()，开关状态由 modal store 单一数据源驱动。
+ * PluginModalHost — 插件模态宿主（应用级单实例，挂载于 AppShell）：按 modalStore.activeKey
+ * 从 uiRegistry 的 modals 表读取并渲染当前打开的插件模态（内置模态由各自组件承载），
+ * 结构为 ModalShell 外壳 + PluginErrorBoundary；关闭一律上抛 modalStore.close()。
  */
 import { computed } from 'vue'
 import ModalShell from '@/components/common/ModalShell.vue'

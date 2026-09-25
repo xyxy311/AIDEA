@@ -1,16 +1,8 @@
 <script lang="ts">
 /**
- * TopBarButton - 通用顶部栏按钮模板（外壳）
- *
- * 顶部栏每个已注册按钮（LeftTopBar / RightTopBar）的视觉外壳，提供：
- * - 悬停 NTooltip 文字提示（与左侧活动栏同一视觉语言，title 已由调用方 t() 翻译）
- * - active 激活态（底部主色指示条，如网格开关）与 primary 主色变体（如「新建节点」）
- * - disabled 禁用态、variant 样式
- * - 「更多选项」下拉：menu 存在时渲染 split-button（主图标 + 独立小三角触发区），
- *   点击主区触发 @click，点小三角弹出 NDropdown
- *
- * 各按钮只提供 icon / title / disabled / active / variant / menu 与 @click，
- * 视觉细节全部由本模板统一（新增按钮无需重写样式）。
+ * TopBarButton - 通用顶部栏按钮模板（外壳）。提供 tooltip / active（底部主色指示条）/
+ * primary（主色填充）/ disabled / 下拉 split-button；各按钮只提供 icon/title/disabled/
+ * active/variant/menu 与 @click，视觉细节全部由本模板统一。
  */
 import type { Component } from 'vue'
 import type { DropdownOption } from 'naive-ui'

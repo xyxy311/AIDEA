@@ -1,9 +1,4 @@
-/**
- * recentFiles store - 最近打开项目（路径式）测试
- *
- * 纯桌面形态：最近列表只存 name + path（磁盘由 main 进程经 aideaFile 桥管理），
- * 不再内联项目内容。验证：同名去重置顶、按最近时间降序、超量裁剪、remove/clear。
- */
+/** recentFiles store 路径式测试：同名去重置顶、按最近时间降序、超量裁剪、remove/clear */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useRecentFilesStore } from '@/stores/recentFiles'

@@ -8,9 +8,6 @@ import {
 } from '../../utils/search'
 import type { WhiteboardNode } from '../../types'
 
-// ===================================================================
-// highlightLine
-// ===================================================================
 describe('highlightLine', () => {
   it('无命中返回单个普通分段', () => {
     expect(highlightLine('abc', 'z')).toEqual([{ text: 'abc', match: false }])
@@ -42,9 +39,6 @@ describe('highlightLine', () => {
   })
 })
 
-// ===================================================================
-// buildDisplayLine
-// ===================================================================
 describe('buildDisplayLine', () => {
   it('短行直接返回整行高亮', () => {
     const segs = buildDisplayLine('需求', '需', 60)
@@ -81,9 +75,6 @@ describe('buildDisplayLine', () => {
   })
 })
 
-// ===================================================================
-// buildSearchLines
-// ===================================================================
 describe('buildSearchLines', () => {
   it('命中在首行：body 为 null', () => {
     const { title, body } = buildSearchLines('需求分析\n第二行', '需求', 60)
@@ -99,9 +90,6 @@ describe('buildSearchLines', () => {
   })
 })
 
-// ===================================================================
-// searchNodes
-// ===================================================================
 function makeNode(partial: Partial<WhiteboardNode> & { id: string; text: string }): WhiteboardNode {
   return {
     parentId: 'root',

@@ -21,11 +21,9 @@ import { generateId } from '@/utils/id'
 import type { WhiteboardNode, Tag } from '@/types'
 
 /**
- * useProjectFile - 项目文件编排层（新建 / 保存 / 打开）
- *
- * 核心是 collectViewState（收集主视图状态）与 loadProjectIntoApp（载入数据）。
- * 文件选择 / 读写为 Electron 原生行为（main 进程 dialog + fs，经 aideaFile 桥），
- * 本层只负责正确分支与提示。
+ * useProjectFile - 项目文件编排：新建 / 保存 / 打开 / 最近文件。
+ * 核心为 collectViewState（收集主视图状态）与 loadProjectIntoApp（载入数据）；
+ * 文件选择与读写经 aideaFile 桥由 main 进程完成，本层负责分支与提示。
  */
 
 /** 确认回调：返回 true 表示确认放弃，false 表示取消 */

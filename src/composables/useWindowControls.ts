@@ -1,18 +1,7 @@
 /**
- * useWindowControls —— Electron 无边框窗口控制（最小化 / 最大化-还原 / 关闭）
- *
- * ⚠ 全 renderer 唯一的 `window.aideaWindow` 桥访问点（架构红线，与
- * src/plugin/sources/desktop.ts 的 window.aideaDesktop 同一模式）：
- * - 本项目已收敛为纯 Electron 桌面形态，preload 注入的窗口桥恒存在；
- * - Electron preload 经 contextBridge 注入先于应用脚本执行，因此模块加载时读取一次即可。
- *
- * 除本文件外，renderer 任何代码不得访问 window.aideaWindow。窗口控制按钮组是固定
- * 窗口 chrome：不登记 constants/topbar.ts 品类表、不参与 layout store 与拖拽排序——
- * 被拖走或移除会导致窗口失控（对应组件 WindowControls.vue 由 RightTopBar 固定渲染）。
- *
- * 桥契约由 Electron 侧（electron/shared/bridge.ts + preload，并行 lane）正式声明；
- * 在其类型落地前，这里用交叉类型断言局部描述桥形状——结构与契约一致，正式声明
- * （Window.aideaWindow 获得全局类型）落地后本文件无需改动即可继续编译。
+ * useWindowControls —— Electron 无边框窗口控制的唯一 renderer 访问点（架构红线）。
+ * preload 桥 window.aideaWindow 恒存在，模块加载时读取一次；窗口按钮不登记 topbar 品类表、
+ * 不参与 layout（被拖走/移除会导致窗口失控），由 RightTopBar 固定渲染 WindowControls.vue。
  */
 import { onMounted, onUnmounted, ref, type Ref } from 'vue'
 

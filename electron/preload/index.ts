@@ -1,12 +1,10 @@
 /**
- * preload/index.ts —— contextBridge 窄桥：window.aideaDesktop + window.aideaWindow。
- *
- * 设计依据：docs/Electron桌面化实施蓝图.md §3 与 electron/shared/bridge.ts 的
- * DesktopBridge / WindowBridge 契约。两座桥职责分离：
+ * preload/index.ts —— contextBridge 窄桥：
  * - aideaDesktop 插件桥：插件系统（扫描/订阅插件目录）；
  * - aideaWindow 窗口控制桥：窗口 chrome（最小化/最大化切换/关闭/最大化状态推送）。
- *
- * 安全边界（红线 2）：只暴露契约白名单内的方法；绝不暴露 fs/path/shell/dialog、
+ * - aideaFile 文件桥桥：文件操作（打开/另存/记忆路径）。
+ * 
+ * 安全边界：只暴露契约白名单内的方法；绝不暴露 fs/path/shell/dialog、
  * 任何携带路径参数的通道、ipcRenderer 本体。形状用类型标注对齐两个 Bridge 接口，
  * 契约漂移（字段改名/签名变化）会在 type-check 期暴露。
  *

@@ -58,8 +58,12 @@ export async function generateVendor(outDir, mode = 'production') {
   await fs.mkdir(outDir, { recursive: true })
 
   for (const pkg of SDK_VENDOR) {
-    // 动态入口：export * 与 namespace default 双形态，插件作者两种导入习惯都能工作
-    const contents = `export * from '${pkg}';\nimport * as ns from '${pkg}';\nexport default ns;\n`
+    // 动态入口：export * 与 ESM 合规 default 双形态，插件作者两种导入习惯都能工作。
+    // default 用 `(ns).default ?? ns`：真实 default 优先（ESM 语义 `import X from 'pkg'`），
+    // 无 default（纯命名导出包）回退整个 namespace。绝不能把 namespace 直接设为 default——
+    // 对 CJS/UMD 包（konva）esbuild 会用它包装出**只读** namespace，宿主 `import Konva from 'konva'`
+    // 后 `Konva.pixelRatio = ...` 直接 TypeError 抛错，整页白屏（已踩坑）。
+    const contents = `export * from '${pkg}';\nimport * as ns from '${pkg}';\nexport default (ns).default ?? ns;\n`
     await esbuild.build({
       stdin: {
         contents,

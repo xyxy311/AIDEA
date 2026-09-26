@@ -1,4 +1,5 @@
 import type { KonvaEventObject } from 'konva/lib/Node'
+import type Konva from 'konva'
 import { t } from '@/composables/useT'
 import { useViewStore } from '@/stores/view'
 import { useNodeStore } from '@/stores/node'
@@ -178,10 +179,53 @@ export function useCanvasEvents(viewId: string) {
   }
 
   /**
+   * 解析右键命中的目标（节点或连线）：从 e.target 沿父链向上，
+   * 匹配返回形状/容器 name 是否为已知节点 ID 或连线 ID。
+   * 未命中任何节点/连线（空白画布）返回 null。
+   */
+  function resolveContextTarget(e: KonvaEventObject<MouseEvent>): {
+    type: 'node' | 'connection'
+    id: string
+  } | null {
+    const hitTarget = e.target
+    // 防御：real 事件 target 恒有；测试 mock 可能缺失时按「未命中」处理
+    if (!hitTarget || typeof hitTarget.getStage !== 'function') return null
+    let target: Konva.Node | null = hitTarget
+    const stage = hitTarget.getStage()
+    while (target && target !== stage) {
+      const name = target.name()
+      if (name) {
+        if (nodeStore.getNode(name)) return { type: 'node', id: name }
+        if (nodeStore.findConnectionById(name)) return { type: 'connection', id: name }
+      }
+      target = target.getParent()
+    }
+    return null
+  }
+
+  /**
    * 处理画布右键菜单事件：阻止默认菜单，按选中状态弹出对应菜单项。
+   *
+   * 优化：未选中任何节点/连线时，若右键命中节点或连线，先自动选中它，
+   * 使其随即弹出该目标的选中级右键菜单；右键命中空白时保持原有行为。
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     e.evt.preventDefault()
+
+    // 未选中任何节点/连线且右键命中目标：自动选中，再按选中态生成菜单
+    if (
+      view.selectedNodeIds.size === 0 &&
+      view.selectedConnectionIds.size === 0
+    ) {
+      const hit = resolveContextTarget(e)
+      if (hit) {
+        if (hit.type === 'node') {
+          view.selectNode(hit.id)
+        } else {
+          view.selectConnection(hit.id)
+        }
+      }
+    }
 
     const count = view.selectedNodeIds.size
     const connCount = view.selectedConnectionIds.size

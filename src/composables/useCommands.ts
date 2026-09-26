@@ -3,6 +3,7 @@ import type { ComputedRef } from 'vue'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
+import { usePresetsStore } from '@/stores/presets'
 import type { Connection, LineStyle, WhiteboardNode } from '@/types'
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '@/constants'
 import {
@@ -26,6 +27,7 @@ export function useCommands() {
   const nodeStore = useNodeStore()
   const project = useProjectStore()
   const history = useHistoryStore()
+  const presets = usePresetsStore()
 
   // ── 历史控制 ──
 
@@ -55,9 +57,11 @@ export function useCommands() {
     x: number,
     y: number,
     text?: string,
-    options?: { id?: string },
+    options?: { id?: string; borderColor?: string },
   ): string {
-    const id = nodeStore.addNode(parentId, x, y, text, options)
+    // 默认样式：取当前预设分组的第一项；无分组/分组为空 → undefined，退回到工厂默认
+    const borderColor = options?.borderColor ?? presets.defaultNodePreset?.borderColor
+    const id = nodeStore.addNode(parentId, x, y, text, { ...options, borderColor })
     const node = captureNodeFull(nodeStore, id)
     const patch: DataPatch = {
       nodeChanges: [{ type: 'add', id, new: node ?? undefined }],
@@ -426,7 +430,21 @@ export function useCommands() {
 
   /** 创建连线 */
   function addConnection(parentId: string, fromNodeId: string, toNodeId: string): string | null {
-    const connId = nodeStore.addConnection(parentId, fromNodeId, toNodeId)
+    // 默认样式：取当前预设分组的第一项；无分组/分组为空 → 不带覆盖，退回到工厂默认
+    const preset = presets.defaultConnectionPreset
+    const connId = nodeStore.addConnection(
+      parentId,
+      fromNodeId,
+      toNodeId,
+      preset
+        ? {
+            lineStyle: preset.lineStyle,
+            strokeWidth: preset.strokeWidth,
+            strokeColor: preset.strokeColor,
+            directed: preset.directed,
+          }
+        : undefined,
+    )
     // 捕获新创建的连线
     const conns = nodeStore.getConnections(parentId)
     const conn = conns.find(

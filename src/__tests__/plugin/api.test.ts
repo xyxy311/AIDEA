@@ -110,7 +110,11 @@ describe('adapter 分类 api', () => {
   it('node: applyPresetById writes a style and is undoable', () => {
     const api = makeApi()
     const id = api.node.create(ROOT_NODE_ID, 0, 0, 'n')
-    const preset = api.presets.nodePresets()[0]
+    const initial = api.node.get(id)!.borderColor
+    // 选一个与初始色不同的预设，确保 apply 后 undo 可区分恢复
+    const preset =
+      api.presets.nodePresets().find((p) => p.borderColor !== initial) ??
+      api.presets.nodePresets()[0]
     expect(api.node.applyPresetById(id, preset.id, 'plugin-test')).toBe(true)
     expect(api.node.get(id)?.borderColor).toBe(preset.borderColor)
     api.project.undo()

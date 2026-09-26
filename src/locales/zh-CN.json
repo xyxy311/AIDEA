@@ -23,7 +23,6 @@
       "addNode": "添加节点",
       "grid": "网格",
       "gridActive": "网格已开启",
-      "debug": "调试",
       "nodeCount": "节点：{count}",
       "minimize": "最小化",
       "maximize": "最大化",
@@ -255,6 +254,7 @@
     "copy": "复制",
     "cut": "剪切",
     "paste": "粘贴",
+    "delete": "删除",
     "placeholderEdit": "双击编辑"
   },
   "floatingEditor": {

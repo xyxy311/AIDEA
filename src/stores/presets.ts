@@ -178,6 +178,21 @@ export const usePresetsStore = defineStore('presets', () => {
     defaultGroupIdFor('connection', connectionGroupFilter.value),
   )
 
+  /**
+   * 新建节点的默认样式来源：取当前「当前分组筛选」下可见列表的第一项
+   * （等价于按数字键 1）；过滤后列表为空时为 null（调用方回退到默认样式）。
+   */
+  const defaultNodePreset = computed<NodePresetStyle | null>(
+    () => visibleNodePresets.value[0] ?? null,
+  )
+
+  /**
+   * 新建连线的默认样式来源：同上
+   */
+  const defaultConnectionPreset = computed<ConnectionPresetStyle | null>(
+    () => visibleConnectionPresets.value[0] ?? null,
+  )
+
   function setNodeGroupFilter(filter: PresetGroupFilter): void {
     nodeGroupFilter.value = filter
   }
@@ -324,6 +339,8 @@ export const usePresetsStore = defineStore('presets', () => {
     visibleConnectionPresets,
     currentNodeGroupId,
     currentConnectionGroupId,
+    defaultNodePreset,
+    defaultConnectionPreset,
     setNodeGroupFilter,
     setConnectionGroupFilter,
     getGroup,

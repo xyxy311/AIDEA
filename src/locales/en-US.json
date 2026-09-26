@@ -23,7 +23,6 @@
     "addNode": "Add Node",
     "grid": "Grid",
     "gridActive": "Grid enabled",
-    "debug": "Debug",
     "nodeCount": "Nodes: {count}",
     "minimize": "Minimize",
     "maximize": "Maximize",
@@ -256,6 +255,7 @@
     "copy": "Copy",
     "cut": "Cut",
     "paste": "Paste",
+    "delete": "Delete",
     "placeholderEdit": "Double-click to edit"
   },
   "floatingEditor": {

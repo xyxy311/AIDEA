@@ -212,7 +212,7 @@ export const useNodeStore = defineStore('node', () => {
     x: number,
     y: number,
     text?: string,
-    options?: { id?: string },
+    options?: { id?: string; borderColor?: string },
   ): string {
     const nodeId = options?.id ?? generateId()
     const node = createNode({
@@ -221,6 +221,7 @@ export const useNodeStore = defineStore('node', () => {
       x,
       y,
       text,
+      borderColor: options?.borderColor,
     })
     nodes.set(nodeId, node)
     return nodeId
@@ -472,10 +473,15 @@ export const useNodeStore = defineStore('node', () => {
   // ===== 连线操作（均作用于持有连线的父节点） =====
 
   /** 添加连线（加到 parentId 节点的 connections） */
-  function addConnection(parentId: string, fromNodeId: string, toNodeId: string): string | null {
+  function addConnection(
+    parentId: string,
+    fromNodeId: string,
+    toNodeId: string,
+    style?: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed' | 'text'>>,
+  ): string | null {
     const parent = nodes.get(parentId)
     if (!parent) return null
-    const conn = createConnection({ fromNodeId, toNodeId })
+    const conn = createConnection({ fromNodeId, toNodeId, ...style })
     if (parent.connections.some((c) => c.id === conn.id)) return conn.id
     parent.connections.push(conn)
     return conn.id

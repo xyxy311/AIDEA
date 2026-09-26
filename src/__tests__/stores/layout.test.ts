@@ -150,9 +150,9 @@ describe('useLayoutStore（delta 模型）', () => {
 
     it('moveTopZone：跨侧移动（源侧移除 + 目标侧末尾追加）', () => {
       const layout = useLayoutStore()
-      layout.moveTopZone('debug', 'left')
-      expect(keysOf(layout.topLeft)).toEqual([...DEFAULT_LEFT_TOP, 'debug'])
-      expect(keysOf(layout.topRight)).toEqual(DEFAULT_RIGHT_TOP.filter((id) => id !== 'debug'))
+      layout.moveTopZone('add-node', 'left')
+      expect(keysOf(layout.topLeft)).toEqual([...DEFAULT_LEFT_TOP, 'add-node'])
+      expect(keysOf(layout.topRight)).toEqual(DEFAULT_RIGHT_TOP.filter((id) => id !== 'add-node'))
     })
 
     it('resetTopBar / resetDock：清 delta 复位默认', () => {

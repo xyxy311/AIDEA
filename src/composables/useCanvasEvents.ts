@@ -157,12 +157,34 @@ export function useCanvasEvents(viewId: string) {
   }
 
   /**
+   * 追加"删除"菜单项（无图标，danger 样式，位于内建菜单项末尾、插件项之前）：
+   * 存在选中节点时删除选中节点，存在选中连线时删除选中连线，然后清空选中。
+   */
+  function appendDelete(target: ContextMenuItem[]): void {
+    target.push({
+      key: 'delete',
+      label: t('canvas.delete'),
+      danger: true,
+      action: () => {
+        if (view.selectedNodeIds.size > 0) {
+          commands.deleteNodes(Array.from(view.selectedNodeIds))
+        }
+        if (view.selectedConnectionIds.size > 0) {
+          commands.deleteConnectionsByIds(Array.from(view.selectedConnectionIds))
+        }
+        view.clearSelection()
+      },
+    })
+  }
+
+  /**
    * 处理画布右键菜单事件：阻止默认菜单，按选中状态弹出对应菜单项。
    */
   function handleStageContextMenu(e: KonvaEventObject<MouseEvent>) {
     e.evt.preventDefault()
 
     const count = view.selectedNodeIds.size
+    const connCount = view.selectedConnectionIds.size
 
     const items: ContextMenuItem[] = []
 
@@ -198,9 +220,9 @@ export function useCanvasEvents(viewId: string) {
       })
     }
 
-    // 无选中节点：显示"粘贴"与插件画布级（scope='canvas'）菜单项；两者皆无则关闭菜单
+    // 无选中节点：删除（内建项，位于插件项之前）+ 插件画布级（scope='canvas'）菜单项
     if (count === 0) {
-      // 追加插件画布级菜单项（when 收到空选中数组）
+      if (connCount > 0) appendDelete(items)
       appendPluginContextMenuItems(items, 'canvas', [])
       if (items.length === 0) {
         contextMenu.close()
@@ -260,7 +282,10 @@ export function useCanvasEvents(viewId: string) {
       })
     }
 
-    // ── 插件注册的选中级（scope='selection'）菜单项：追加在内置项之后 ──
+    // ── 删除（有选中节点时可用）：内建项末尾、插件项之前 ──
+    if (count > 0) appendDelete(items)
+
+    // ── 插件注册的选中级（scope='selection'）菜单项：追加在内建项之后 ──
     appendPluginContextMenuItems(items, 'selection', Array.from(view.selectedNodeIds))
 
     contextMenu.open(e.evt.clientX, e.evt.clientY, items)

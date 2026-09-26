@@ -4,7 +4,7 @@ import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
 import { useHistoryStore } from '@/stores/history'
 import { useCommands } from '@/composables/useCommands'
-import { DEFAULT_NODE_STYLE } from '@/constants'
+import { DEFAULT_NODE_PRESETS } from '@/constants'
 
 describe('history store', () => {
   beforeEach(() => {
@@ -223,8 +223,8 @@ describe('history store', () => {
       const commands = useCommands()
 
       const id = commands.createNode(ROOT_NODE_ID, 0, 0, '样式节点')
-      // 新建节点的样式字段为默认值（非 undefined）
-      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_STYLE.borderColor)
+      // 新建节点的样式字段为默认值（非 undefined）；默认分组筛选「全部」→ 首个预设色
+      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_PRESETS[0].borderColor)
 
       // 更新样式 - 不应抛错
       commands.updateNodesStyle([id], { borderColor: '#ff0000' })
@@ -232,7 +232,7 @@ describe('history store', () => {
 
       // undo 应恢复为默认值
       history.undo()
-      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_STYLE.borderColor)
+      expect(nodeStore.getNode(id)?.borderColor).toBe(DEFAULT_NODE_PRESETS[0].borderColor)
 
       // redo 应恢复样式
       history.redo()

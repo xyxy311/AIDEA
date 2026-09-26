@@ -50,8 +50,10 @@ describe('useCanvasEvents 插件右键菜单项（uiRegistry.contextMenuItems）
     const pluginItem = items.find((it) => it.key === 'demo:hello-item')
     expect(pluginItem).toBeDefined()
     expect(pluginItem!.label).toBe('Hello 演示')
-    // 插件项追加在内置项（复制/剪切/粘贴/子视图等）之后
+    // 插件项追加在内建项（复制/剪切/删除/粘贴/子视图等）之后，仍为菜单末项
     expect(items[items.length - 1].key).toBe('demo:hello-item')
+    // 删除为内建项末尾，位于插件项之前
+    expect(items[items.length - 2].key).toBe('delete')
 
     pluginItem!.action!()
     expect(run).toHaveBeenCalledTimes(1)

@@ -208,4 +208,33 @@ describe('PluginManager', () => {
     expect(snapshot[0].id).toBe('a')
     expect(snapshot[0].status).toBe('error')
   })
+
+  it('disposeAll 触发 active 插件的 onDispose、清空记录并推一拍快照（重新加载的热清理）', async () => {
+    const disposed: string[] = []
+    const mk = (id: string): PluginEntry => ({
+      id,
+      loader: async () => ({
+        default: {
+          manifest: { id, name: id, version: '0.1.0', sdkVersion: SDK_VERSION },
+          setup(ctx: PluginContext): void {
+            ctx.onDispose(() => disposed.push(id))
+          },
+        },
+      }),
+    })
+
+    const { mgr } = makeManager([mk('a'), mk('b')], { a: true, b: true })
+    await mgr.installAll()
+    expect(mgr.getRecords()).toHaveLength(2)
+
+    const listener = vi.fn()
+    mgr.onChange(listener)
+    mgr.disposeAll()
+
+    // 运行中插件的 onDispose 全部触发；记录清空；推送一拍（空快照）
+    expect(disposed.sort()).toEqual(['a', 'b'])
+    expect(mgr.getRecords()).toHaveLength(0)
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener.mock.calls[0][0]).toEqual([])
+  })
 })

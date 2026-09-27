@@ -1,8 +1,9 @@
 <script setup lang="ts">
 /**
- * PluginsSection — 设置面板「插件」栏目：展示插件清单与运行时状态，启停仅持久化→重启生效。
+ * PluginsSection — 设置面板「插件」栏目：展示插件清单与运行时状态；启停与代码变更
+ * 经「重新加载」按钮立即生效（manager.disposeAll → 重扫目录 → installAll 重装）。
  */
-import { NEmpty, NSwitch, NTag } from 'naive-ui'
+import { NButton, NEmpty, NSwitch, NTag } from 'naive-ui'
 import { storeToRefs } from 'pinia'
 import { usePluginStore } from '@/stores/plugin'
 import type { PluginStatus } from '@/plugin/manager'
@@ -10,7 +11,7 @@ import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 
 const plugin = usePluginStore()
-const { records, ready, dirDirty } = storeToRefs(plugin)
+const { records, ready, reloading, dirDirty } = storeToRefs(plugin)
 
 /** 状态 → 徽标类型与 i18n 标签 key（运行态展示；错误态再补充红字文案） */
 const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'default'; labelKey: string }> = {
@@ -22,12 +23,17 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
 
 <template>
   <div class="plugin-manager">
-    <!-- 提示行：重启提示文案左、目录变更徽标右（dirDirty 仅桌面桥推送置位，web 恒 false） -->
+    <!-- 提示行：重新加载说明文案左、目录变更徽标 + 重新加载按钮右（dirDirty 仅桌面桥推送置位，web 恒 false） -->
     <div class="plugin-hint-row">
       <p class="settings-hint plugin-hint">{{ t('plugin.reloadHint') }}</p>
-      <NTag v-if="dirDirty" type="warning" size="tiny" :bordered="false" class="plugin-dirty">
-        {{ t('plugin.dirDirty') }}
-      </NTag>
+      <div class="plugin-hint-actions">
+        <NTag v-if="dirDirty" type="warning" size="tiny" :bordered="false" class="plugin-dirty">
+          {{ t('plugin.dirDirty') }}
+        </NTag>
+        <NButton size="small" :loading="reloading" :disabled="reloading" @click="plugin.reload()">
+          {{ t('plugin.reload') }}
+        </NButton>
+      </div>
     </div>
 
     <template v-if="ready">
@@ -55,10 +61,11 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
             <div v-if="rec.status === 'error' && rec.error" class="plugin-error">{{ rec.error }}</div>
           </div>
 
-          <!-- 右：启用开关（启停仅持久化 → 重启生效），title 注明重启后生效 -->
+          <!-- 右：启用开关（启停仅持久化 → 重新加载生效），title 注明重新加载后生效 -->
           <NSwitch
             :value="rec.enabled"
             size="small"
+            :disabled="reloading"
             :title="t('plugin.restartRequired')"
             @update:value="(v: boolean) => plugin.setEnabled(rec.id, v)"
           />
@@ -88,6 +95,14 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
 .plugin-hint {
   margin: 0;
   color: var(--color-text-muted);
+}
+
+/* 提示行右侧动作区：目录变更徽标 + 重新加载按钮 */
+.plugin-hint-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 目录变更徽标：风格对齐 .plugin-source 小徽标 */

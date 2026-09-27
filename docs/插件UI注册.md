@@ -199,5 +199,5 @@ delta 清洗的合法集合 = 内置 ∪ **已发现**插件前缀（而非「�
 
 ### 5.7 生命周期一致性
 
-- `stores/plugin.ts` 只管启停：`setEnabled` 仅持久化启用意愿 + 更新记录，**重启应用生效**，运行期不做动态卸载注册。
+- `stores/plugin.ts` 只管启停与重载：`setEnabled` 仅持久化启用意愿 + 更新记录，**重新加载生效**；`reload` 经 `manager.disposeAll()` 回滚注册后重扫重装，运行期不做逐条卸载注册。
 - setup 半程抛错：`manager.activate` catch → `context.dispose()` → `rollbackPluginUi(record.id)` = `registry.removePlugin`（按 pluginId 批量删 7 表），布局派生自动收缩——不残留半激活插件 UI，error 态只在管理面板可见。

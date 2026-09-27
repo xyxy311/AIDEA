@@ -60,7 +60,15 @@ components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/Canva
 - **主题/多语言**：themeStore 单一数据源 → Naive UI + CSS 变量 + 画布 chrome 色；UI 文本经 `useT` 的 `t()`。
 - **项目文件**：`projectFile`（AppShell 注入）→ fileStore + 命令层载入/保存；登录态/快照由 `project` store 维护。
 
-## 编码规范与注意事项（通用）
+## 编码要求
+
+**非常重要！**：
+- 编代中要注意是否存在相似重复的代码，并考虑能否优化和重构。
+- 要谨慎编写过于复杂的代码，并考虑能否简化
+- 要保持注释简明，只保留关键注释，不要加入过多的解释内容（除了文件开头）。
+- 编码后不立即更新文档，但是需要提醒用户更新文档。
+
+## 注意事项
 
 - **命令层约束**：数据写操作必须经 `useCommands`，不能直接调 nodeStore 写 action（否则不进历史栈）。Exception：拖拽/缩放实时渲染的 `moveNode`/`resizeNode` 不入栈，结束事件 `commit*` 入栈。
 - **reactive(Map) 深度响应式**：nodeStore 用 `reactive(new Map())`（非 shallowRef）。依赖 `childrenOf`/`getConnections` 的 computed 只随 parentId 关系变化重算。

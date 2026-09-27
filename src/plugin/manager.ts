@@ -96,6 +96,8 @@ export class PluginManager {
   private readonly getEnabled: () => Record<string, boolean>
   private readonly records = new Map<string, PluginRecord>()
   private readonly listeners = new Set<(records: PluginRecord[]) => void>()
+  /** 运行中（已 setup 成功）插件的上下文，用于 disposeAll */
+  private readonly liveContexts = new Map<string, InternalPluginContext>()
 
   constructor(options: PluginManagerOptions) {
     this.entries = options.entries
@@ -202,18 +204,35 @@ export class PluginManager {
     }
 
     const context = createPluginContext(plugin.manifest)
+    this.liveContexts.set(id, context)
     try {
       plugin.setup(context)
       record.status = 'active'
       record.error = undefined
     } catch (e) {
       context.dispose()
+      this.liveContexts.delete(id)
       // 回滚 setup 半程已注册的 UI（防半激活插件残留面板/按钮/设置栏目）
       rollbackPluginUi(record.id)
       console.error(`[plugin] setup 抛错（${record.id}）`, e)
       record.status = 'error'
       record.error = `setup 抛错：${toMessage(e)}`
     }
+  }
+
+  /**
+   * 热清理全部插件：逐个触发运行中插件的 onDispose 清理 + 回滚其 UI 注册，并清空记录
+   */
+  disposeAll(): void {
+    for (const [id] of this.records) {
+      // 仅运行中的插件有 live context；installed / error 态无 setup 副作用
+      this.liveContexts.get(id)?.dispose()
+      // 幂等回滚该插件全部 UI 登记（未注册也是 no-op）
+      rollbackPluginUi(id)
+    }
+    this.liveContexts.clear()
+    this.records.clear()
+    this.emit()
   }
 
   private emit(): void {

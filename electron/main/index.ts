@@ -8,6 +8,7 @@ import path from 'node:path'
 import { IPC } from '../shared/bridge'
 import { registerIpc } from './ipc'
 import { startPluginWatching } from './pluginWatch'
+import { startI18nWatching } from './i18nWatch'
 import { registerPrivilegedSchemes, registerProtocolHandlers } from './protocol'
 import { attachWindowShortcuts } from './shortcuts'
 
@@ -87,6 +88,8 @@ void app.whenReady().then(() => {
 
   // 插件目录 watch：增删改经 IPC.CHANGED 推送给 renderer
   startPluginWatching()
+  // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
+  startI18nWatching()
 
   // macOS 惯例：Dock 点击重新创建窗口
   app.on('activate', () => {

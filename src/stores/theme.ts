@@ -6,6 +6,7 @@ import { computed, watchEffect } from 'vue'
 import { defineStore } from 'pinia'
 import { useColorMode, useStorage } from '@vueuse/core'
 import { modeSchemes, accentSchemes, combineScheme, type ColorScheme, type AccentSchemeId } from '@/config/colorSchemes'
+import { DEFAULT_LOCALE } from '@/constants/locale'
 import type { LocaleId } from '@/types/locale'
 
 export const useThemeStore = defineStore('theme', () => {
@@ -23,8 +24,8 @@ export const useThemeStore = defineStore('theme', () => {
   /** 主色调 ID，持久化到 localStorage('aidea-accent')，默认 'emerald' */
   const accentId = useStorage<AccentSchemeId>('aidea-accent', 'emerald')
 
-  /** 界面语言，持久化到 localStorage('aidea-locale')，默认中文；useT 读取该值决定文案来源 */
-  const locale = useStorage<LocaleId>('aidea-locale', 'zh-CN')
+  /** 界面语言，持久化到 localStorage('aidea-locale')，默认 DEFAULT_LOCALE（zh-CN）；useT 读取该值决定文案来源 */
+  const locale = useStorage<LocaleId>('aidea-locale', DEFAULT_LOCALE)
 
   const scheme = computed<ColorScheme>(() =>
     combineScheme(mode.value === 'dark' ? 'dark' : 'light', accentId.value),

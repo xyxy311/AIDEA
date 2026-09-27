@@ -12,6 +12,7 @@ import path from 'node:path'
 import type { DesktopPluginInfo } from '../shared/bridge'
 import { IPC } from '../shared/bridge'
 import { getPluginDir, pluginsRoot, rescan } from './plugins'
+import { createDebouncer, diffSnapshots } from './watchUtils'
 
 // ═══════════ 纯逻辑（纯函数；不触 electron / chokidar 运行时）═══════
 
@@ -28,43 +29,7 @@ export function fingerprintInfo(info: DesktopPluginInfo, entryHash: string): str
   })
 }
 
-/**
- * 快照比对，返回变更 id 列表（增/删/指纹变）；输出按 id 字典序排序保证稳定性。
- */
-export function diffPluginSnapshots(before: Map<string, string>, after: Map<string, string>): string[] {
-  const changed = new Set<string>()
-  // 新增（before 无 → undefined）与修改（两边都有但指纹不同）在此一并捕获
-  for (const [id, fp] of after) {
-    if (before.get(id) !== fp) changed.add(id)
-  }
-  // 删除：before 有 after 无
-  for (const id of before.keys()) {
-    if (!after.has(id)) changed.add(id)
-  }
-  return [...changed].sort()
-}
-
-/**
- * 简易 debounce 工厂：ms 窗口内多次 push 只在最后一次 push 后 ms 执行一次 task；cancel() 取消未执行任务。
- */
-export function createDebouncer(ms: number, task: () => void): { push(): void; cancel(): void } {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  return {
-    push(): void {
-      if (timer !== null) clearTimeout(timer)
-      timer = setTimeout(() => {
-        timer = null
-        task()
-      }, ms)
-    },
-    cancel(): void {
-      if (timer !== null) {
-        clearTimeout(timer)
-        timer = null
-      }
-    },
-  }
-}
+export { diffSnapshots as diffPluginSnapshots, createDebouncer } from './watchUtils'
 
 // ═══════════ 薄接线层（import electron / chokidar / node:crypto / node:fs）═══════
 
@@ -115,7 +80,7 @@ export function startPluginWatching(): () => void {
   // debounced 任务：重扫（白名单同步刷新）→ 重建快照 → diff → 非空才推送
   const rescanAndPush = (): void => {
     const next = buildSnapshot()
-    const ids = diffPluginSnapshots(lastSnapshot, next)
+    const ids = diffSnapshots(lastSnapshot, next)
     lastSnapshot = next
     // diff 为空 = touch 等噪音：不推送（防误报）
     if (ids.length === 0) return

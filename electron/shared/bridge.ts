@@ -22,6 +22,12 @@ export const IPC = {
   FILE_SAVE: 'file:save',
   FILE_WRITE: 'file:write',
   FILE_READ: 'file:read',
+  /** renderer → main：列出运行时 i18n 目录内的语言文件清单，返回 I18nFileInfo[] */
+  I18N_LIST: 'i18n:list',
+  /** renderer → main：读取指定语言文件内容（only 白名单内 id，越界拒绝） */
+  I18N_READ: 'i18n:read',
+  /** main → renderer：运行时 i18n 目录变更推送（增/删/改对应语言 id 列表） */
+  I18N_CHANGED: 'i18n:changed',
 } as const
 
 /**
@@ -104,6 +110,26 @@ export interface SaveFileResult {
   name?: string
 }
 
+/** 运行时 i18n 目录扫描产出的单个语言条目（@meta 自描述：id/label/naiveBase） */
+export interface I18nFileInfo {
+  /** 语言 id（= 文件名去 .json，两者强校验一致） */
+  id: string
+  /** 语言自名（不可翻译文本，供下拉展示） */
+  label: string
+  /** naive-ui 文案兜底语言 id（App.vue 由此映射 NLocale） */
+  naiveBase: string
+}
+
+/** preload 经 contextBridge 暴露的 i18n 桥（window.aideaI18n）；src/i18n/loader.ts 是唯一访问点 */
+export interface I18nBridge {
+  /** 列出运行时 i18n 目录内的语言清单（目录由 main 决定，renderer 永不传路径） */
+  list(): Promise<I18nFileInfo[]>
+  /** 读取指定 id 的语言文件内容；白名单外/非法 id 侧拒绝 */
+  read(id: string): Promise<{ content: string }>
+  /** 订阅运行时 i18n 目录变更（携带变更语言 id 列表）；返回取消订阅函数 */
+  onChanged(cb: (ids: string[]) => void): () => void
+}
+
 declare global {
   interface Window {
     /** 纯桌面形态恒存在；仅 sources/desktop.ts 允许访问（架构红线） */
@@ -115,5 +141,7 @@ declare global {
     aideaWindow: WindowBridge
     /** 纯桌面形态恒存在；全 renderer 唯一运行时访问点为 useNativeFile.ts */
     aideaFile: FileBridge
+    /** 纯桌面形态恒存在；全 renderer 唯一访问点为 src/i18n/loader.ts */
+    aideaI18n: I18nBridge
   }
 }

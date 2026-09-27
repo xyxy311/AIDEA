@@ -1,4 +1,5 @@
 {
+  "@meta": { "id": "en-US", "label": "English", "naiveBase": "en-US" },
   "menuBar": {
     "file": "File",
     "edit": "Edit",

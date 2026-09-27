@@ -7,12 +7,14 @@ import { computed } from 'vue'
 import type { AccentSchemeId } from '@/config/colorSchemes'
 import type { LocaleId } from '@/types/locale'
 import { accentSchemes } from '@/config/colorSchemes'
-import { LOCALE_OPTIONS } from '@/constants/locale'
 import { useThemeStore } from '@/stores/theme'
+import { useI18nStore } from '@/stores/i18n'
 import { t } from '@/composables/useT'
 import '@/components/settings/settings-shared.css'
 
 const theme = useThemeStore()
+// 运行时语言表（内置 zh-CN + 运行时装载登记的语言，即插即用）
+const i18nStore = useI18nStore()
 
 /** 当前明暗模式下各主色调的色块颜色 */
 const dotColors = computed(() => {
@@ -23,8 +25,10 @@ const dotColors = computed(() => {
   }
 })
 
-/** 语言选择器选项：label 为语言自名（不可翻译，见 constants/locale.ts） */
-const localeOptions = computed(() => LOCALE_OPTIONS.map((o) => ({ label: o.label, value: o.id })))
+/** 语言选择器选项：来自 i18nStore.available（label 为语言自名，不可翻译） */
+const localeOptions = computed(() =>
+  i18nStore.available.map((l) => ({ label: l.label, value: l.id })),
+)
 </script>
 
 <template>

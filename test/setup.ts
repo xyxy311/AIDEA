@@ -10,7 +10,8 @@
  * - listPlugins 默认返回空数组（空插件集 → installAll 空转，多数用例的天然起点）；
  * - onPluginsChanged 返回 no-op 退订函数；
  * - aideaWindow 各方法 no-op，isMaximized 恒 false；
- * - aideaFile：open/save 默认取消，write/read 抛错（避免意外改动测试环境文件）。
+ * - aideaFile：open/save 默认取消，write/read 抛错（避免意外改动测试环境文件）；
+ * - aideaI18n：list/read 抛错、onChanged no-op（默认无运行时语言，避免误登记测试环境文件）。
  *
  * 需要特定桥行为的用例自行覆盖：先 `(window as any).aideaXxx = <定制桩>`，
  * 再 `vi.resetModules()` + 动态 import 被测模块（与 sources.test.ts 同款装置）。
@@ -54,6 +55,20 @@ if (typeof window !== 'undefined') {
       readFile: async () => {
         throw new Error('test setup: aideaFile.readFile 未配置具体 stub')
       },
+    },
+    configurable: true,
+    writable: true,
+  })
+
+  Object.defineProperty(window, 'aideaI18n', {
+    value: {
+      // 默认空语言集：list 空、read 抛错（避免读到真实 i18n-runtime 文件、误登记测试环境）。
+      // 需要具体桥行为的用例自行覆写（见 sources.test.ts 同款装置：vi.resetModules + 动态 import）。
+      list: async () => [],
+      read: async () => {
+        throw new Error('test setup: aideaI18n.read 未配置具体 stub')
+      },
+      onChanged: () => () => {},
     },
     configurable: true,
     writable: true,

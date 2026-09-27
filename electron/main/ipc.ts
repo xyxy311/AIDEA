@@ -6,6 +6,7 @@ import fs from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IPC } from '../shared/bridge'
 import { rescan } from './plugins'
+import { getI18nFile, rescanI18n } from './i18n'
 
 /** 项目文件对话框的过滤规则（mutable 数组，匹配 Electron FileFilter 类型） */
 const PROJECT_FILTERS: Electron.FileFilter[] = [
@@ -18,6 +19,17 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.LIST, () => rescan())
 
   // IPC.CHANGED：M1 只预留（main 不发送，watch 属 M2），preload 侧订阅转发已实现。
+
+  // 列出运行时 i18n 语言文件：每次调用重扫，刷新白名单 + 返回最新条目（含新登记的调用方下拉立即可用）。
+  ipcMain.handle(IPC.I18N_LIST, () => rescanI18n())
+
+  // 读取指定语言文件内容：renderer 只传 id，id→绝对路径由扫描「id↔文件名」强校验后锁定进白名单，
+  // 白名单外 id 一律拒绝（无任何 traversal 面；i18n 白名单即 fsGuard 语义）。
+  ipcMain.handle(IPC.I18N_READ, async (_event, id: string) => {
+    const filePath = getI18nFile(id)
+    if (!filePath) throw new Error('i18n: 语言 id 未在运行时 i18n 白名单内')
+    return { content: await fs.readFile(filePath, 'utf8') }
+  })
 
   // 窗口控制统一用 fromWebContents(event.sender) 取目标窗口：多窗口安全，不依赖模块级引用。
   ipcMain.on(IPC.WINDOW_MINIMIZE, (event) => {

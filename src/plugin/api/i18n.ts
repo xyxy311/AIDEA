@@ -10,7 +10,7 @@ import type { TBundles, TFunction } from '@/composables/useT'
 
 export function createI18nApi() {
   const api = {
-    /** 当前界面语言：'zh-CN' | 'en-US'（只读快照；切换入口在设置面板，插件不可写） */
+    /** 当前界面语言 id（只读快照；切换入口在设置面板，插件不可写） */
     getLocale(): LocaleId {
       return getLocale()
     },

@@ -1,12 +1,12 @@
 /**
- * preload/index.ts —— contextBridge 窄桥，暴露三座桥：
- * aideaDesktop（插件系统）、aideaWindow（窗口 chrome）、aideaFile（文件操作）。
+ * preload/index.ts —— contextBridge 窄桥，暴露四座桥：
+ * aideaDesktop（插件系统）、aideaWindow（窗口 chrome）、aideaFile（文件操作）、aideaI18n（运行时 i18n 目录）。
  * 安全边界：只暴露契约白名单内方法，绝不暴露 ipcRenderer 本体或任何带路径参数的通道；
  * 类型标注对齐各 Bridge 接口，契约漂移会在 type-check 期暴露。
  */
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { DesktopBridge, FileBridge, WindowBridge } from '../shared/bridge'
+import type { DesktopBridge, FileBridge, I18nBridge, WindowBridge } from '../shared/bridge'
 import { IPC } from '../shared/bridge'
 
 const bridge: DesktopBridge = {
@@ -48,6 +48,22 @@ const windowBridge: WindowBridge = {
   },
 }
 
+const i18nBridge: I18nBridge = {
+  list: () => ipcRenderer.invoke(IPC.I18N_LIST),
+  read: (id) => ipcRenderer.invoke(IPC.I18N_READ, id),
+  /** 返回取消订阅函数 */
+  onChanged: (cb: (ids: string[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, ids: string[]): void => {
+      cb(ids)
+    }
+    ipcRenderer.on(IPC.I18N_CHANGED, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.I18N_CHANGED, listener)
+    }
+  },
+}
+
 contextBridge.exposeInMainWorld('aideaDesktop', bridge)
 contextBridge.exposeInMainWorld('aideaWindow', windowBridge)
 contextBridge.exposeInMainWorld('aideaFile', fileBridge)
+contextBridge.exposeInMainWorld('aideaI18n', i18nBridge)

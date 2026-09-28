@@ -198,27 +198,10 @@
     "noPreset": "暂无预设",
     "noPresetInGroup": "该分组下暂无预设",
     "deletePresetConfirm": "确定删除预设「{name}」？",
-    "builtin": "内置",
-    "builtinGroupHint": "内置分组不可删除或改名",
     "noSelection": "请先在画布中选中对应对象",
     "cancel": "取消",
     "save": "保存",
     "confirm": "确定"
-  },
-  "presets": {
-    "groupBuiltin": "内置",
-    "nodeDefault": "默认",
-    "nodeBlue": "蓝色",
-    "nodeGreen": "绿色",
-    "nodeYellow": "黄色",
-    "nodeRed": "红色",
-    "nodePurple": "紫色",
-    "nodePink": "粉色",
-    "connDefault": "默认灰线",
-    "connBlueArrow": "蓝色箭头",
-    "connRedDashed": "红色虚线",
-    "connGreenPlain": "绿色无箭头",
-    "connGrayDotted": "灰色点线"
   },
   "tagsPanel": {
     "tagName": "标签名称",

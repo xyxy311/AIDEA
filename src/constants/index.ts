@@ -137,30 +137,30 @@ export const CONNECTION_LABEL_RADIUS: number = 4
 
 // ── 预设样式系统 ──
 
-/** 内置保留分组 id（内置预设默认归入此分组，不可删除/改名） */
-export const BUILTIN_PRESET_GROUP_ID: string = 'builtin'
+/** 初始分组 id（应用启动时创建的分组；与用户自定义分组地位等同，可改名/删除） */
+export const DEFAULT_PRESET_GROUP_ID: string = 'default'
 
-/** 内置保留分组名称的 i18n key（仅 store 初始化建组时经 t() 固化为数据文本） */
-export const BUILTIN_PRESET_GROUP_KEY: string = 'presets.groupBuiltin'
+/** 初始分组名称（英文，直接作为数据文本写入，不随语言切换） */
+export const DEFAULT_PRESET_GROUP_NAME: string = 'Default'
 
-/** 默认节点预设（不含 id/type/groupId/name，store 初始化时分配 id 并归入内置分组）；nameKey 仅初始化时经 t() 固化为当前语言文本 */
-export const DEFAULT_NODE_PRESETS: (Omit<NodePresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
-  { nameKey: 'presets.nodeDefault', borderColor: '#7d7d7dff' },
-  { nameKey: 'presets.nodeBlue', borderColor: '#3b82f6' },
-  { nameKey: 'presets.nodeGreen', borderColor: '#22c55e' },
-  { nameKey: 'presets.nodeYellow', borderColor: '#eab308' },
-  { nameKey: 'presets.nodeRed', borderColor: '#ef4444' },
-  { nameKey: 'presets.nodePurple', borderColor: '#a855f7' },
-  { nameKey: 'presets.nodePink', borderColor: '#ec4899' },
+/** 默认节点预设（不含 id/type/groupId，store 初始化时分配 id 并归入初始分组）；名称直接用英文作为持久化数据 */
+export const DEFAULT_NODE_PRESETS: Omit<NodePresetStyle, 'id' | 'type' | 'groupId'>[] = [
+  { name: 'Default', borderColor: '#7d7d7dff' },
+  { name: 'Blue', borderColor: '#3b82f6' },
+  { name: 'Green', borderColor: '#22c55e' },
+  { name: 'Yellow', borderColor: '#eab308' },
+  { name: 'Red', borderColor: '#ef4444' },
+  { name: 'Purple', borderColor: '#a855f7' },
+  { name: 'Pink', borderColor: '#ec4899' },
 ]
 
-/** 默认连线预设（同 DEFAULT_NODE_PRESETS，store 初始化时分配 id 并归入内置分组） */
-export const DEFAULT_CONNECTION_PRESETS: (Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId' | 'name'> & { nameKey: string })[] = [
-  { nameKey: 'presets.connDefault', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
-  { nameKey: 'presets.connBlueArrow', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },
-  { nameKey: 'presets.connRedDashed', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true, applyText: false },
-  { nameKey: 'presets.connGreenPlain', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false, applyText: false },
-  { nameKey: 'presets.connGrayDotted', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false, applyText: false },
+/** 默认连线预设（同 DEFAULT_NODE_PRESETS，store 初始化时分配 id 并归入初始分组） */
+export const DEFAULT_CONNECTION_PRESETS: Omit<ConnectionPresetStyle, 'id' | 'type' | 'groupId'>[] = [
+  { name: 'Default', lineStyle: 'solid', strokeWidth: 2, strokeColor: '#6b7280', directed: true, applyText: false },
+  { name: 'Blue Arrow', lineStyle: 'solid', strokeWidth: 3, strokeColor: '#3b82f6', directed: true, applyText: false },
+  { name: 'Red Dashed', lineStyle: 'dashed', strokeWidth: 2, strokeColor: '#ef4444', directed: true, applyText: false },
+  { name: 'Green Plain', lineStyle: 'solid', strokeWidth: 4, strokeColor: '#22c55e', directed: false, applyText: false },
+  { name: 'Gray Dotted', lineStyle: 'dotted', strokeWidth: 1, strokeColor: '#9ca3af', directed: false, applyText: false },
 ]
 
 // ── 内联视图 ──

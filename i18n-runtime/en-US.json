@@ -198,27 +198,10 @@
     "noPreset": "No presets",
     "noPresetInGroup": "No presets in this group",
     "deletePresetConfirm": "Delete preset \"{name}\"?",
-    "builtin": "Built-in",
-    "builtinGroupHint": "The built-in group cannot be deleted or renamed",
     "noSelection": "Select the target object on the canvas first",
     "cancel": "Cancel",
     "save": "Save",
     "confirm": "OK"
-  },
-  "presets": {
-    "groupBuiltin": "Built-in",
-    "nodeDefault": "Default",
-    "nodeBlue": "Blue",
-    "nodeGreen": "Green",
-    "nodeYellow": "Yellow",
-    "nodeRed": "Red",
-    "nodePurple": "Purple",
-    "nodePink": "Pink",
-    "connDefault": "Default gray",
-    "connBlueArrow": "Blue arrow",
-    "connRedDashed": "Red dashed",
-    "connGreenPlain": "Green plain",
-    "connGrayDotted": "Gray dotted"
   },
   "tagsPanel": {
     "tagName": "Tag Name",

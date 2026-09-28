@@ -102,10 +102,8 @@ export interface ConnectionPresetStyle {
 /** 预设样式统一类型 */
 export type PresetStyleItem = NodePresetStyle | ConnectionPresetStyle
 
-/** 预设分组；内置保留分组 builtin=true，不可删除/改名。 */
+/** 预设分组；应用初始提供的分组与用户自定义分组地位等同，均可改名/删除。 */
 export interface PresetGroup {
   id: string
   name: string
-  /** 内置保留分组：不可删除、不可改名 */
-  builtin: boolean
 }

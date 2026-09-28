@@ -3,12 +3,11 @@ import { defineStore } from 'pinia'
 import { nanoid } from 'nanoid'
 import { useStorage } from '@vueuse/core'
 import type { NodePresetStyle, ConnectionPresetStyle, PresetGroup } from '@/types'
-import { t } from '@/composables/useT'
 import {
   DEFAULT_NODE_PRESETS,
   DEFAULT_CONNECTION_PRESETS,
-  BUILTIN_PRESET_GROUP_ID,
-  BUILTIN_PRESET_GROUP_KEY,
+  DEFAULT_PRESET_GROUP_ID,
+  DEFAULT_PRESET_GROUP_NAME,
 } from '@/constants'
 
 /**
@@ -91,16 +90,12 @@ export const usePresetsStore = defineStore('presets', () => {
     if (!validConn) connectionGroupFilter.value = 'all'
   }
 
-  /** 确保某类型的"内置"保留分组存在 */
-  function ensureBuiltinGroup(type: PresetKind): void {
+  /** 确保某类型的初始分组存在（与用户自定义分组地位等同，可改名/删除） */
+  function ensureDefaultGroup(type: PresetKind): void {
     const ref = groupsRef(type)
-    if (ref.value.some((g) => g.id === BUILTIN_PRESET_GROUP_ID)) return
-    // 有意行为：分组名仅在初始化建组时机经 t() 固化为当前语言文本写入数据，
-    // 已存 localStorage 的旧数据不追溯重译
-    ref.value = [
-      { id: BUILTIN_PRESET_GROUP_ID, name: t(BUILTIN_PRESET_GROUP_KEY), builtin: true },
-      ...ref.value,
-    ]
+    if (ref.value.some((g) => g.id === DEFAULT_PRESET_GROUP_ID)) return
+    // 初始分组名与默认预设名直接用英文作为数据文本写入，不随语言切换
+    ref.value = [{ id: DEFAULT_PRESET_GROUP_ID, name: DEFAULT_PRESET_GROUP_NAME }, ...ref.value]
   }
 
   /** 迁移旧版连线预设：补充缺失的 applyText 字段（默认 false，沿用旧行为：应用时写入连线文字） */
@@ -113,34 +108,26 @@ export const usePresetsStore = defineStore('presets', () => {
   function initDefaults(): void {
     migrateConnectionPresets()
     validateStorages()
-    ensureBuiltinGroup('node')
-    ensureBuiltinGroup('connection')
+    ensureDefaultGroup('node')
+    ensureDefaultGroup('connection')
     sanitizeFilters()
 
     if (nodePresets.value.length === 0) {
-      // 有意行为：默认预设名仅在初始化时机经 t() 固化为当前语言文本写入数据，
-      // 已存 localStorage 的旧数据不追溯重译；nameKey 不写入持久化数据
+      // 初始预设名直接用英文作为数据文本写入，不随语言切换
       nodePresets.value = DEFAULT_NODE_PRESETS.map((p) => ({
-        name: t(p.nameKey),
-        borderColor: p.borderColor,
+        ...p,
         id: nanoid(),
         type: 'node' as const,
-        groupId: BUILTIN_PRESET_GROUP_ID,
+        groupId: DEFAULT_PRESET_GROUP_ID,
       }))
     }
 
     if (connectionPresets.value.length === 0) {
-      // 有意行为：同上，名称经 t(nameKey) 固化，nameKey 不写入持久化数据
       connectionPresets.value = DEFAULT_CONNECTION_PRESETS.map((p) => ({
-        name: t(p.nameKey),
-        lineStyle: p.lineStyle,
-        strokeWidth: p.strokeWidth,
-        strokeColor: p.strokeColor,
-        directed: p.directed,
-        applyText: p.applyText,
+        ...p,
         id: nanoid(),
         type: 'connection' as const,
-        groupId: BUILTIN_PRESET_GROUP_ID,
+        groupId: DEFAULT_PRESET_GROUP_ID,
       }))
     }
   }
@@ -216,20 +203,18 @@ export const usePresetsStore = defineStore('presets', () => {
 
   function addGroup(type: PresetKind, name: string): PresetGroup {
     const ref = groupsRef(type)
-    const g: PresetGroup = { id: nanoid(), name, builtin: false }
+    const g: PresetGroup = { id: nanoid(), name }
     ref.value = [...ref.value, g]
     return g
   }
 
   function updateGroup(type: PresetKind, id: string, name: string): void {
-    if (id === BUILTIN_PRESET_GROUP_ID) return
     const ref = groupsRef(type)
     ref.value = ref.value.map((g) => (g.id === id ? { ...g, name } : g))
   }
 
-  /** 删除某类型分组（内置分组不可删）；该类型下该分组预设转为未分组 */
+  /** 删除某类型分组（初始分组亦同，可删）；该类型下该分组预设转为未分组 */
   function deleteGroup(type: PresetKind, id: string): void {
-    if (id === BUILTIN_PRESET_GROUP_ID) return
     const ref = groupsRef(type)
     ref.value = ref.value.filter((g) => g.id !== id)
     if (type === 'node') {

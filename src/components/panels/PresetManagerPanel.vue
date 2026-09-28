@@ -515,15 +515,11 @@ function handleDeleteGroup(id: string): void {
         <div class="group-list">
           <div v-for="g in currentGroups" :key="g.id" class="group-row">
             <NText class="group-name" depth="2">{{ g.name }}</NText>
-            <NTag v-if="g.builtin" size="tiny" :bordered="false" class="builtin-tag">
-              {{ t('presetPanel.builtin') }}
-            </NTag>
             <div class="group-actions">
               <NButton
                 size="tiny"
                 quaternary
                 class="action-btn"
-                :disabled="g.builtin"
                 @click="openEditGroup(g.id, g.name)"
               >
                 ✎
@@ -531,20 +527,15 @@ function handleDeleteGroup(id: string): void {
               <NPopconfirm
                 :positive-text="t('presetPanel.confirm')"
                 :negative-text="t('presetPanel.cancel')"
-                :disabled="g.builtin"
                 @positive-click="handleDeleteGroup(g.id)"
               >
                 <template #trigger>
-                  <NButton size="tiny" quaternary class="action-btn" :disabled="g.builtin">✕</NButton>
+                  <NButton size="tiny" quaternary class="action-btn">✕</NButton>
                 </template>
                 {{ t('presetPanel.deleteGroupConfirm', { name: g.name }) }}
               </NPopconfirm>
             </div>
           </div>
-        </div>
-
-        <div class="builtin-hint">
-          <NText depth="3" style="font-size: 12px">{{ t('presetPanel.builtinGroupHint') }}</NText>
         </div>
       </div>
     </NModal>
@@ -754,20 +745,9 @@ function handleDeleteGroup(id: string): void {
   white-space: nowrap;
 }
 
-.builtin-tag {
-  flex-shrink: 0;
-  font-size: 10px;
-}
-
 .group-actions {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
-}
-
-.builtin-hint {
-  padding: 6px 4px 0;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text-muted);
 }
 </style>

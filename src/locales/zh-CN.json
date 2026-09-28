@@ -72,8 +72,6 @@
     "disableHint": "禁用此插件（重新加载后生效）",
     "componentError": "该插件组件渲染失败",
     "retry": "重试",
-    "sourceBuiltin": "内置",
-    "sourceLocal": "本地",
     "dirChanged": "检测到插件目录变更，点击「重新加载」后生效",
     "dirDirty": "目录有变更"
   },

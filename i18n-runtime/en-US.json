@@ -72,8 +72,6 @@
     "disableHint": "Disable this plugin (applies after reload)",
     "componentError": "This plugin component failed to render",
     "retry": "Retry",
-    "sourceBuiltin": "Built-in",
-    "sourceLocal": "Local",
     "dirChanged": "Plugin directory changed. Click \"Reload\" to apply.",
     "dirDirty": "Directory changed"
   },

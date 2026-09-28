@@ -34,7 +34,7 @@ describe('collectPluginEntries（sources 聚合收口）', () => {
     unstubBridge()
   })
 
-  it('恒走桌面源：经桥扫描返回目录条目，均 source: local', async () => {
+  it('恒走桌面源：经桥扫描返回目录条目', async () => {
     stubBridge({
       kind: 'desktop',
       listPlugins: async () => [
@@ -46,7 +46,6 @@ describe('collectPluginEntries（sources 聚合收口）', () => {
     const { collectPluginEntries } = await import('@/plugin/sources')
     const entries = await collectPluginEntries()
     expect(entries).toHaveLength(2)
-    expect(entries.every((e) => e.source === 'local')).toBe(true)
     expect(new Set(entries.map((e) => e.id))).toEqual(new Set(['ai', 'other']))
   })
 })
@@ -61,7 +60,7 @@ describe('collectDesktopEntries（桌面源单测）', () => {
     unstubBridge()
   })
 
-  it('error 非空的条目被过滤，正常条目带 source: local', async () => {
+  it('error 非空的条目被过滤', async () => {
     stubBridge({
       kind: 'desktop',
       listPlugins: async () => [
@@ -73,7 +72,6 @@ describe('collectDesktopEntries（桌面源单测）', () => {
     const { collectDesktopEntries } = await import('@/plugin/sources/desktop')
     const entries = await collectDesktopEntries()
     expect(entries.map((e) => e.id)).toEqual(['good'])
-    expect(entries[0]!.source).toBe('local')
   })
 
   it('IPC listPlugins reject → console.error + 空集', async () => {

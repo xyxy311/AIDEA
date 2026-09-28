@@ -48,7 +48,6 @@ export async function collectDesktopEntries(): Promise<PluginEntry[]> {
     entries.push({
       id: info.id,
       loader: () => import(/* @vite-ignore */ url),
-      source: 'local',
     })
   }
   return entries

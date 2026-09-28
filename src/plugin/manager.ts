@@ -12,8 +12,6 @@ import { createPluginRegister, createPluginModalApi, createPluginFloatingApi, ro
 export interface PluginEntry {
   id: string
   loader: () => Promise<{ default?: AideaPlugin; [k: string]: unknown }>
-  /** 来源标记：builtin=历史内置 glob 源（已废除，保留枚举兼容）；local=运行时目录装载 */
-  source?: 'builtin' | 'local'
 }
 
 // 历史内置 glob 源（sources/builtin.ts）已废除，路径推断工具随迁移保留在此：
@@ -74,8 +72,6 @@ export interface PluginRecord {
   status: PluginStatus
   /** 持久化"启用意愿"；active 需要 enabled=true（启停经重启应用生效） */
   enabled: boolean
-  /** 来源：builtin=历史内置 glob 源（已废除，保留枚举兼容）；local=运行时目录装载（桌面协议 / web 清单） */
-  source: 'builtin' | 'local'
   /** 错误态下的单插件错误信息 */
   error?: string
   /** 源提供的装载入口 */
@@ -148,8 +144,6 @@ export class PluginManager {
       status: 'installed',
       enabled,
       entry,
-      // source 由装载入口透传；未经聚合层注入的条目（测试直构）按内置兜底
-      source: entry.source ?? 'builtin',
     }
     try {
       const mod = await entry.loader()

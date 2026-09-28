@@ -46,10 +46,6 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
             <div class="plugin-title">
               <span class="plugin-name">{{ rec.name }}</span>
               <span class="plugin-version">v{{ rec.version || '—' }}</span>
-              <!-- 来源徽标（从简小标签）：builtin=随包内置 / local=桌面本地目录 -->
-              <NTag size="tiny" :bordered="false" class="plugin-source">
-                {{ t(rec.source === 'local' ? 'plugin.sourceLocal' : 'plugin.sourceBuiltin') }}
-              </NTag>
             </div>
             <div class="plugin-meta">
               <span v-if="rec.author" class="plugin-author">{{ t('plugin.author') }} · {{ rec.author }}</span>
@@ -105,7 +101,7 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
   flex-shrink: 0;
 }
 
-/* 目录变更徽标：风格对齐 .plugin-source 小徽标 */
+/* 目录变更徽标：小徽标风格 */
 .plugin-dirty {
   --n-font-size: 11px;
   flex-shrink: 0;
@@ -145,10 +141,6 @@ const STATUS_META: Record<PluginStatus, { tagType: 'success' | 'error' | 'defaul
 .plugin-version {
   font-size: 12px;
   color: var(--color-text-muted);
-}
-
-.plugin-source {
-  --n-font-size: 11px;
 }
 
 .plugin-meta {

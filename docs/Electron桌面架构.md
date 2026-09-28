@@ -88,11 +88,11 @@ subscribePluginChanges(cb): () => void
 collectPluginEntries(): Promise<PluginEntry[]>
 
 // src/plugin/manager.ts
-PluginEntry { id; loader(); source?: 'builtin' | 'local' }
-PluginRecord { id; name; version; status; enabled; source; entry; ... }
+PluginEntry { id; loader() }
+PluginRecord { id; name; version; status; enabled; entry; ... }
 ```
 
-要义：`sources/desktop.ts` 是把桥形态翻译成 `PluginEntry` 的唯一翻译点——`loader` 按 `location.protocol` 分支产 URL（dev → `/plugins/<id>/<entry>` 根相对，走 vite transform；生产 → `aidea-plugin://<id>/<entry>`），`source: 'local'`。`collectPluginEntries` 当前只做 `collectDesktopEntries()` 的透传（纯桌面形态单源）。
+要义：`sources/desktop.ts` 是把桥形态翻译成 `PluginEntry` 的唯一翻译点——`loader` 按 `location.protocol` 分支产 URL（dev → `/plugins/<id>/<entry>` 根相对，走 vite transform；生产 → `aidea-plugin://<id>/<entry>`）。`collectPluginEntries` 当前只做 `collectDesktopEntries()` 的透传（纯桌面形态单源）。
 
 ### watch 纯函数（`electron/main/pluginWatch.ts`）
 

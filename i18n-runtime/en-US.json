@@ -21,7 +21,16 @@
     "exportToText": "Export to Text",
     "exportToTextFilter": "Text file",
     "exportedToText": "Exported to text",
-    "exportToTextFailed": "Failed to export text: {message}"
+    "exportToTextFailed": "Failed to export text: {message}",
+    "insertText": "Insert from Text",
+    "insertTextTip": "Type or paste text: one node per line, indent with Tab (or two spaces) for nesting; zero-indent nodes are inserted as direct children of the current view.",
+    "insertTextPlaceholder": "Root\n\tChild A\n\tChild B\n\t\tChild B1",
+    "insertTextImport": "Import file",
+    "insertTextImportTitle": "Select text file",
+    "insertTextFilter": "Text file",
+    "insertTextConfirm": "Insert",
+    "insertTextDone": "Inserted {count} node(s)",
+    "insertTextEmpty": "Nothing to insert"
   },
   "toolbar": {
     "title": "Whiteboard",

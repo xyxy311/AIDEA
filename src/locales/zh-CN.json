@@ -21,7 +21,16 @@
     "exportToText": "导出为文本",
     "exportToTextFilter": "文本文件",
     "exportedToText": "已导出为文本",
-    "exportToTextFailed": "导出文本失败：{message}"
+    "exportToTextFailed": "导出文本失败：{message}",
+    "insertText": "从文本插入",
+    "insertTextTip": "输入或粘贴文本：每行一个节点，用 Tab（或两个空格）缩进表示层级；0 缩进节点将插入为当前视图的直接子节点。",
+    "insertTextPlaceholder": "根节点\n\t子节点 A\n\t子节点 B\n\t\t子节点 B1",
+    "insertTextImport": "导入文件",
+    "insertTextImportTitle": "选择文本文件",
+    "insertTextFilter": "文本文件",
+    "insertTextConfirm": "插入",
+    "insertTextDone": "已插入 {count} 个节点",
+    "insertTextEmpty": "没有可插入的内容"
   },
 "toolbar": {
       "title": "白板",

@@ -7,7 +7,9 @@ import { useFileStore } from '@/stores/file'
 import { useRecentFilesStore } from '@/stores/recentFiles'
 import { useTagsStore } from '@/stores/tags'
 import { useAdditionsStore } from '@/stores/additions'
+import { usePresetsStore } from '@/stores/presets'
 import { useCommands } from '@/composables/useCommands'
+import { deepClone, type NodeChange } from '@/utils/command'
 import { nativeFile } from '@/composables/useNativeFile'
 import { nativeFs } from '@/composables/useNativeFs'
 import { useMessage } from 'naive-ui'
@@ -17,9 +19,11 @@ import {
   parseProjectFile,
   type ProjectViewState,
 } from '@/utils/projectFile'
-import { buildTextOutline } from '@/utils/textOutline'
+import { buildTextOutline, layoutTextNodes, parseTextForest } from '@/utils/textOutline'
+import type { PlacedTextNode } from '@/utils/textOutline'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
+import { DEFAULT_NODE_WIDTH } from '@/constants'
 import type { WhiteboardNode, Tag } from '@/types'
 
 /**
@@ -30,6 +34,9 @@ import type { WhiteboardNode, Tag } from '@/types'
 
 /** 确认回调：返回 true 表示确认放弃，false 表示取消 */
 export type ProjectConfirmFn = (message: string) => Promise<boolean>
+
+/** 从文本插入的节点与现有节点包围盒之间的固定间距 */
+const TEXT_INSERT_MARGIN = 80
 
 /** useProjectFile 返回的 API 类型 */
 export type ProjectFileApi = ReturnType<typeof useProjectFile>
@@ -43,6 +50,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   const recentFilesStore = useRecentFilesStore()
   const tagsStore = useTagsStore()
   const additionsStore = useAdditionsStore()
+  const presets = usePresetsStore()
 
   /**
    * 最近打开文件（响应式 Ref）。
@@ -320,6 +328,71 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     }
   }
 
+  /** 从文本插入节点：解析缩进森林，作为当前视图观察节点的子树插入（预设样式，单条历史可撤销）。返回插入的节点数 */
+  function insertNodeText(content: string): number {
+    const forest = parseTextForest(content)
+    if (forest.length === 0) return 0
+
+    const parentId = project.currentNodeId
+    // 默认样式：当前节点预设分组第一项；无则 undefined → 工厂回退到默认样式（同 useCommands.createNode）
+    const borderColor = presets.defaultNodePreset?.borderColor
+    // 先按层级排成整齐网格（每层列数 = floor(√层节点数)，间距固定）
+    const placed = layoutTextNodes(forest)
+
+    // 收集全部（含子树）以计算插入内容的包围盒
+    const all: PlacedTextNode[] = []
+    const collectAll = (nodes: PlacedTextNode[]): void => {
+      for (const n of nodes) {
+        all.push(n)
+        collectAll(n.children)
+      }
+    }
+    collectAll(placed)
+    let insMaxX = 0
+    for (const p of all) {
+      insMaxX = Math.max(insMaxX, p.x + DEFAULT_NODE_WIDTH)
+    }
+
+    // 现有节点包围盒（当前视图直接子节点）；无则原点对齐
+    let exMinY = 0
+    let exMaxX = 0
+    const existing = nodeStore.childrenOf(parentId)
+    if (existing.length > 0) {
+      exMinY = Infinity
+      exMaxX = -Infinity
+      for (const n of existing) {
+        exMinY = Math.min(exMinY, n.y)
+        exMaxX = Math.max(exMaxX, n.x + n.width)
+      }
+    }
+    // 插入原点：整体放到现有包围盒的右侧之外，垂直与现有顶部平齐
+    const originX = exMaxX + TEXT_INSERT_MARGIN
+    const originY = exMinY
+
+    const nodeChanges: NodeChange[] = []
+    const build = (nodes: PlacedTextNode[], pid: string): void => {
+      for (const p of nodes) {
+        const id = generateId()
+        const node = createNode({
+          id,
+          parentId: pid,
+          text: p.text,
+          borderColor,
+          x: originX + p.x,
+          y: originY + p.y,
+        })
+        nodeStore.nodes.set(id, node)
+        nodeChanges.push({ type: 'add', id, new: deepClone(node) })
+        build(p.children, id)
+      }
+    }
+    build(placed, parentId)
+
+    // 一次性入栈：整次插入 = 单条历史，可一步撤销/重做
+    history.pushCommand({ nodeChanges, connChanges: [] })
+    return nodeChanges.length
+  }
+
   /** 另存为项目（main showSaveDialog + writeFile） */
   async function saveAsProject(): Promise<void> {
     const json = buildProjectJson()
@@ -345,6 +418,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     saveProject,
     saveAsProject,
     exportToText,
+    insertNodeText,
     recentFiles,
     dirty: fileStore.dirty,
     suggestedName: fileStore.suggestedName,

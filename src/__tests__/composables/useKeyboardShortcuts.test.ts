@@ -11,6 +11,7 @@ import { useShortcutsStore } from '@/stores/shortcuts'
 import { useUiRegistryStore } from '@/stores/uiRegistry'
 import { useModalStore } from '@/stores/modal'
 import { useTagsStore } from '@/stores/tags'
+import { useClipboard } from '@/composables/useClipboard'
 
 /** 挂载无渲染组件以触发 composable 生命周期钩子 */
 function mountWithShortcuts(isEditing: Ref<boolean>) {
@@ -158,6 +159,61 @@ describe('useKeyboardShortcuts', () => {
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'b' }))
 
     expect(nodeStore.getNode(id)?.tagIds).toContain(tag.id)
+  })
+
+  it('mod+c 复制选中节点入剪贴板（canPaste=true）', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    expect(useClipboard().canPaste.value).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
+    expect(useClipboard().canPaste.value).toBe(true)
+  })
+
+  it('mod+v 粘贴剪贴板内容到当前视图（出现新顶层节点）', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(2)
+  })
+
+  it('mod+x 剪切：删原节点且剪贴板保留；mod+z 撤销恢复；mod+shift+z 重做再删', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const view = useViewStore('main')
+
+    const id = nodeStore.addNode(project.currentNodeId, 0, 0)
+    view.selectNode(id)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
+    expect(useClipboard().canPaste.value).toBe(true)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(1)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }))
+    expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
   })
 
   it('可自定义删除键：把 deleteSelected 由 d 改为 x 后，x 删除、d 不再删除', () => {

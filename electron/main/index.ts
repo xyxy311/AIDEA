@@ -1,7 +1,8 @@
 /**
  * index.ts —— Electron main 进程入口：privileged schemes 注册 → app 生命周期 → 主窗口。
  * 协议 scheme 须在 app ready 前注册；dev 走 VITE_DEV_SERVER_URL，生产走 app://（刻意不用 file://，避免 origin 为 null 致 CORS/ESM 行为不一致）。
- * 无边框用 titleBarStyle:'hidden'（macOS hiddenInset）；Menu.setApplicationMenu(null) 删除原生菜单栏，快捷键由 attachWindowShortcuts 兜底。
+ * 无边框用 titleBarStyle:'hidden'（macOS hiddenInset）；Menu.setApplicationMenu(null) 删除原生菜单栏，devtools 快捷键由 attachWindowShortcuts 兜底；
+ * 复制/剪切/粘贴/撤销/重做等编辑快捷键由渲染层 useKeyboardShortcuts 统一处理（webContents 层拦截会让画布快捷键失效）。
  */
 import { app, BrowserWindow, Menu, dialog } from 'electron'
 import path from 'node:path'
@@ -15,7 +16,8 @@ import { attachWindowShortcuts } from './shortcuts'
 // privileged schemes 必须先于 app ready 注册（Chromium 在 ready 前固化协议能力）
 registerPrivilegedSchemes()
 
-// 删除原生菜单栏（无边框自绘 chrome，不占顶部空间）；默认 role 快捷键随之失效，由 attachWindowShortcuts 兜底
+// 删除原生菜单栏（无边框自绘 chrome，不占顶部空间）；devtools 快捷键由 attachWindowShortcuts 兜底，
+// 编辑快捷键由渲染层 useKeyboardShortcuts 处理
 Menu.setApplicationMenu(null)
 
 let mainWindow: BrowserWindow | null = null

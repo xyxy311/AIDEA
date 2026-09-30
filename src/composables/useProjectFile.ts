@@ -27,9 +27,9 @@ import { DEFAULT_NODE_WIDTH } from '@/constants'
 import type { WhiteboardNode, Tag } from '@/types'
 
 /**
- * useProjectFile - 项目文件编排：新建 / 保存 / 打开 / 最近文件。
+ * useProjectFile - 项目文件编排：新建 / 保存 / 打开 / 最近文件 / 导出为文本 / 从文本插入。
  * 核心为 collectViewState（收集主视图状态）与 loadProjectIntoApp（载入数据）；
- * 文件选择与读写经 aideaFile 桥由 main 进程完成，本层负责分支与提示。
+ * 文件选择与读写经 aideaFile / aideaFs 桥由 main 进程完成，本层负责分支与提示。
  */
 
 /** 确认回调：返回 true 表示确认放弃，false 表示取消 */

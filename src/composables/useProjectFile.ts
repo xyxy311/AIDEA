@@ -9,6 +9,7 @@ import { useTagsStore } from '@/stores/tags'
 import { useAdditionsStore } from '@/stores/additions'
 import { useCommands } from '@/composables/useCommands'
 import { nativeFile } from '@/composables/useNativeFile'
+import { nativeFs } from '@/composables/useNativeFs'
 import { useMessage } from 'naive-ui'
 import { t } from '@/composables/useT'
 import {
@@ -16,6 +17,7 @@ import {
   parseProjectFile,
   type ProjectViewState,
 } from '@/utils/projectFile'
+import { buildTextOutline } from '@/utils/textOutline'
 import { createNode } from '@/utils/factory'
 import { generateId } from '@/utils/id'
 import type { WhiteboardNode, Tag } from '@/types'
@@ -294,6 +296,30 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     await saveAsProject()
   }
 
+  /** 导出为文本：深度优先收集整棵节点树，制表符缩进排成大纲，经 fs 桥另存为 .txt */
+  async function exportToText(): Promise<void> {
+    const rootId = ROOT_NODE_ID
+    const outline = buildTextOutline(rootId, {
+      textOf: (id) => nodeStore.getNode(id)?.text,
+      childrenOf: (id) => nodeStore.childrenOf(id).map((n) => n.id),
+    })
+    const name = nodeStore.rootNode?.text?.trim() || t('common.untitledProject')
+    try {
+      const res = await nativeFs.save({
+        mode: 'text',
+        title: t('menuBar.exportToText'),
+        defaultName: `${name}.txt`,
+        filters: [{ name: t('menuBar.exportToTextFilter'), extensions: ['txt'] }],
+        content: outline,
+      })
+      if (res.canceled || !res.path) return
+      message.success(t('menuBar.exportedToText'))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      message.error(t('menuBar.exportToTextFailed', { message: msg }))
+    }
+  }
+
   /** 另存为项目（main showSaveDialog + writeFile） */
   async function saveAsProject(): Promise<void> {
     const json = buildProjectJson()
@@ -318,6 +344,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     openRecentFile,
     saveProject,
     saveAsProject,
+    exportToText,
     recentFiles,
     dirty: fileStore.dirty,
     suggestedName: fileStore.suggestedName,

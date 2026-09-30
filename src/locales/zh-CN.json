@@ -17,7 +17,11 @@
     "unsavedConfirm": "当前项目有未保存的改动，确定要放弃吗？",
     "openFailed": "打开文件失败：{message}",
     "saveFailed": "保存失败：{message}",
-    "unsavedConfirmNeeded": "有未保存的改动，请先保存或确认"
+    "unsavedConfirmNeeded": "有未保存的改动，请先保存或确认",
+    "exportToText": "导出为文本",
+    "exportToTextFilter": "文本文件",
+    "exportedToText": "已导出为文本",
+    "exportToTextFailed": "导出文本失败：{message}"
   },
 "toolbar": {
       "title": "白板",

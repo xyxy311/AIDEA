@@ -17,7 +17,11 @@
     "unsavedConfirm": "This project has unsaved changes. Discard them?",
     "openFailed": "Failed to open file: {message}",
     "saveFailed": "Failed to save: {message}",
-    "unsavedConfirmNeeded": "You have unsaved changes. Save or confirm first"
+    "unsavedConfirmNeeded": "You have unsaved changes. Save or confirm first",
+    "exportToText": "Export to Text",
+    "exportToTextFilter": "Text file",
+    "exportedToText": "Exported to text",
+    "exportToTextFailed": "Failed to export text: {message}"
   },
   "toolbar": {
     "title": "Whiteboard",

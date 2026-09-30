@@ -11,6 +11,11 @@ const projectFile = inject<ProjectFileApi | undefined>('projectFile')
 
 const menu = computed<TopBarMenuOption[]>(() => [
   { key: 'save-as', label: t('menuBar.saveAs'), onSelect: () => projectFile?.saveAsProject() },
+  {
+    key: 'export-to-text',
+    label: t('menuBar.exportToText'),
+    onSelect: () => projectFile?.exportToText(),
+  },
 ])
 </script>
 

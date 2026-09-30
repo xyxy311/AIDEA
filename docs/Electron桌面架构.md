@@ -7,7 +7,7 @@
 Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo/redo、插件系统）都在 renderer 的 Vue3 + Pinia 里，与浏览器运行时完全一致。进程分工是围绕「renderer 拥有全部逻辑、绝不触碰文件系统 / Node」这条边界展开的：
 
 - **main 进程**（`electron/main`）：宿主壳。负责开窗、插件目录扫描与协议、窗口/文件/IPC 通道、快捷键兜底。**全部文件系统访问收敛在 main**（`dialog` + `fs` + 自定义协议 handler）。
-- **preload**（`electron/preload/index.ts`）：contextBridge 暴露三座**窄桥**（`aideaDesktop` / `aideaWindow` / `aideaFile`），只转发明文通道，绝不暴露 `ipcRenderer` 本体或任何带物理路径参数的通道。
+- **preload**（`electron/preload/index.ts`）：contextBridge 暴露五座**窄桥**（`aideaDesktop` / `aideaWindow` / `aideaFile` / `aideaFs` / `aideaI18n`），只转发明文通道，绝不暴露 `ipcRenderer` 本体或任何带物理路径参数的通道。
 - **renderer**（`src/`）：纯 UI 与业务逻辑，通过桥与 main 通信；插件系统在 renderer 内装载运行。
 
 整体链路一句话：**main 扫描插件目录 → preload 注入桥 → renderer 启动 `init()` 经桥收集插件条目 → 按运行时 protocol 分支动态 `import()` 插件 bundle → 插件 `ctx.register` 注册 UI → uiRegistry 派生渲染自动生效**。
@@ -18,7 +18,7 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 
 | 路径 | 职责 |
 |---|---|
-| `electron/shared/bridge.ts` | IPC 契约全量：`IPC` 通道名白名单 + `DesktopBridge`/`WindowBridge`/`FileBridge` + `declare global` 的 `window.aideaDesktop` 等类型声明。main 与 preload 双向 import，除类型与常量外**无运行时副作用**。新通道集中在此评审 |
+| `electron/shared/bridge.ts` | IPC 契约全量：`IPC` 通道名白名单 + `DesktopBridge`/`WindowBridge`/`FileBridge`/`FsBridge` + `declare global` 的 `window.aideaDesktop` 等类型声明。main 与 preload 双向 import，除类型与常量外**无运行时副作用**。新通道集中在此评审 |
 | `electron/shared/vendor.ts` | SDK 共享契约：`SDK_VENDOR` external 清单 + `VENDOR_FILE` 产物名（须与 `index.html` import map 对齐）。只增不减 |
 | `electron/main/index.ts` | main 入口：privileged schemes 注册（app ready 前）→ 删原生菜单 → 开主窗口 → ready 后注册协议/IPC/watch |
 | `electron/main/plugins.ts` | 插件扫描壳（唯一 import electron）：`pluginsRoot()`（dev 为 `<仓库根>/plugins/`，打包后 `userData/plugins/`）、`rescan()` 刷新白名单、`getPluginDir()` |
@@ -27,9 +27,10 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 | `electron/main/fsGuard.ts` | 路径防护纯函数：`isValidPluginDirName` / `decodeProtocolPath` / `resolveSafeFile`（traversal 守门人） |
 | `electron/main/protocol.ts` | 自定义协议：`aidea-plugin://` 插件资源 + `app://` renderer 载体，注册与 handler |
 | `electron/main/mime.ts` | 协议响应 MIME 推断（.js/.mjs → `text/javascript` 硬要求） |
-| `electron/main/ipc.ts` | main 侧 IPC 通道注册：插件 list + 窗口控制 + 项目文件（dialog+fs） |
+| `electron/main/ipc.ts` | main 侧 IPC 通道注册：插件 list + 窗口控制 + 项目文件 + 通用任意文件读写（dialog+fs+iconv） |
 | `electron/main/shortcuts.ts` | `attachWindowShortcuts`：删菜单后编辑快捷键/devtools 兜底 |
-| `electron/preload/index.ts` | contextBridge 露出三座窄桥 |
+| `electron/preload/index.ts` | contextBridge 露出五座窄桥 |
+| `src/composables/useNativeFs.ts` | `window.aideaFs` 桥唯一 renderer 访问点 + 二进制解析原语（`toArrayBuffer`/`bytesToHex`）；`api/fs.ts` 与内置功能共用 |
 | `src/plugin/sources/desktop.ts` | **全 renderer 唯一桥访问点**（`window.aideaDesktop`），`collectDesktopEntries` / `subscribePluginChanges` |
 | `src/plugin/sources/index.ts` | 聚合收口 `collectPluginEntries` + re-export 订阅；manager 对源内部无感知 |
 | `src/plugin/manager.ts` | 插件「加载 + 生命周期」：`PluginManager` / `installAll` / `PluginEntry` / `PluginRecord` |
@@ -50,7 +51,7 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 
 ### IPC 通道常量（`electron/shared/bridge.ts`）
 
-`IPC` 是全体通道名的唯一来源（禁止散落字符串）：插件 `LIST`(`plugins:list`) / `CHANGED`(`plugins:changed`)；窗口 `WINDOW_MINIMIZE` / `WINDOW_TOGGLE_MAXIMIZE` / `WINDOW_CLOSE` / `WINDOW_IS_MAXIMIZED` / `WINDOW_MAXIMIZED_CHANGED`；文件 `FILE_OPEN` / `FILE_SAVE` / `FILE_WRITE` / `FILE_READ`。
+`IPC` 是全体通道名的唯一来源（禁止散落字符串）：插件 `LIST`(`plugins:list`) / `CHANGED`(`plugins:changed`)；窗口 `WINDOW_MINIMIZE` / `WINDOW_TOGGLE_MAXIMIZE` / `WINDOW_CLOSE` / `WINDOW_IS_MAXIMIZED` / `WINDOW_MAXIMIZED_CHANGED`；文件 `FILE_OPEN` / `FILE_SAVE` / `FILE_WRITE` / `FILE_READ`（项目文件）+ `FS_OPEN` / `FS_SAVE` / `FS_WRITE` / `FS_READ`（`fs:*` 通用任意文件读写）。
 
 ### 契约类型
 
@@ -72,6 +73,16 @@ WindowBridge { minimize(); toggleMaximize(); close(); isMaximized(): Promise<boo
   onMaximizedChange(cb): () => void }
 
 FileBridge { openProject(); saveProject(opts); writeFile(opts); readFile(opts) }
+
+// 通用任意文件读写（window.aideaFs，同窄桥准则：open/save 对话框定路径，write/read 只收已记忆路径令牌）
+type FsMode = 'text' | 'binary'
+FsBridge {
+  open(req: { mode: FsMode; encoding?: TextEncoding; title?; filters? }): Promise<FsOpenResult>
+  save(req: { mode: FsMode; encoding?: TextEncoding; defaultName?; content? / bytes? }): Promise<FsSaveResult>
+  read(req: { path; mode: FsMode; encoding? }): Promise<FsReadResult>
+  write(req: { path; mode: FsMode; encoding?; content? / bytes? }): Promise<void>
+}
+// text 载荷 content?: string（按 encoding 用 iconv-lite 编解码，默认 utf-8）；binary 载荷 bytes?: Uint8Array
 ```
 
 `SDK_VENDOR = ['vue', 'pinia', 'naive-ui', 'konva']`（`electron/shared/vendor.ts`）；`VENDOR_FILE` 给出各包产物文件名。
@@ -123,7 +134,7 @@ createDebouncer(ms, task): { push(); cancel() }
 1. **main 启动**（`scripts/dev.mjs` 编排，见下）：`electron/main/index.ts` 顶层 `registerPrivilegedSchemes()`（scheme 特权在 app ready 前固化）→ `Menu.setApplicationMenu(null)`。
 2. **app ready 后**：`registerProtocolHandlers()`（`aidea-plugin://` + `app://`）→ `registerIpc()` → `createMainWindow()`（`contextIsolation`/`sandbox`，`preload: dist-electron/preload.cjs`）→ `startPluginWatching()`。
    - dev：`VITE_DEV_SERVER_URL` 存在 → `win.loadURL(devUrl)`；生产 → `win.loadURL('app://./index.html')`。
-3. **preload**（`index.ts`）：`contextBridge.exposeInMainWorld` 暴露三座桥。注入先于应用脚本，故 renderer 模块顶部可直接读 `window.aideaDesktop`。
+3. **preload**（`index.ts`）：`contextBridge.exposeInMainWorld` 暴露五座桥（aideaDesktop/aideaWindow/aideaFile/aideaFs/aideaI18n）。注入先于应用脚本，故 renderer 模块顶部可直接读 `window.aideaDesktop`。
 4. **renderer**（`src/main.ts`）：`Konva.pixelRatio` → `app.use(pinia)` → `mount('#app')` → `void usePluginStore().init()`。
 5. **`init()`**（`src/stores/plugin.ts`）：`subscribePluginChanges`（置 `dirDirty`）→ `await collectPluginEntries()` → `useLayoutStore().setDiscoveredPluginIds(...)`（回填在先，注册前 delta 已正确）→ `new PluginManager({ entries, getEnabled })` → `mgr.installAll()`（装载 → activate → 注册 UI）。
 6. **插件装载**：`entry.loader()` 动态 `import(url)`；dev 经 vite transform、生产经 `aidea-plugin://` 协议 → bare import 由 import map 解析到 `/vendor/*.js` → 与宿主共享同一 SDK 实例。
@@ -131,6 +142,16 @@ createDebouncer(ms, task): { push(); cancel() }
 `scripts/dev.mjs` 编排：① `packagePlugin('ai')`（内置插件产物）→ ② spawn vite（`--strictPort` 5173）→ ③ 轮询就绪 → ④ esbuild watch main/preload（直出 `.cjs`）→ ⑤ `VITE_DEV_SERVER_URL` 下 spawn electron。main/preload 改动重建后**需手动重启 electron**（不做热重启）。
 
 ## 5. 实现细节与踩坑点
+
+### 通用文件桥 `aideaFs`（任意文件读写）
+
+与项目文件桥 `aideaFile` 平行、但语义面向「任意文件」：支撑插件「导出为文本 / 加载模板 / 读二进制」与未来内置功能。安全模型沿用窄桥红线：
+
+- **dialog + fs 全在 main**：`fs:open`/`fs:save` 各带 `async` handler，用 `showOpenDialog`/`showSaveDialog` 选路径后 `fs.readFile/writeFile`；插件只要不传路径，open/save 就一定由对话框定路径。
+- **路径即令牌**：`fs:read`/`fs:write` 只接受 `main` 之前（open/save 或其它通道）产出的记忆路径字符串，落盘/重读仍在 main。renderer 从不自造路径、不直接碰磁盘。
+- **双编码**：`mode:'text'` + `encoding`（缺省 utf-8）经 `iconv-lite` 编解码（`encodingExists` 兜底，非法抛错）；支持 gbk/gb18030/big5/shift_jis/utf-16le 等，GBK 场景不会乱码。`mode:'binary'` 把 Node `Buffer` 以 `Uint8Array` 返回（IPC 结构化克隆），写侧 `Uint8Array`→`Buffer` 落盘，用户格式解析由调用方自理。
+- **依赖**：`iconv-lite`（纯 JS，无原生模块）例进 esbuild main bundle（`external` 仅 `electron`），已实测 main.cjs 内联。
+- **取消语义**：对话框取消静默返回 `{ canceled: true }`，不抛错；整文件进内存，未做流式（50MB 软上限建议写进插件侧）。
 
 ### 自定义协议 `aidea-plugin://`
 

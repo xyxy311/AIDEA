@@ -22,6 +22,11 @@ export const IPC = {
   FILE_SAVE: 'file:save',
   FILE_WRITE: 'file:write',
   FILE_READ: 'file:read',
+  /** renderer → main：任意文件读写（通用 fs 桥）。对话框驱动 + 已记忆路径回传令牌，text/binary 双编码 */
+  FS_OPEN: 'fs:open',
+  FS_SAVE: 'fs:save',
+  FS_WRITE: 'fs:write',
+  FS_READ: 'fs:read',
   /** renderer → main：列出运行时 i18n 目录内的语言文件清单，返回 I18nFileInfo[] */
   I18N_LIST: 'i18n:list',
   /** renderer → main：读取指定语言文件内容（only 白名单内 id，越界拒绝） */
@@ -110,6 +115,110 @@ export interface SaveFileResult {
   name?: string
 }
 
+/**
+ * 通用任意文件读写契约（window.aideaFs / FsBridge）。
+ * 安全模型与项目文件桥一致：open/save 一律由 main 弹对话框确定路径，renderer 永不传递路径；
+ * write/read 的 path 只能回传 main 之前产出的「记忆路径令牌」，落盘/重读仍在 main 完成。
+ * mode='text' 时按 encoding 用 iconv-lite 编解码（默认 utf-8）；mode='binary' 时载荷为 Uint8Array。
+ */
+export type FsMode = 'text' | 'binary'
+
+/** 文本读取编码（iconv-lite 支持的常见编码；默认 utf-8；binary 模式忽略）。literal 给出常用项，也接受任意 iconv-lite 编码名 */
+export type TextEncoding =
+  | 'utf-8'
+  | 'utf-16le'
+  | 'latin1'
+  | 'ascii'
+  | 'gbk'
+  | 'gb18030'
+  | 'big5'
+  | 'shift_jis'
+  | 'shift-jis'
+  | (string & {})
+
+/** 对话框过滤规则（与 Electron.FileFilter 结构兼容，避免 renderer 侧引入 electron 类型） */
+export interface FsFileFilter {
+  name: string
+  extensions: string[]
+}
+
+export interface FsOpenRequest {
+  title?: string
+  filters?: FsFileFilter[]
+  /** 读取模式：text 按 encoding 解码返回 content；binary 返回 bytes（原样字节） */
+  mode: FsMode
+  /** 仅 text 生效，默认 'utf-8' */
+  encoding?: TextEncoding
+}
+
+/** open 的返回：取消 / 成功（path + name + 按 mode 交付 text 或 binary 载荷） */
+export interface FsOpenResult {
+  canceled: boolean
+  path?: string
+  name?: string
+  /** mode='text' 时返回（已按 encoding 解码） */
+  content?: string
+  /** mode='binary' 时返回（原始字节） */
+  bytes?: Uint8Array
+}
+
+export interface FsSaveRequest {
+  title?: string
+  filters?: FsFileFilter[]
+  defaultName?: string
+  /** 写入模式：text 按 encoding 编码写 content；binary 写 bytes */
+  mode: FsMode
+  /** 仅 text 生效，默认 'utf-8' */
+  encoding?: TextEncoding
+  /** mode='text' 时的写入内容 */
+  content?: string
+  /** mode='binary' 时的写入内容 */
+  bytes?: Uint8Array
+}
+
+/** save 的返回：取消 / 成功（path + name） */
+export interface FsSaveResult {
+  canceled: boolean
+  path?: string
+  name?: string
+}
+
+export interface FsReadRequest {
+  /** 之前 open/save 返回的记忆路径令牌（renderer 不外传任意路径） */
+  path: string
+  mode: FsMode
+  /** 仅 text 生效，默认 'utf-8' */
+  encoding?: TextEncoding
+}
+
+export interface FsReadResult {
+  path: string
+  /** mode='text' 时返回 */
+  content?: string
+  /** mode='binary' 时返回 */
+  bytes?: Uint8Array
+}
+
+export interface FsWriteRequest {
+  /** 之前 open/save 返回的记忆路径令牌（覆盖写） */
+  path: string
+  mode: FsMode
+  /** 仅 text 生效，默认 'utf-8' */
+  encoding?: TextEncoding
+  /** mode='text' 时的写入内容 */
+  content?: string
+  /** mode='binary' 时的写入内容 */
+  bytes?: Uint8Array
+}
+
+/** preload 经 contextBridge 暴露的通用文件桥（window.aideaFs）；useNativeFs.ts 是唯一访问点 */
+export interface FsBridge {
+  open(req: FsOpenRequest): Promise<FsOpenResult>
+  save(req: FsSaveRequest): Promise<FsSaveResult>
+  read(req: FsReadRequest): Promise<FsReadResult>
+  write(req: FsWriteRequest): Promise<void>
+}
+
 /** 运行时 i18n 目录扫描产出的单个语言条目（@meta 自描述：id/label/naiveBase） */
 export interface I18nFileInfo {
   /** 语言 id（= 文件名去 .json，两者强校验一致） */
@@ -141,6 +250,8 @@ declare global {
     aideaWindow: WindowBridge
     /** 纯桌面形态恒存在；全 renderer 唯一运行时访问点为 useNativeFile.ts */
     aideaFile: FileBridge
+    /** 纯桌面形态恒存在；全 renderer 唯一访问点为 useNativeFs.ts */
+    aideaFs: FsBridge
     /** 纯桌面形态恒存在；全 renderer 唯一访问点为 src/i18n/loader.ts */
     aideaI18n: I18nBridge
   }

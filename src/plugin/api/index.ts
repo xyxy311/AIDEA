@@ -12,10 +12,12 @@ import { createThemeApi } from './theme'
 import { createFileApi } from './file'
 import { createShortcutsApi } from './shortcuts'
 import { createI18nApi } from './i18n'
+import { createFsApi } from './fs'
 
 /**
- * 构造分类好的应用 api：node / connection / tag / project / view / presets / theme / file / shortcuts / i18n。
+ * 构造分类好的应用 api：node / connection / tag / project / view / presets / theme / file / shortcuts / i18n / fs。
  * additions 移出共享 api（插件命名空间数据仅经 adapter.for(id).additions）；shortcuts 动作注册已移至 ctx.register。
+ * fs = 任意文件读写 I/O（与 file 域「项目文件序列化/解析/状态」职责分离）。
  * AI 功能已移除，未来迁移为内置插件。
  */
 export function createPluginApi() {
@@ -30,6 +32,7 @@ export function createPluginApi() {
     file: createFileApi(),
     shortcuts: createShortcutsApi(),
     i18n: createI18nApi(),
+    fs: createFsApi(),
   }
 }
 
@@ -46,6 +49,7 @@ export { createThemeApi } from './theme'
 export { createFileApi } from './file'
 export { createShortcutsApi } from './shortcuts'
 export { createI18nApi } from './i18n'
+export { createFsApi } from './fs'
 export type { NodeApi } from './node'
 export type { ConnectionApi } from './connection'
 export type { TagApi } from './tag'
@@ -57,3 +61,4 @@ export type { ThemeApi } from './theme'
 export type { FileApi } from './file'
 export type { ShortcutsApi } from './shortcuts'
 export type { I18nApi } from './i18n'
+export type { FsApi } from './fs'

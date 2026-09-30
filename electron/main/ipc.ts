@@ -4,7 +4,14 @@
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { IPC } from '../shared/bridge'
+import iconv from 'iconv-lite'
+import {
+  IPC,
+  type FsOpenRequest,
+  type FsSaveRequest,
+  type FsReadRequest,
+  type FsWriteRequest,
+} from '../shared/bridge'
 import { rescan } from './plugins'
 import { getI18nFile, rescanI18n } from './i18n'
 
@@ -12,6 +19,47 @@ import { getI18nFile, rescanI18n } from './i18n'
 const PROJECT_FILTERS: Electron.FileFilter[] = [
   { name: '头脑风暴白板项目', extensions: ['aidea.json', 'json'] },
 ]
+
+/** 通用 fs 桥的默认文本编码 */
+const DEFAULT_ENCODING = 'utf-8'
+
+/** 校验编码是否受 iconv-lite 支持并解析默认值；非法抛错（调用方自行捕获） */
+function requireEncoding(encoding: string, fallback = DEFAULT_ENCODING): string {
+  const resolved = encoding || fallback
+  if (!iconv.encodingExists(resolved)) throw new Error(`fs: 不支持的文本编码：${resolved}`)
+  return resolved
+}
+
+/** 读取字节并按指定文本编码解码 */
+async function readText(filePath: string, enc: string): Promise<string> {
+  const buf = await fs.readFile(filePath)
+  return iconv.decode(buf, requireEncoding(enc))
+}
+
+/** 按 mode 读取文件：text 返回解码字符串，binary 返回原始字节副本（跨 IPC 结构化克隆） */
+async function readPayload(
+  filePath: string,
+  mode: 'text' | 'binary',
+  encoding?: string,
+): Promise<{ content?: string; bytes?: Uint8Array }> {
+  if (mode === 'binary') {
+    return { bytes: new Uint8Array(await fs.readFile(filePath)) }
+  }
+  return { content: await readText(filePath, encoding ?? DEFAULT_ENCODING) }
+}
+
+/** 按 mode 将载荷编码后写入 filePath（path 由调用方回传的令牌 / 对话框选定的路径确定） */
+async function writePayload(
+  filePath: string,
+  req: Pick<FsSaveRequest | FsWriteRequest, 'mode' | 'encoding' | 'content' | 'bytes'>,
+): Promise<void> {
+  if (req.mode === 'binary') {
+    await fs.writeFile(filePath, Buffer.from(req.bytes ?? new Uint8Array()))
+    return
+  }
+  const enc = requireEncoding(req.encoding ?? DEFAULT_ENCODING)
+  await fs.writeFile(filePath, iconv.encode(req.content ?? '', enc))
+}
 
 /** app ready 后调用一次 */
 export function registerIpc(): void {
@@ -92,5 +140,53 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.FILE_READ, async (_event, opts: { path: string }) => {
     const content = await fs.readFile(opts.path, 'utf8')
     return { content }
+  })
+
+  // ── 通用任意文件读写（window.aideaFs）；open/save 对话框定路径，write/read 只收已记忆路径令牌 ──
+
+  // 打开 + 读取：对话框选定路径后按 mode 交付 content（text）/ bytes（binary）。
+  ipcMain.handle(IPC.FS_OPEN, async (event, req: FsOpenRequest) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const opts: Electron.OpenDialogOptions = {
+      title: req.title,
+      filters: req.filters,
+      properties: ['openFile'],
+    }
+    const res = win
+      ? await dialog.showOpenDialog(win, opts)
+      : await dialog.showOpenDialog(opts)
+    const filePath = res.canceled ? undefined : res.filePaths[0]
+    if (!filePath) return { canceled: true }
+    const payload = await readPayload(filePath, req.mode, req.encoding)
+    return { canceled: false, path: filePath, name: path.basename(filePath), ...payload }
+  })
+
+  // 另存 + 写入：对话框选定路径后按 mode 编码写入。
+  ipcMain.handle(IPC.FS_SAVE, async (event, req: FsSaveRequest) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const dialogOpts: Electron.SaveDialogOptions = {
+      title: req.title,
+      defaultPath: req.defaultName,
+      filters: req.filters,
+    }
+    const res = win
+      ? await dialog.showSaveDialog(win, dialogOpts)
+      : await dialog.showSaveDialog(dialogOpts)
+    const filePath = res.canceled ? undefined : res.filePath
+    if (!filePath) return { canceled: true }
+    const { mode, encoding, content, bytes } = req
+    await writePayload(filePath, { mode, encoding, content, bytes })
+    return { canceled: false, path: filePath, name: path.basename(filePath) }
+  })
+
+  // 覆盖写已记忆路径（open/save 返回的令牌）。
+  ipcMain.handle(IPC.FS_WRITE, async (_event, req: FsWriteRequest) => {
+    await writePayload(req.path, req)
+  })
+
+  // 重读已记忆路径（open 返回的令牌）。
+  ipcMain.handle(IPC.FS_READ, async (_event, req: FsReadRequest) => {
+    const payload = await readPayload(req.path, req.mode, req.encoding)
+    return { path: req.path, ...payload }
   })
 }

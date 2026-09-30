@@ -118,6 +118,7 @@ export type {
   ThemeApi,
   FileApi,
   ShortcutsApi,
+  FsApi,
 } from './api'
 export type { PluginConfigApi } from './api/config'
 export type {

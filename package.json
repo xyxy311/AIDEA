@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "AIDEA 头脑风暴白板（Electron 桌面应用）",
+  "description": "AIDEA brainstorming whiteboard",
   "author": "xyxy",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -17,7 +17,7 @@
   "build": {
     "appId": "com.xyxy.aideawhiteboard",
     "productName": "AIDEA",
-    "copyright": "Copyright \u00A9 2025 xyxy",
+    "copyright": "Copyright \u00A9 2026 xyxy",
     "directories": {
       "output": "release",
       "buildResources": "build"

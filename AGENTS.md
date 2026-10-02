@@ -7,9 +7,8 @@
 ## 命令与验证
 
 ```
-npm run type-check   # 类型检查
 npm run test         # 测试
-npm run build        # 构建（包括类型检查）
+npm run build        # 构建（已包括类型检查）
 ```
 
 每次改动的完成标准：`test` 全绿 + `build` 无错误（注意：DSH 下需要请求更高权限运行这两个命令，否则会因为沙箱环境报错）。渲染正确性由人工验证。

@@ -4,6 +4,7 @@ import { useNodeStore } from '@/stores/node'
 import { DEFAULT_NODE_TEXT } from '@/constants'
 import { useViewStore } from '@/stores/view'
 import { useCommands } from '@/composables/useCommands'
+import { useClipboard } from '@/composables/useClipboard'
 
 /** 节点树节点 */
 export interface NodeTreeNode {
@@ -36,6 +37,7 @@ export function useNodeTree() {
   const project = useProjectStore()
   const nodeStore = useNodeStore()
   const commands = useCommands()
+  const clipboard = useClipboard()
 
   /** 根节点 ID（项目节点） */
   const rootViewId = computed(() => project.rootViewId)
@@ -155,6 +157,38 @@ export function useNodeTree() {
     return commands.setNodeText(nodeId, trimmed)
   }
 
+  // ── 剪贴板（与画布共享）──
+
+  /** 剪贴板是否有可粘贴内容 */
+  const canPaste = clipboard.canPaste
+
+  /** 复制节点整棵子树（含内部连线）到剪贴板 */
+  function copyNodeTree(nodeId: string): boolean {
+    return clipboard.copy([nodeId])
+  }
+
+  /** 剪切节点子树到剪贴板并删除原节点（根节点不可剪切） */
+  function cutNodeTree(nodeId: string): boolean {
+    if (nodeId === project.rootViewId) return false
+    return clipboard.cut([nodeId])
+  }
+
+  /** 粘贴剪贴板内容为指定节点的子节点，并展开该节点使新节点可见 */
+  function pasteIntoNode(nodeId: string): string[] {
+    const ids = clipboard.paste(nodeId)
+    if (ids.length > 0) project.expand(nodeId)
+    return ids
+  }
+
+  /**
+   * 拖拽移动节点到目标节点的子级下（reparent，跨视图迁移连线），并展开目标使节点可见。
+   * 根节点/环（目标为自身或后代）由命令层过滤，此处仅调用。
+   */
+  function moveNodeUnder(nodeId: string, targetParentId: string): void {
+    commands.reparentTo([nodeId], targetParentId, new Map())
+    project.expand(targetParentId)
+  }
+
   return {
     rootViewId,
     tree,
@@ -167,5 +201,10 @@ export function useNodeTree() {
     findParent,
     collectDescendants,
     renameNode,
+    canPaste,
+    copyNodeTree,
+    cutNodeTree,
+    pasteIntoNode,
+    moveNodeUnder,
   }
 }

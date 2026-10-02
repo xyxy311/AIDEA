@@ -1,19 +1,15 @@
 <script setup lang="ts">
 /**
  * NodeTreePanel - 节点树面板：基于 parentId 展示节点树，支持展开/收起、单击切换视图、
- * 双击重命名（根节点文本即项目名）、新建/递归删除，叶子节点颜色减淡。
+ * 双击重命名（根节点文本即项目名）、新建/递归删除、右键菜单、拖拽移动节点（跨视图 reparent）、
+ * 叶子节点颜色减淡。
  */
-import { ref, nextTick, computed, watch } from 'vue'
-import {
-  NButton,
-  NInput,
-  NScrollbar,
-  NPopconfirm,
-} from 'naive-ui'
+import { ref, nextTick, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { NButton, NInput, NScrollbar, NDropdown, useDialog } from 'naive-ui'
+import type { DropdownOption } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 import {
   AddOutline,
-  TrashOutline,
   ChevronForward,
   ChevronDown,
 } from '@vicons/ionicons5'
@@ -29,13 +25,20 @@ const {
   rootViewId,
   toggleExpand,
   addSubNode,
-  deleteNodeRecursive,
   renameNode,
+  canPaste,
+  copyNodeTree,
+  cutNodeTree,
+  pasteIntoNode,
+  deleteNodeRecursive,
+  moveNodeUnder,
+  collectDescendants,
 } = useNodeTree()
 
 const active = useActiveView()
 const nodeStore = useNodeStore()
 const message = useMessage()
+const dialog = useDialog()
 
 /** 根节点名称（即项目名，单一数据源） */
 const rootName = computed(() => nodeStore.getNode(rootViewId.value)?.text ?? '')
@@ -67,16 +70,53 @@ watch(selectedSet, (ids) => {
 const editingNodeId = ref<string | null>(null)
 const renameText = ref('')
 
-// ── 工具栏操作（纯图标按钮）──
+// ── 右键菜单状态 ──
+const ctxMenu = ref<{ x: number; y: number; nodeId: string } | null>(null)
 
-/** 在活跃视图下新建子节点并进入编辑态 */
-function handleAdd(): void {
-  addSubNode(project.currentNodeId)
+// ── 拖拽移动状态 ──
+const dragNodeId = ref<string | null>(null)
+const dropTargetId = ref<string | null>(null)
+
+/**
+ * 拖拽期间在 window 上统一处理 dragover/drop，并用 elementFromPoint 命中落点。
+ * 仅当指针落在有效目标（节点项或根节点名称）上才 preventDefault（武装放置区、move 光标）；
+ * 空白/非法区域不 preventDefault —— 浏览器保持 no-drop，放置被禁用。
+ */
+const onWindowDragOver = (e: DragEvent): void => {
+  if (!dragNodeId.value) return
+  const targetId = targetIdAt(e.clientX, e.clientY)
+  if (targetId) {
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  }
+  dropTargetId.value = targetId
 }
 
-/** 递归删除当前活跃节点（含子树） */
-function handleDeleteActive(): void {
-  deleteNodeRecursive(project.currentNodeId)
+const onWindowDrop = (e: DragEvent): void => {
+  const nodeId = dragNodeId.value
+  const targetId = nodeId ? targetIdAt(e.clientX, e.clientY) : null
+  stopDrag()
+  if (nodeId && targetId) {
+    e.preventDefault()
+    moveNodeUnder(nodeId, targetId)
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('dragover', onWindowDragOver)
+  window.addEventListener('drop', onWindowDrop)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('dragover', onWindowDragOver)
+  window.removeEventListener('drop', onWindowDrop)
+})
+
+// ── 工具栏操作（纯图标按钮）──
+
+/** 在项目根节点下新建子节点（根节点工具栏的添加按钮） */
+function handleAdd(): void {
+  addSubNode(rootViewId.value)
 }
 
 // ── 节点项操作 ──
@@ -84,10 +124,6 @@ function handleDeleteActive(): void {
 function handleSwitch(id: string): void {
   if (editingNodeId.value) return // 重命名中不切换
   project.switchView(id)
-}
-
-function handleRemove(id: string): void {
-  deleteNodeRecursive(id)
 }
 
 // ── 双击开始重命名 ──
@@ -123,6 +159,115 @@ function cancelRename(): void {
   editingNodeId.value = null
 }
 
+// ── 右键菜单 ──
+
+/** 菜单项：依目标节点与剪贴板状态推导（根节点禁剪切/删除；无剪贴板内容禁粘贴） */
+const menuOptions = computed<DropdownOption[]>(() => {
+  const node = ctxMenu.value
+  if (!node) return []
+  const isRoot = node.nodeId === rootViewId.value
+  return [
+    { key: 'add', label: t('leftSidebar.addChildInMenu') },
+    { key: 'rename', label: t('leftSidebar.renameInMenu') },
+    { key: 'copy', label: t('leftSidebar.copyInMenu') },
+    { key: 'cut', label: t('leftSidebar.cutInMenu'), disabled: isRoot },
+    { key: 'paste', label: t('leftSidebar.pasteInMenu'), disabled: !canPaste.value },
+    { key: 'delete', label: t('leftSidebar.deleteInMenu'), disabled: isRoot },
+  ]
+})
+
+/** 打开节点右键菜单（放弃当前重命名输入态，避免状态互斥） */
+function openContextMenu(nodeId: string, e: MouseEvent): void {
+  editingNodeId.value = null
+  ctxMenu.value = { x: e.clientX, y: e.clientY, nodeId }
+}
+
+/** 关闭右键菜单 */
+function closeContextMenu(): void {
+  ctxMenu.value = null
+}
+
+/** 菜单项选择分发 */
+function handleMenuSelect(key: string | number): void {
+  const nodeId = ctxMenu.value?.nodeId
+  closeContextMenu()
+  if (!nodeId) return
+  if (key === 'add') {
+    addSubNode(nodeId)
+  } else if (key === 'rename') {
+    handleDblClick(nodeId, nodeStore.getNode(nodeId)?.text ?? '')
+  } else if (key === 'copy') {
+    copyNodeTree(nodeId)
+  } else if (key === 'cut') {
+    cutNodeTree(nodeId)
+  } else if (key === 'paste') {
+    pasteIntoNode(nodeId)
+  } else if (key === 'delete') {
+    confirmDelete(nodeId)
+  }
+}
+
+/** 删除确认弹窗：确认后递归删除整棵子树（可撤销） */
+function confirmDelete(nodeId: string): void {
+  if (nodeId === rootViewId.value) return
+  dialog.warning({
+    title: t('leftSidebar.deleteCurrent'),
+    content: t('leftSidebar.deleteConfirmNode'),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => deleteNodeRecursive(nodeId),
+  })
+}
+
+// ── 拖拽移动节点（reparent 到其它节点或根的子级）──
+
+/** 目标是否可接收拖放：非自身、非其自身子树节点（防环） */
+function isDropTargetAllowed(targetId: string): boolean {
+  if (!dragNodeId.value || targetId === dragNodeId.value) return false
+  return !collectDescendants(dragNodeId.value).includes(targetId)
+}
+
+/**
+ * 解算指针(x,y)处落点：命中节点项→该节点；落于空白/根区域→根节点。
+ * 非法目标（自身/后代）返回 null。
+ */
+/**
+ * 解算指针(x,y)处落点。仅两类有效目标：
+ *  - 命中节点项 → 该节点；
+ *  - 命中根节点名称 → 根节点（顶级）。
+ * 其余（含列表下方空白）返回 null，即该处不可放置。
+ */
+function targetIdAt(x: number, y: number): string | null {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null
+  const itemEl = el?.closest?.('.node-item') as HTMLElement | null
+  if (itemEl?.dataset.nodeId) {
+    const id = itemEl.dataset.nodeId
+    return isDropTargetAllowed(id) ? id : null
+  }
+  if (el?.closest?.('.toolbar-title-name')) {
+    return rootViewId.value
+  }
+  return null
+}
+
+/** 开始拖拽：记录源节点并设置拖拽类型 */
+function onDragStart(nodeId: string, e: DragEvent): void {
+  if (editingNodeId.value) {
+    e.preventDefault()
+    return
+  }
+  closeContextMenu()
+  dragNodeId.value = nodeId
+  e.dataTransfer!.effectAllowed = 'move'
+  e.dataTransfer!.setData('text/plain', nodeId)
+}
+
+/** 结束拖拽：清理拖动/高亮状态 */
+function stopDrag(): void {
+  dragNodeId.value = null
+  dropTargetId.value = null
+}
+
 // ── 根节点名称：单击即时切换根视图 / 双击编辑项目名 ──
 // 双击会先触发两次 click 切到根视图（闪切一次）；「即时响应」与「双击编辑」难两全，此处选即时切换。
 
@@ -139,7 +284,7 @@ function handleRootDblClick(): void {
 
 <template>
   <div class="node-tree-panel">
-    <!-- 顶部操作工具栏：左侧显示根节点名称（双击可编辑项目名），右侧为操作按钮 -->
+    <!-- 顶部操作工具栏：根节点名称（双击可编辑项目名）+ 紧挨其右端的操作按钮 -->
     <div class="panel-toolbar">
       <div class="toolbar-title">
         <!-- 根节点重命名（复用列表节点重命名逻辑） -->
@@ -156,38 +301,27 @@ function handleRootDblClick(): void {
           v-else
           class="toolbar-title-name"
           :title="rootName"
-          :class="{ 'root-view-active': project.currentNodeId === rootViewId }"
+          :class="{
+            'root-view-active': project.currentNodeId === rootViewId,
+            'drop-target': dropTargetId === rootViewId,
+          }"
           @click="handleRootClick"
           @dblclick.stop="handleRootDblClick"
         >{{ rootName }}</span>
-      </div>
-      <div class="panel-actions">
-        <!-- 纯图标按钮：新建子节点 -->
-        <NButton
-          size="tiny"
-          quaternary
-          class="action-btn"
-          :title="t('leftSidebar.newChild')"
-          @click="handleAdd"
-        >
-          <template #icon><AddOutline /></template>
-        </NButton>
-        <!-- 纯图标按钮：删除当前节点 -->
-        <NPopconfirm @positive-click="handleDeleteActive">
-          <template #trigger>
-            <NButton
-              size="tiny"
-              quaternary
-              type="error"
-              class="action-btn"
-              :title="t('leftSidebar.deleteCurrent')"
-              :disabled="project.currentNodeId === rootViewId"
-            >
-              <template #icon><TrashOutline /></template>
-            </NButton>
-          </template>
-          {{ t('leftSidebar.deleteConfirmCurrent') }}
-        </NPopconfirm>
+
+        <!-- 与根节点名称紧挨的按钮：添加子节点 + 删除当前节点 -->
+        <div class="panel-actions">
+          <!-- 纯图标按钮：新建子节点 -->
+          <NButton
+            size="tiny"
+            quaternary
+            class="action-btn"
+            :title="t('leftSidebar.newChild')"
+            @click="handleAdd"
+          >
+            <template #icon><AddOutline /></template>
+          </NButton>
+        </div>
       </div>
     </div>
 
@@ -197,14 +331,21 @@ function handleRootDblClick(): void {
           v-for="item in treeItems"
           :key="item.id"
           class="node-item"
+          :data-node-id="item.id"
+          :draggable="editingNodeId !== item.id"
           :class="{
             active: item.id === project.currentNodeId && !editingNodeId,
             selected: selectedSet.has(item.id),
             leaf: !item.hasChildren && !item.isRoot,
+            dragging: item.id === dragNodeId,
+            'drop-target': item.id === dropTargetId,
           }"
           :style="{ paddingLeft: 12 + item.depth * 16 + 'px' }"
           @click="handleSwitch(item.id)"
           @dblclick.stop="handleDblClick(item.id, item.name)"
+          @contextmenu.prevent.stop="openContextMenu(item.id, $event)"
+          @dragstart="onDragStart(item.id, $event)"
+          @dragend="stopDrag"
         >
           <!-- ── 缩进竖线（VSCode 风格，depth>0 时渲染）──
                使用绝对定位覆盖在 padding 区域内，不影响 flex 布局。 -->
@@ -244,22 +385,22 @@ function handleRootDblClick(): void {
           />
           <!-- 正常显示（原生 span：避免 NText 在 flex 布局下 min-width:0 导致文字被裁剪） -->
           <span v-else class="node-name">{{ item.name }}</span>
-
-          <!-- 删除按钮（根节点不显示） -->
-          <NPopconfirm
-            v-if="!item.isRoot"
-            @positive-click="handleRemove(item.id)"
-          >
-            <template #trigger>
-              <NButton size="tiny" quaternary type="error" class="node-remove-btn">
-                <template #icon><TrashOutline /></template>
-              </NButton>
-            </template>
-            {{ t('leftSidebar.deleteConfirmNode') }}
-          </NPopconfirm>
         </div>
       </div>
     </NScrollbar>
+
+    <!-- 右键上下文菜单（光标定位，点击外部/Escape 自动关闭） -->
+    <NDropdown
+      v-if="ctxMenu"
+      trigger="manual"
+      :show="true"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      :options="menuOptions"
+      @update:show="closeContextMenu"
+      @clickoutside="closeContextMenu"
+      @select="handleMenuSelect"
+    />
   </div>
 </template>
 
@@ -275,22 +416,24 @@ function handleRootDblClick(): void {
 .panel-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--color-border);
 }
 
-/* 左侧：根节点名称（双击可编辑项目名） */
+/* 根节点名称 + 紧挨其右端的操作按钮（同一行） */
 .toolbar-title {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
+  gap: 4px;
   overflow: hidden;
 }
 
 .toolbar-title-name {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--color-text);
@@ -366,6 +509,24 @@ function handleRootDblClick(): void {
   box-shadow: inset 0 0 0 2px var(--color-selected-ring);
 }
 
+/* 拖拽源：减淡提示 */
+.node-item.dragging {
+  opacity: 0.4;
+}
+
+/* 拖放目标（有效落点）：主色虚线轮廓 */
+.node-item.drop-target {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -1px;
+  background: var(--color-primary-faint);
+}
+
+/* 根节点作为拖放目标：内缩虚线高亮 */
+.toolbar-title-name.drop-target {
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+  outline: 1px dashed var(--color-primary);
+}
+
 /* 叶子节点（无子节点且非根）颜色减淡 */
 .node-item.leaf {
   opacity: 0.55;
@@ -420,17 +581,6 @@ function handleRootDblClick(): void {
 .node-rename-input {
   flex: 1;
   min-width: 0;
-}
-
-/* ── 删除按钮（hover 显示） ── */
-
-.node-remove-btn {
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.node-item:hover .node-remove-btn {
-  opacity: 1;
 }
 
 /* ── 缩进竖线（VSCode 风格）──

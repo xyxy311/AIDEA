@@ -63,6 +63,7 @@ function handleInsert(): void {
     :closable="true"
     :width="640"
     max-height="min(80vh, 600px)"
+    @close="emit('close')"
   >
     <div class="insert-modal">
       <NText depth="3" class="insert-tip">{{ t('menuBar.insertTextTip') }}</NText>

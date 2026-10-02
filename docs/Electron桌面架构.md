@@ -20,7 +20,8 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 |---|---|
 | `electron/shared/bridge.ts` | IPC 契约全量：`IPC` 通道名白名单 + `DesktopBridge`/`WindowBridge`/`FileBridge`/`FsBridge` + `declare global` 的 `window.aideaDesktop` 等类型声明。main 与 preload 双向 import，除类型与常量外**无运行时副作用**。新通道集中在此评审 |
 | `electron/shared/vendor.ts` | SDK 共享契约：`SDK_VENDOR` external 清单 + `VENDOR_FILE` 产物名（须与 `index.html` import map 对齐）。只增不减 |
-| `electron/main/index.ts` | main 入口：privileged schemes 注册（app ready 前）→ 删原生菜单 → 开主窗口 → ready 后注册协议/IPC/watch |
+| `electron/main/index.ts` | main 入口：`app.setName('AIDEA')` 固定 userData → privileged schemes 注册（app ready 前）→ 删原生菜单 → 开主窗口 → ready 后 `seedUserData()` 再注册协议/IPC/插件/i18n watch |
+| `electron/main/seedData.ts` | 生产首跑种子：把 extraResources 的 `resources/seed/` 复制进 userData（`plugins/` 覆盖式、`i18n/` 只补缺），保证首跑即有内置 AI 插件与语言模板 |
 | `electron/main/plugins.ts` | 插件扫描壳（唯一 import electron）：`pluginsRoot()`（dev 为 `<仓库根>/plugins/`，打包后 `userData/plugins/`）、`rescan()` 刷新白名单、`getPluginDir()` |
 | `electron/main/pluginScan.ts` | 扫描纯逻辑（IO 注入可单测）：入口判定 `plugin.js > index.js > index.mjs`、manifest 校验、产出一条 + 白名单 Map |
 | `electron/main/pluginWatch.ts` | chokidar watch + 变更推送：纯函数（fingerprint/diff/debounce）+ 薄接线 `startPluginWatching` |
@@ -174,7 +175,7 @@ createDebouncer(ms, task): { push(); cancel() }
 
 ### 插件目录 dev/prod 同构
 
-dev 插件根 `<仓库根>/plugins/`，生产 `userData/plugins/`——两形态目录结构一致，统一为**应用启动时扫描**装载。目录名 = pluginId（强校验 `^[a-z0-9_-]+$`，非法子目录扫描期跳过）；入口判定 `plugin.js > index.js > index.mjs`，无入口的目录被天然跳过。`manifest.json` 可选，解析/校验失败条目带 `error` 但不中断。内置 AI 插件也打包出 `plugins/ai/plugin.js`（gitignored），与第三方地位一致。
+dev 插件根 `<仓库根>/plugins/`，生产 `userData/plugins/`——两形态目录结构一致，统一为**应用启动时扫描**装载。目录名 = pluginId（强校验 `^[a-z0-9_-]+$`，非法子目录扫描期跳过）；入口判定 `plugin.js > index.js > index.mjs`，无入口的目录被天然跳过。`manifest.json` 可选，解析/校验失败条目带 `error` 但不中断。内置 AI 插件也打包出 `plugins/ai/plugin.js`（gitignored），与第三方地位一致；生产打包后由 `seedData.ts` 在首跑把它连同 `i18n-runtime` 种子复制进 `userData`。发版/数据位置/加语言加插件见 `打包发布.md`。
 
 ### watch 只提示、不热重载
 

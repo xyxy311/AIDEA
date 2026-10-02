@@ -12,6 +12,10 @@ import { startPluginWatching } from './pluginWatch'
 import { startI18nWatching } from './i18nWatch'
 import { registerPrivilegedSchemes, registerProtocolHandlers } from './protocol'
 import { attachWindowShortcuts } from './shortcuts'
+import { seedUserData } from './seedData'
+
+// 固定 userData 目录名（%APPDATA%/AIDEA），与 productName 解耦、避免改名导致旧配置丢失
+app.setName('AIDEA')
 
 // privileged schemes 必须先于 app ready 注册（Chromium 在 ready 前固化协议能力）
 registerPrivilegedSchemes()
@@ -83,15 +87,17 @@ function createMainWindow(): void {
 }
 
 void app.whenReady().then(() => {
-  // 协议 handler 与 IPC 都依赖 ready
-  registerProtocolHandlers()
-  registerIpc()
-  createMainWindow()
+  // 生产首跑把 extraResources 的 seed 复制进 userData（插件/i18n），须先于协议与 watch
+  seedUserData().then(() => {
+    registerProtocolHandlers()
+    registerIpc()
+    createMainWindow()
 
-  // 插件目录 watch：增删改经 IPC.CHANGED 推送给 renderer
-  startPluginWatching()
-  // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
-  startI18nWatching()
+    // 插件目录 watch：增删改经 IPC.CHANGED 推送给 renderer
+    startPluginWatching()
+    // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
+    startI18nWatching()
+  })
 
   // macOS 惯例：Dock 点击重新创建窗口
   app.on('activate', () => {

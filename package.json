@@ -1,37 +1,86 @@
 {
-  "name": "whiteboard",
+  "name": "aidea",
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "description": "AIDEA 头脑风暴白板（Electron 桌面应用）",
+  "author": "xyxy",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "vue-tsc --noEmit && vite build && node scripts/build-electron.mjs",
     "test": "vitest run --passWithNoTests",
-    "type-check": "vue-tsc --noEmit && tsc -p tsconfig.electron.json"
+    "type-check": "vue-tsc --noEmit && tsc -p tsconfig.electron.json",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win"
   },
-  "dependencies": {
+  "build": {
+    "appId": "com.xyxy.aideawhiteboard",
+    "productName": "AIDEA",
+    "copyright": "Copyright \u00A9 2025 xyxy",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "plugins/ai/plugin.js",
+        "to": "seed/plugins/ai/plugin.js"
+      },
+      {
+        "from": "i18n-runtime",
+        "to": "seed/i18n",
+        "filter": [
+          "*.json"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AIDEA"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24",
     "@vicons/ionicons5": "^0.13.0",
+    "@vitejs/plugin-vue": "^5",
+    "@vue/test-utils": "^2",
     "@vueuse/core": "^12",
+    "chokidar": "^4",
+    "electron": "^38",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25",
+    "happy-dom": "^15",
     "iconv-lite": "^0.6.3",
     "konva": "^9.3",
     "naive-ui": "^2.44.1",
     "nanoid": "^5",
     "pinia": "^2.2",
-    "vue": "^3.5",
-    "vue-konva": "^3"
-  },
-  "devDependencies": {
-    "@types/node": "^24",
-    "@vitejs/plugin-vue": "^5",
-    "@vue/test-utils": "^2",
-    "chokidar": "^4",
-    "electron": "^38",
-    "esbuild": "^0.25",
-    "happy-dom": "^15",
     "typescript": "~5.7",
     "vite": "^6",
     "vitest": "^2",
+    "vue": "^3.5",
+    "vue-konva": "^3",
     "vue-tsc": "^2"
   }
 }

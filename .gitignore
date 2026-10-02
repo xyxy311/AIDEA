@@ -1,6 +1,8 @@
 node_modules
 dist
 dist-electron
+release
+build/icon.png
 public/vendor
 plugins/*/plugin.js
 plugins/*/plugin.css

@@ -104,9 +104,9 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     expect(panel.words.value).toEqual(['词一', '词二', '词三'])
     expect(panel.visible.value).toBe(true)
     expect(panel.error.value).toBeNull()
-    // 自动生成的上下文预览回填（含当前视图根节点名称作为标题前缀）
+    // 自动生成的上下文预览回填（标题 = 祖先链「根节点/.../当前视图节点」，即 项目/目标）
     expect(panel.previewText.value).toContain('子A')
-    expect(panel.previewText.value).toContain('目标 :\n')
+    expect(panel.previewText.value).toContain('项目/目标 :\n')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0]
@@ -118,6 +118,28 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     expect(body.messages[1].content).toContain('# 指令')
     expect(body.messages[1].content).toContain(MOCK_DIRECTION.prompt) // 直接生成用 store 默认方向
     expect(body.messages[1].content).not.toContain('副标题A')
+  })
+
+  it('当前视图无子节点但有祖先链：仍能生成预览并直接发散', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okResponse('灵感1\n灵感2'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '项目'
+    const parent = nodeStore.addNode(ROOT_NODE_ID, 0, 0, '一级')
+    const target = nodeStore.addNode(parent, 0, 0, '二级') // 空视图：无子节点
+    project.switchView(target)
+    setDefaultAIConfig(cfg({ localPrompt: '', mode: 'fast' }))
+
+    const words = await directGenerate()
+
+    expect(words).toEqual(['灵感1', '灵感2'])
+    const panel = useAIWordPanel()
+    // 预览 = 祖先链「根/直接父级/当前视图」，含当前视图节点本身
+    expect(panel.previewText.value).toBe('项目/一级/二级')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(init.body as string)
+    expect(body.messages[1].content).toContain('项目/一级/二级')
   })
 
   it('精确模式：预览为空自动生成预览，再自动连词成句，共两次调用', async () => {
@@ -175,6 +197,7 @@ describe('useAIWordPanel - directGenerate（无参，I 键与 AIPanel 共用）'
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '' // 根节点无名称 → 标题为空的真·空上下文
     const words = await directGenerate()
 
     expect(words).toEqual([])
@@ -434,6 +457,7 @@ describe('useAIWordPanel - generateDirectional（定向发散）', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
+    nodeStore.getNode(ROOT_NODE_ID)!.text = '' // 根节点无名称 → 标题为空的真·空上下文
     const words = await generateDirectional([], dir())
 
     expect(words).toEqual([])

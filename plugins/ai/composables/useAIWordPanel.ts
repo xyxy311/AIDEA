@@ -105,16 +105,27 @@ export function syncAIMode(): void {
 export function generatePreview(): boolean {
   const nodeId = currentViewedNodeId()
   const cfg = getAIConfig(nodeId)
-  // 标题 = 当前视图根节点首行（如根节点即项目名），非空时作为结构化文本前缀
-  const current = adapter.api.node.get(nodeId)
-  const title = current?.text ? (current.text.split('\n')[0] ?? '').trim() : ''
-  state.previewText = buildViewText(
-    adapter.api.node.children(nodeId),
-    cfg.viewTextAlgoId ?? 'collectAll',
-    {},
-    title,
-  )
+  // 标题 = 祖先链路径「根节点/父节点1/.../当前视图节点」。
+  // 当前视图无子节点时，仍以其作为上下文预览，保证空视图也能生成预览并启用 AI 功能；
+  // 有子节点时作为结构化文本前缀交给 viewText 编排。
+  const title = ancestorPathTitle(nodeId)
+  const children = adapter.api.node.children(nodeId)
+  if (children.length === 0) {
+    state.previewText = title
+    return state.previewText.trim().length > 0
+  }
+  state.previewText = buildViewText(children, cfg.viewTextAlgoId ?? 'collectAll', {}, title)
   return state.previewText.trim().length > 0
+}
+
+/** 祖先链标题：根节点/父节点1/.../当前视图节点（取链上各节点 text 首行，去空后用 '/' 拼接） */
+function ancestorPathTitle(nodeId: string): string {
+  return adapter.api.node
+    .pathToRoot(nodeId)
+    .reverse() // [root, ..., 直接父节点, 当前视图节点]
+    .map((id) => adapter.api.node.get(id)?.text.split('\n')[0].trim() ?? '')
+    .filter((s) => s.length > 0)
+    .join('/')
 }
 
 /** 连词成句：把内部预览文本转自然语言，结果写回 sentenceText（无参） */

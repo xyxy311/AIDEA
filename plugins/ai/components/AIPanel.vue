@@ -18,7 +18,6 @@ import {
   NSelect,
   NButton,
   NInput,
-  NEmpty,
   NScrollbar,
   NSpin,
   NAlert,
@@ -54,15 +53,8 @@ const {
 } = useAIWordPanel()
 
 /**
- * 当前视图节点（直接子级），用于空态判断。
- * 只读经 adapter：在 computed 内调用（内部惰性 useStore，保持响应式追踪，
- * 见 stores/aiProject.ts 的 currentViewedNodeId 同法）。
+ * 空间布局算法下拉选项（来自注册表；labelKey 为 viewTextPanel.* key，走插件语言包）
  */
-const viewNodes = computed(() =>
-  adapter.api.node.children(adapter.api.view.active().viewedNodeId),
-)
-
-/** 空间布局算法下拉选项（来自注册表；labelKey 为 viewTextPanel.* key，走插件语言包） */
 const algorithmOptions = computed(() =>
   VIEW_TEXT_ALGORITHMS.map((a) => ({ label: t(a.labelKey), value: a.id })),
 )
@@ -161,14 +153,9 @@ const sentenceCopy = makeCopier(sentenceText)
 <template>
   <div class="ai-panel">
     <NScrollbar class="ai-scroll">
-      <div v-if="viewNodes.length === 0" class="ai-empty">
-        <NEmpty :description="t('aiPanel.empty')" size="small" />
-      </div>
-
-      <template v-else>
-        <!-- 全局提示词（自动保存） -->
-        <div class="ai-section">
-          <label class="section-label">{{ t('aiPanel.globalPrompt') }}</label>
+      <!-- 全局提示词（自动保存） -->
+      <div class="ai-section">
+        <label class="section-label">{{ t('aiPanel.globalPrompt') }}</label>
           <NInput
             :value="globalPrompt"
             @update:value="onGlobalPromptInput"
@@ -303,7 +290,6 @@ const sentenceCopy = makeCopier(sentenceText)
             class="bottom-error"
           />
         </div>
-      </template>
     </NScrollbar>
   </div>
 </template>
@@ -318,10 +304,6 @@ const sentenceCopy = makeCopier(sentenceText)
 
 .ai-scroll {
   flex: 1;
-}
-
-.ai-empty {
-  padding: 24px 0;
 }
 
 /* 分区：纵向一堆，间隔用 border 分隔（呼应 SearchPanel 的简洁风格） */

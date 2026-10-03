@@ -4,7 +4,7 @@ import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { useCommands } from '@/composables/useCommands'
-import { useNodeStore } from '@/stores/node'
+import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
 import { useProjectStore } from '@/stores/project'
 import { useShortcutsStore } from '@/stores/shortcuts'
@@ -214,6 +214,62 @@ describe('useKeyboardShortcuts', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }))
     expect(nodeStore.childrenOf(project.currentNodeId).length).toBe(0)
+  })
+
+  it('Ctrl+Tab 从左向右切换标签页，末尾环绕回第一个', () => {
+    const project = useProjectStore()
+    const first = project.activeTabId!
+    project.addTab()
+    const second = project.tabs[project.tabs.length - 1].id
+    expect(project.tabs.length).toBe(2)
+    // addTab 会切到新标签
+    expect(project.activeTabId).toBe(second)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    // Ctrl+Tab → 回到第一个
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true }))
+    expect(project.activeTabId).toBe(first)
+    // 再按 → 环绕到第二个
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', ctrlKey: true }))
+    expect(project.activeTabId).toBe(second)
+  })
+
+  it('alt+左箭头后退 / alt+右箭头前进（可自定义导航）', () => {
+    const project = useProjectStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+    const b = commands.createNode(ROOT_NODE_ID, 0, 0, 'B')
+    project.switchView(a)
+    project.switchView(b)
+    expect(project.currentNodeId).toBe(b)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', altKey: true }))
+    expect(project.currentNodeId).toBe(a)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true }))
+    expect(project.currentNodeId).toBe(b)
+  })
+
+  it('鼠标侧边键后退 / 前进（button 3 / 4，固定不可改）', () => {
+    const project = useProjectStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+    const b = commands.createNode(ROOT_NODE_ID, 0, 0, 'B')
+    project.switchView(a)
+    project.switchView(b)
+    expect(project.currentNodeId).toBe(b)
+
+    const isEditing = ref(false)
+    wrapper = mountWithShortcuts(isEditing)
+
+    window.dispatchEvent(new MouseEvent('mousedown', { button: 3 }))
+    expect(project.currentNodeId).toBe(a)
+    window.dispatchEvent(new MouseEvent('mousedown', { button: 4 }))
+    expect(project.currentNodeId).toBe(b)
   })
 
   it('可自定义删除键：把 deleteSelected 由 d 改为 x 后，x 删除、d 不再删除', () => {

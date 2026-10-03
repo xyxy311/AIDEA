@@ -31,6 +31,7 @@ export function useKeyboardShortcuts(
   },
 ) {
   const active = useActiveView()
+  const project = useProjectStore()
   const link = useNodeViewLink('main')
   const commands = useCommands()
   const presets = usePresetsStore()
@@ -96,6 +97,14 @@ export function useKeyboardShortcuts(
     },
     // 字母 d 的删除（可自定义，默认 d）；Delete/Backspace 在锁定层固定
     deleteSelected: runDelete,
+    navBack: (e) => {
+      e.preventDefault()
+      project.navigateBack()
+    },
+    navForward: (e) => {
+      e.preventDefault()
+      project.navigateForward()
+    },
   }
 
   /** 删除所有选中的连线 / 节点（锁定） */
@@ -211,6 +220,20 @@ export function useKeyboardShortcuts(
       for (let n = 1; n <= 9; n++) {
         map.set(String(n), { id: `seq${n}`, scope: canvas, run: makeSeqRun(n) })
       }
+      // Ctrl+Tab：切换标签页（从左向右，末尾环绕回第一个；锁定，不可改绑）
+      map.set('mod+tab', {
+        id: 'nextTab',
+        scope: 'always',
+        run: (e) => {
+          if (project.tabs.length === 0) return
+          const idx = project.tabs.findIndex((tb) => tb.id === project.activeTabId)
+          const next = project.tabs[(idx + 1) % project.tabs.length]
+          if (next.id !== project.activeTabId) {
+            e.preventDefault()
+            project.switchToTab(next.id)
+          }
+        },
+      })
 
       // ── 可自定义动作（scope 来自注册表，绑定来自 store）──
       for (const def of CUSTOM_SHORTCUTS) {
@@ -256,18 +279,36 @@ export function useKeyboardShortcuts(
     entry.run(e)
   }
 
-  /** keyup：释放「序号修饰键」时复位 seqHeld */
+  /**
+   * keyup：释放「序号修饰键」时复位 seqHeld
+   */
   function onKeyup(e: KeyboardEvent) {
     if (normalizeKey(e.key) === shortcuts.seqModKey) seqHeld = false
+  }
+
+  /**
+   * 鼠标侧边键（锁定，不可改绑）：button 3 = 后退，4 = 前进。
+   * 守卫与 canvas scope 一致（模态 / 输入框 / 编辑态抑制），避免打断输入。
+   */
+  function onMouseDown(e: MouseEvent): void {
+    if (e.button !== 3 && e.button !== 4) return
+    if (modalStore.hasOpenModal) return
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+    if (isEditing.value) return
+    e.preventDefault()
+    if (e.button === 3) project.navigateBack()
+    else project.navigateForward()
   }
 
   onMounted(() => {
     window.addEventListener('keydown', onKeydown)
     window.addEventListener('keyup', onKeyup)
+    window.addEventListener('mousedown', onMouseDown)
   })
 
   onUnmounted(() => {
     window.removeEventListener('keydown', onKeydown)
     window.removeEventListener('keyup', onKeyup)
+    window.removeEventListener('mousedown', onMouseDown)
   })
 }

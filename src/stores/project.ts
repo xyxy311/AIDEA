@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore, getActivePinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useViewStore } from '@/stores/view'
+import { useNavigationStore } from '@/stores/navigation'
 import { t } from '@/composables/useT'
 import { generateId } from '@/utils/id'
 import type { InlineViewItem } from '@/stores/view'
@@ -45,6 +46,8 @@ export interface ProjectTab {
  */
 export const useProjectStore = defineStore('project', () => {
   const nodeStore = useNodeStore()
+  /** 导航历史（记录当前查看节点，定长 10 条） */
+  const navigation = useNavigationStore()
 
   // ── 确保主视图实例存在 ──
   useViewStore('main', { nodeId: ROOT_NODE_ID, type: 'main' })
@@ -201,9 +204,10 @@ export const useProjectStore = defineStore('project', () => {
   /**
    * 私有：切换主视图到指定节点。
    * 保存当前节点快照 → 销毁主视图内联视图实例 → 改 viewedNodeId → 恢复目标快照。
+   * recordHistory=true 时记录到导航历史（历史前进/后退应传 false，避免自己入栈自己）。
    * 调用方负责维护「当前活动标签 viewedNodeId 与 main.viewedNodeId 同步」。
    */
-  function doSwitch(nodeId: string): void {
+  function doSwitch(nodeId: string, recordHistory = true): void {
     const view = useViewStore('main')
     // 保存当前快照
     saveSnapshot(view.viewedNodeId)
@@ -214,6 +218,8 @@ export const useProjectStore = defineStore('project', () => {
     view.inlineViews = []
     // 切换目标节点
     view.viewedNodeId = nodeId
+    // 记录导航历史（切换后 record 的节点即新位置）
+    if (recordHistory) navigation.record(nodeId)
     // 恢复目标快照
     restoreSnapshot(nodeId)
   }
@@ -222,9 +228,9 @@ export const useProjectStore = defineStore('project', () => {
    * 切换到指定标签页。
    * 若 activeTabId 已是该标签直接 return；
    * 懒检查：目标 viewedNodeId 不存在则置为 ROOT 并置 tabFallbackNotice=true；
-   * 最后 doSwitch 到该标签 viewedNodeId。
+   * 最后 doSwitch 到该标签 viewedNodeId（recordHistory 透传给 doSwitch）。
    */
-  function switchToTab(tabId: string): void {
+  function switchToTab(tabId: string, recordHistory = true): void {
     if (activeTabId.value === tabId) return
     const tab = tabs.value.find((t) => t.id === tabId)
     if (!tab) return
@@ -236,28 +242,37 @@ export const useProjectStore = defineStore('project', () => {
       tabFallbackNotice.value = true
     }
     activeTabId.value = tabId
-    doSwitch(nodeId)
+    doSwitch(nodeId, recordHistory)
   }
 
   /**
-   * 切换主视图到指定节点（所有操作共用此语义）：
-   * - 节点不存在 → return；
-   * - 活动标签已观察此节点 → return；
-   * - 存在其它标签观察此节点 → switchToTab 到该标签并 return；
+   * 主视图切换到指定节点并确保标签状态同步（所有入口共用此语义）：
+   * - 节点不存在 → false；
+   * - 活动标签已观察此节点 → 无需切换，true；
+   * - 存在其它标签观察此节点 → switchToTab 到该标签；
    * - 否则：设当前活动标签 viewedNodeId=nodeId 并 doSwitch（活动标签不变）。
+   * recordHistory=false 用于导航历史前进/后退，避免自己入栈自己。
    */
-  function switchView(id: string): void {
-    if (!nodeStore.nodes.has(id)) return
-    if (activeTab.value?.viewedNodeId === id) return
+  function ensureViewSynced(id: string, recordHistory: boolean): boolean {
+    if (!nodeStore.nodes.has(id)) return false
+    if (activeTab.value?.viewedNodeId === id) return true
     const observing = tabs.value.find((t) => t.viewedNodeId === id)
     if (observing) {
-      switchToTab(observing.id)
-      return
+      switchToTab(observing.id, recordHistory)
+      return true
     }
     if (activeTab.value) {
       activeTab.value.viewedNodeId = id
     }
-    doSwitch(id)
+    doSwitch(id, recordHistory)
+    return true
+  }
+
+  /**
+   * 切换主视图到指定节点：负责「考虑有无标签正好展示此视图」并同步标签状态。
+   */
+  function switchView(id: string): void {
+    ensureViewSynced(id, true)
   }
 
   /** 新增一个标签页（观察根节点）并切到它 */
@@ -295,6 +310,22 @@ export const useProjectStore = defineStore('project', () => {
   /** 进入节点子视图（语义同 switchView，保留此方法供调用） */
   function enterNodeView(nodeId: string): void {
     switchView(nodeId)
+  }
+
+  // ── 导航历史前进/后退 ──
+
+  /** 跳到导航历史中的上一位置（跳过已删除节点），经 ensureViewSynced 同步标签且不再入栈 */
+  function navigateBack(): void {
+    let target = navigation.back()
+    while (target !== null && !nodeStore.nodes.has(target)) target = navigation.back()
+    if (target !== null) ensureViewSynced(target, false)
+  }
+
+  /** 跳到导航历史中的下一位置（跳过已删除节点），经 ensureViewSynced 同步标签且不再入栈 */
+  function navigateForward(): void {
+    let target = navigation.forward()
+    while (target !== null && !nodeStore.nodes.has(target)) target = navigation.forward()
+    if (target !== null) ensureViewSynced(target, false)
   }
 
   // ── viewStore 实例销毁 ──
@@ -361,6 +392,9 @@ export const useProjectStore = defineStore('project', () => {
     expandedIds.value = new Set([ROOT_NODE_ID])
     // 重置标签页与主视图（清空快照、销毁内联实例、归位根节点）
     resetTabsForProject()
+    // 重置导航历史：清空后以 ROOT 为起点（新项目 / 新会话的导航基准）
+    navigation.clear()
+    navigation.record(ROOT_NODE_ID)
   }
 
   return {
@@ -378,6 +412,9 @@ export const useProjectStore = defineStore('project', () => {
     // 视图切换
     switchView,
     enterNodeView,
+    // 导航历史
+    navigateBack,
+    navigateForward,
     // 标签页
     tabs,
     activeTabId,

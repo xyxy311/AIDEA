@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useNodeStore, ROOT_NODE_ID } from '@/stores/node'
 import { useProjectStore } from '@/stores/project'
+import { useNavigationStore } from '@/stores/navigation'
 import { useCommands } from '@/composables/useCommands'
 import { serializeProject, parseProjectFile } from '@/utils/projectFile'
 import { createNode } from '@/utils/factory'
@@ -278,5 +279,115 @@ describe('runWithViewCoord 与标签共存', () => {
     expect(nodeStore.getNode(childId)).toBeUndefined()
     expect(project.currentNodeId).toBe(ROOT_NODE_ID)
     expect(project.activeTab?.viewedNodeId).toBe(ROOT_NODE_ID)
+  })
+})
+
+// ========== 导航历史（前进 / 后退，定长 10 条）==========
+describe('project store - 导航历史', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    useProjectStore().resetForNewProject()
+  })
+
+  it('按 switchView 记录历史，navigateBack/Forward 依次跳转且不重复入栈', () => {
+    const project = useProjectStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+    const b = commands.createNode(ROOT_NODE_ID, 0, 0, 'B')
+
+    // ROOT → a → b（切换视图记录历史）
+    project.switchView(a)
+    project.switchView(b)
+    expect(project.currentNodeId).toBe(b)
+
+    project.navigateBack()
+    expect(project.currentNodeId).toBe(a)
+    project.navigateBack()
+    expect(project.currentNodeId).toBe(ROOT_NODE_ID)
+    // 到头不再后退
+    project.navigateBack()
+    expect(project.currentNodeId).toBe(ROOT_NODE_ID)
+
+    project.navigateForward()
+    expect(project.currentNodeId).toBe(a)
+    project.navigateForward()
+    expect(project.currentNodeId).toBe(b)
+    // 到底不再前进
+    project.navigateForward()
+    expect(project.currentNodeId).toBe(b)
+  })
+
+  it('后退后新导航会丢弃前进分支', () => {
+    const project = useProjectStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+    const b = commands.createNode(ROOT_NODE_ID, 0, 0, 'B')
+    const c = commands.createNode(ROOT_NODE_ID, 0, 0, 'C')
+
+    project.switchView(a)
+    project.switchView(b)
+    project.navigateBack() // 回到 a
+    project.switchView(c) // 新导航应丢弃 b 的前进分支
+
+    expect(project.currentNodeId).toBe(c)
+    project.navigateBack()
+    expect(project.currentNodeId).toBe(a) // 直接回 a，证明 b 分支已被丢弃
+    project.navigateForward() // 前进到新导航 c（而非已丢弃的 b）
+    expect(project.currentNodeId).toBe(c)
+  })
+
+  it('历史定长 10 条：超过时淘汰最旧', () => {
+    const project = useProjectStore()
+    const nav = useNavigationStore()
+    const commands = useCommands()
+    const ids: string[] = []
+    for (let i = 0; i < 13; i++) {
+      ids.push(commands.createNode(ROOT_NODE_ID, 0, 0, `N${i}`))
+      project.switchView(ids[i])
+    }
+    // 13 条记录超 10 → 淘汰最旧，保留 N3..N12
+    expect(nav.entries.length).toBe(10)
+    expect(nav.entries[0]).toBe(ids[3])
+    expect(nav.current).toBe(ids[12])
+  })
+
+  it('导航历史记录已查看节点；切换到已查看的节点不重复记录', () => {
+    const project = useProjectStore()
+    const nav = useNavigationStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+
+    project.switchView(a)
+    project.switchView(a) // 已是当前，早退不记录
+    expect(nav.entries.length).toBe(2) // [ROOT, a]，未因重复切换再添一条
+    expect(project.currentNodeId).toBe(a)
+  })
+
+  it('导航前进/后退经 ensureViewSynced：目标被其它标签观察时激活该标签且不新记录', () => {
+    const project = useProjectStore()
+    const nav = useNavigationStore()
+    const commands = useCommands()
+    const a = commands.createNode(ROOT_NODE_ID, 0, 0, 'A')
+    const b = commands.createNode(ROOT_NODE_ID, 0, 0, 'B')
+
+    // tab0 观察 a → tab1 观察 b → 前进过程中其他标签观察目标
+    project.switchView(a) // tab0 views a
+    const tab0Id = project.tabs[0].id
+    project.addTab() // tab1 活动（观察 b 前先切）
+    project.switchView(b) // tab1 views b
+    const beforeLen = nav.entries.length
+    project.switchView(a) // 目标 a 已被 tab0 观察 → 切回 tab0（并记录 a）
+
+    project.navigateBack() // a ← b（切回 tab1，目标 b 由 tab1 观察）
+    expect(project.activeTabId).not.toBe(tab0Id)
+    expect(project.activeTab?.viewedNodeId).toBe(b)
+    expect(project.currentNodeId).toBe(b)
+
+    project.navigateForward() // 回到 a（tab0 观察）→ 激活 tab0 而非新建/改标签
+    expect(project.activeTabId).toBe(tab0Id)
+    expect(project.activeTab?.viewedNodeId).toBe(a)
+    expect(project.currentNodeId).toBe(a)
+    // 导航过程不重复入栈历史
+    expect(nav.entries.length).toBe(beforeLen + 1)
   })
 })

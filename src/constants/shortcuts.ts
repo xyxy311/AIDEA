@@ -27,6 +27,8 @@ export const CUSTOM_SHORTCUTS: ShortcutDef[] = [
   { id: 'toggleInline', labelKey: 'shortcuts.actionToggleInline', scope: 'canvas', default: 'tab' },
   { id: 'fitInline', labelKey: 'shortcuts.actionFitInline', scope: 'canvas', default: 'r' },
   { id: 'deleteSelected', labelKey: 'shortcuts.actionDelete', scope: 'canvas', default: 'd' },
+  { id: 'navBack', labelKey: 'shortcuts.actionNavBack', scope: 'canvas', default: 'alt+left' },
+  { id: 'navForward', labelKey: 'shortcuts.actionNavForward', scope: 'canvas', default: 'alt+right' },
 ]
 
 /** 可自定义动作的 id 集合（用于 store 自愈过滤） */
@@ -44,6 +46,8 @@ export const RESERVED_CHORDS: string[] = [
   'mod+z',
   'mod+shift+z',
   'mod+y',
+  // Ctrl+Tab 切换标签页（锁定，不可改绑）
+  'mod+tab',
   // 对象剪贴板
   'mod+c',
   'mod+x',

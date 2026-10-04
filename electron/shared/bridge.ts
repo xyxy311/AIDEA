@@ -22,6 +22,16 @@ export const IPC = {
   FILE_SAVE: 'file:save',
   FILE_WRITE: 'file:write',
   FILE_READ: 'file:read',
+  /**
+   * renderer → main：登记当前窗口正在打开的项目路径（null = 未命名/新建）。
+   * 用于多窗口场景下「同一项目已在其它窗口打开」的去重判定。
+   */
+  PROJECT_SET_PATH: 'project:set-path',
+  /**
+   * renderer → main：打开某项目前询问该路径是否已被其它窗口打开。
+   * 是则 main 聚焦该窗口并返回 intercepted=true；renderer 据此拦截本次打开。
+   */
+  PROJECT_CLAIM: 'project:claim',
   /** renderer → main：任意文件读写（通用 fs 桥）。对话框驱动 + 已记忆路径回传令牌，text/binary 双编码 */
   FS_OPEN: 'fs:open',
   FS_SAVE: 'fs:save',
@@ -98,6 +108,23 @@ export interface FileBridge {
   /** 覆盖写入已记忆路径（Ctrl+S 覆盖保存） */
   writeFile(opts: { path: string; content: string }): Promise<void>
   readFile(opts: { path: string }): Promise<{ content: string }>
+  /**
+   * 登记当前窗口正在打开的项目路径（null = 未命名/新建）。
+   * 打开/另存成功后调用使其进入「已打开」集合，供跨窗口去重。
+   */
+  setProjectPath(path: string | null): Promise<void>
+  /**
+   * 打开某项目前询问该路径是否已被其它窗口打开：是则 main 聚焦该窗口，
+   * 返回 intercepted=true（调用方应拦截本次打开）；否则返回 false 可正常打开。
+   */
+  claimProject(path: string): Promise<ProjectClaimResult>
+}
+
+/** claimProject 的返回：intercepted=true 时主进程已聚焦目标窗口 */
+export interface ProjectClaimResult {
+  intercepted: boolean
+  /** 目标窗口 id（intercepted=true 时存在） */
+  windowId?: number
 }
 
 /** openProject 的返回：取消 / 成功（path + name + content） */

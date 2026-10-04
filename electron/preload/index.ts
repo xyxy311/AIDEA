@@ -35,6 +35,8 @@ const fileBridge: FileBridge = {
   saveProject: (opts) => ipcRenderer.invoke(IPC.FILE_SAVE, opts),
   writeFile: (opts) => ipcRenderer.invoke(IPC.FILE_WRITE, opts),
   readFile: (opts) => ipcRenderer.invoke(IPC.FILE_READ, opts),
+  setProjectPath: (path) => ipcRenderer.invoke(IPC.PROJECT_SET_PATH, path),
+  claimProject: (path) => ipcRenderer.invoke(IPC.PROJECT_CLAIM, path),
 }
 
 const fsBridge: FsBridge = {

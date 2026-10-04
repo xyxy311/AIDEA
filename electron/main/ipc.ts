@@ -30,6 +30,31 @@ function requireEncoding(encoding: string, fallback = DEFAULT_ENCODING): string 
   return resolved
 }
 
+// ── 多窗口「项目已打开」去重登记表 ──
+
+/** 各窗口当前打开的项目路径（win.id → 规范化路径）；仅登记已保存过路径的项目，未命名不登记 */
+const windowProjects = new Map<number, string>()
+
+/** 路径规范化：Windows 忽略大小写，保证同一文件不同大小写也能命中 */
+function normalizePath(p: string): string {
+  return process.platform === 'win32' ? p.toLowerCase() : p
+}
+
+/**
+ * 聚焦指定窗口（还原最小化 + 显示 + 前置）。
+ * 供 PROJECT_CLAIM 命中时跳转到拥有该项目的窗口。
+ */
+function focusWindow(win: Electron.BrowserWindow): void {
+  if (win.isMinimized()) win.restore()
+  if (!win.isVisible()) win.show()
+  win.focus()
+}
+
+/** 窗口关闭后移除其登记项（index.ts 的 closed 回调调用） */
+export function unregisterProjectWindow(winId: number): void {
+  windowProjects.delete(winId)
+}
+
 /** 读取字节并按指定文本编码解码 */
 async function readText(filePath: string, enc: string): Promise<string> {
   const buf = await fs.readFile(filePath)
@@ -188,5 +213,31 @@ export function registerIpc(): void {
   ipcMain.handle(IPC.FS_READ, async (_event, req: FsReadRequest) => {
     const payload = await readPayload(req.path, req.mode, req.encoding)
     return { path: req.path, ...payload }
+  })
+
+  // 登记当前窗口打开的项目路径（null = 未命名/新建）。
+  ipcMain.handle(IPC.PROJECT_SET_PATH, (event, path: string | null) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    if (path) windowProjects.set(win.id, normalizePath(path))
+    else windowProjects.delete(win.id)
+  })
+
+  // 打开项目前询问：该路径是否已被其它窗口打开。是则 main 聚焦该窗口并返回 intercepted=true。
+  // 排除请求方自身（同一窗口重开同一文件属正常刷新，不应拦截）。
+  ipcMain.handle(IPC.PROJECT_CLAIM, (event, path: string) => {
+    const requested = normalizePath(path)
+    const selfId = BrowserWindow.fromWebContents(event.sender)?.id
+    for (const [id, opened] of windowProjects) {
+      if (id === selfId) continue
+      if (opened === requested) {
+        const owner = BrowserWindow.fromId(id)
+        if (owner && !owner.isDestroyed()) {
+          focusWindow(owner)
+          return { intercepted: true, windowId: owner.id }
+        }
+      }
+    }
+    return { intercepted: false }
   })
 }

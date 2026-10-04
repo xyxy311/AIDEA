@@ -240,6 +240,8 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     fileStore.resetFileState()
     // 新建项目：清空插件项目化扩展数据
     additionsStore.clear()
+    // 新窗口当前无项目路径，释放「已打开」登记位
+    await nativeFile.setProjectPath(null)
     // 标签定义已由 loadProjectIntoApp 的 `tags ?? []` 兜底清空（无需重复 clearTags）
     message.success(t('menuBar.newProjectDone'))
   }
@@ -250,11 +252,17 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
     try {
       const res = await nativeFile.openProject()
       if (res.canceled || !res.content || !res.path) return // 用户取消不提示
+      // 项目已在其它窗口打开 → main 已聚焦该窗口，此处拦截本次打开（不替换当前内容）
+      const claim = await nativeFile.claimProject(res.path)
+      if (claim.intercepted) {
+        return
+      }
       const data = parseProjectFile(res.content)
       loadProjectIntoApp(data)
       // 记住打开路径，后续保存直接覆盖该文件；仅清 dirty，不清路径
       fileStore.markClean()
       fileStore.setSavedPath(res.path)
+      await nativeFile.setProjectPath(res.path)
       recentFilesStore.add(res.name ?? '', res.path)
       message.success(t('menuBar.opened'))
     } catch (e) {
@@ -267,6 +275,12 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
   async function openRecentFile(name: string): Promise<void> {
     const entry = recentFilesStore.list.find((f) => f.name === name)
     if (!entry) return
+    // 路径已知，先查重：已在其它窗口打开 → main 聚焦该窗口，拦截本次打开
+    const claim = await nativeFile.claimProject(entry.path)
+    if (claim.intercepted) {
+      message.warning(t('menuBar.alreadyOpen'))
+      return
+    }
     if (!(await confirmDiscard())) return
     try {
       const { content } = await nativeFile.readFile({ path: entry.path })
@@ -275,6 +289,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       // 最近文件可经持久化路径直接覆盖保存：记录路径，清 dirty
       fileStore.markClean()
       fileStore.setSavedPath(entry.path)
+      await nativeFile.setProjectPath(entry.path)
       // 刷新为最近（置顶 + 更新时间）
       recentFilesStore.add(entry.name, entry.path)
       message.success(t('menuBar.opened'))
@@ -403,6 +418,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       if (res.canceled || !res.path) return // 用户取消不报错
       fileStore.setSavedPath(res.path)
       fileStore.markClean()
+      await nativeFile.setProjectPath(res.path)
       recentFilesStore.add(res.name ?? '', res.path)
       message.success(t('menuBar.saved'))
     } catch (e) {

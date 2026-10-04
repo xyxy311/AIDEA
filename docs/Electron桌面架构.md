@@ -20,7 +20,7 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 |---|---|
 | `electron/shared/bridge.ts` | IPC 契约全量：`IPC` 通道名白名单 + `DesktopBridge`/`WindowBridge`/`FileBridge`/`FsBridge` + `declare global` 的 `window.aideaDesktop` 等类型声明。main 与 preload 双向 import，除类型与常量外**无运行时副作用**。新通道集中在此评审 |
 | `electron/shared/vendor.ts` | SDK 共享契约：`SDK_VENDOR` external 清单 + `VENDOR_FILE` 产物名（须与 `index.html` import map 对齐）。只增不减 |
-| `electron/main/index.ts` | main 入口：`app.setName('AIDEA')` 固定 userData → privileged schemes 注册（app ready 前）→ 删原生菜单 → 开主窗口 → ready 后 `seedUserData()` 再注册协议/IPC/插件/i18n watch |
+| `electron/main/index.ts` | main 入口：`app.setName('AIDEA')` 固定 userData → privileged schemes 注册（app ready 前）→ 删原生菜单 → `requestSingleInstanceLock()`（**单进程**；未拿到锁 `quit()`，二次启动 = `second-instance` 新开窗口）→ ready 后 `seedUserData()` 再注册协议/IPC/建窗/插件/i18n watch；`windows` 集合管理多窗口 |
 | `electron/main/seedData.ts` | 生产首跑种子：把 extraResources 的 `resources/seed/` 复制进 userData（`plugins/` 覆盖式、`i18n/` 只补缺），保证首跑即有内置 AI 插件与语言模板 |
 | `electron/main/plugins.ts` | 插件扫描壳（唯一 import electron）：`pluginsRoot()`（dev 为 `<仓库根>/plugins/`，打包后 `userData/plugins/`）、`rescan()` 刷新白名单、`getPluginDir()` |
 | `electron/main/pluginScan.ts` | 扫描纯逻辑（IO 注入可单测）：入口判定 `plugin.js > index.js > index.mjs`、manifest 校验、产出一条 + 白名单 Map |
@@ -28,7 +28,7 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 | `electron/main/fsGuard.ts` | 路径防护纯函数：`isValidPluginDirName` / `decodeProtocolPath` / `resolveSafeFile`（traversal 守门人） |
 | `electron/main/protocol.ts` | 自定义协议：`aidea-plugin://` 插件资源 + `app://` renderer 载体，注册与 handler |
 | `electron/main/mime.ts` | 协议响应 MIME 推断（.js/.mjs → `text/javascript` 硬要求） |
-| `electron/main/ipc.ts` | main 侧 IPC 通道注册：插件 list + 窗口控制 + 项目文件 + 通用任意文件读写（dialog+fs+iconv） |
+| `electron/main/ipc.ts` | main 侧 IPC 通道注册：插件 list + 窗口控制 + 项目文件 + **跨窗口项目去重登记表**（`windowProjects`：win.id→项目路径；`PROJECT_SET_PATH` 登记 / `PROJECT_CLAIM` 查重并聚焦目标窗口）+ 通用任意文件读写（dialog+fs+iconv） |
 | `electron/main/shortcuts.ts` | `attachWindowShortcuts`：删菜单后编辑快捷键/devtools 兜底 |
 | `electron/preload/index.ts` | contextBridge 露出五座窄桥 |
 | `src/composables/useNativeFs.ts` | `window.aideaFs` 桥唯一 renderer 访问点 + 二进制解析原语（`toArrayBuffer`/`bytesToHex`）；`api/fs.ts` 与内置功能共用 |
@@ -52,7 +52,7 @@ Electron 只是一个**外壳**：全部应用逻辑（画布、节点树、undo
 
 ### IPC 通道常量（`electron/shared/bridge.ts`）
 
-`IPC` 是全体通道名的唯一来源（禁止散落字符串）：插件 `LIST`(`plugins:list`) / `CHANGED`(`plugins:changed`)；窗口 `WINDOW_MINIMIZE` / `WINDOW_TOGGLE_MAXIMIZE` / `WINDOW_CLOSE` / `WINDOW_IS_MAXIMIZED` / `WINDOW_MAXIMIZED_CHANGED`；文件 `FILE_OPEN` / `FILE_SAVE` / `FILE_WRITE` / `FILE_READ`（项目文件）+ `FS_OPEN` / `FS_SAVE` / `FS_WRITE` / `FS_READ`（`fs:*` 通用任意文件读写）。
+`IPC` 是全体通道名的唯一来源（禁止散落字符串）：插件 `LIST`(`plugins:list`) / `CHANGED`(`plugins:changed`)；窗口 `WINDOW_MINIMIZE` / `WINDOW_TOGGLE_MAXIMIZE` / `WINDOW_CLOSE` / `WINDOW_IS_MAXIMIZED` / `WINDOW_MAXIMIZED_CHANGED`；文件 `FILE_OPEN` / `FILE_SAVE` / `FILE_WRITE` / `FILE_READ`（项目文件）+ `FS_OPEN` / `FS_SAVE` / `FS_WRITE` / `FS_READ`（`fs:*` 通用任意文件读写）+ 项目去重 `PROJECT_SET_PATH`(`project:set-path`) / `PROJECT_CLAIM`(`project:claim`)。
 
 ### 契约类型
 
@@ -73,7 +73,10 @@ DesktopBridge {
 WindowBridge { minimize(); toggleMaximize(); close(); isMaximized(): Promise<boolean>;
   onMaximizedChange(cb): () => void }
 
-FileBridge { openProject(); saveProject(opts); writeFile(opts); readFile(opts) }
+FileBridge { openProject(); saveProject(opts); writeFile(opts); readFile(opts);
+  setProjectPath(path: string | null): Promise<void>;  // 登记/释放当前窗口打开的项目路径
+  claimProject(path): Promise<ProjectClaimResult> }     // 查重；命中则 main 聚焦目标窗口
+// ProjectClaimResult { intercepted: boolean; windowId?: number }
 
 // 通用任意文件读写（window.aideaFs，同窄桥准则：open/save 对话框定路径，write/read 只收已记忆路径令牌）
 type FsMode = 'text' | 'binary'
@@ -132,7 +135,7 @@ createDebouncer(ms, task): { push(); cancel() }
 
 启动链路分步：
 
-1. **main 启动**（`scripts/dev.mjs` 编排，见下）：`electron/main/index.ts` 顶层 `registerPrivilegedSchemes()`（scheme 特权在 app ready 前固化）→ `Menu.setApplicationMenu(null)`。
+1. **main 启动**（`scripts/dev.mjs` 编排，见下）：`electron/main/index.ts` 顶层 `registerPrivilegedSchemes()`（scheme 特权在 app ready 前固化）→ `Menu.setApplicationMenu(null)` → `requestSingleInstanceLock()`（未拿到锁即 `app.quit()`；否则进入下方当 ready 引导）。
 2. **app ready 后**：`registerProtocolHandlers()`（`aidea-plugin://` + `app://`）→ `registerIpc()` → `createMainWindow()`（`contextIsolation`/`sandbox`，`preload: dist-electron/preload.cjs`）→ `startPluginWatching()`。
    - dev：`VITE_DEV_SERVER_URL` 存在 → `win.loadURL(devUrl)`；生产 → `win.loadURL('app://./index.html')`。
 3. **preload**（`index.ts`）：`contextBridge.exposeInMainWorld` 暴露五座桥（aideaDesktop/aideaWindow/aideaFile/aideaFs/aideaI18n）。注入先于应用脚本，故 renderer 模块顶部可直接读 `window.aideaDesktop`。
@@ -143,6 +146,14 @@ createDebouncer(ms, task): { push(); cancel() }
 `scripts/dev.mjs` 编排：① `packagePlugin('ai')`（内置插件产物）→ ② spawn vite（`--strictPort` 5173）→ ③ 轮询就绪 → ④ esbuild watch main/preload（直出 `.cjs`）→ ⑤ `VITE_DEV_SERVER_URL` 下 spawn electron。main/preload 改动重建后**需手动重启 electron**（不做热重启）。
 
 ## 5. 实现细节与踩坑点
+
+### 应用单实例与多窗口（跨窗口项目去重）
+
+应用收敛为**单进程 + 多窗口**：`app.requestSingleInstanceLock()` 保证只有一个 OS 进程（共享同一份 userData / Chromium profile——否则第二进程并发写共享 profile 会导致 renderer 白屏）；再次启动（双击 exe / 二次打开）触发 `second-instance` → **新开一个窗口**，每个窗口即一个独立「应用」（渲染层各窗口 Pinia 天然隔离）。`windows` 集合跟踪所有窗口，`window-all-closed` / Mac `activate` 语义不变。
+
+**跨窗口项目去重**：`electron/main/ipc.ts` 持 `windowProjects` 登记表（win.id → 规范化路径，Windows 忽略大小写）。renderer 打开项目前先经 `claimProject(path)` 查该路径是否已被**其它**窗口打开（排除发请求窗口自身，避免对"同一窗口重开当前文件"误拦截）——命中则 main `focusWindow`（还原最小化/显示/前置）并返回 `{ intercepted: true, windowId }`，renderer **拦截本次打开**并提示；否则正常载入并 `setProjectPath(path)` 登记。窗口关闭时 `unregisterProjectWindow(win.id)` 释放独占的项目路径。
+
+接入点：`src/composables/useProjectFile.ts` 在 `openProject`（对话框选路径后）/ `openRecentFile`（路径已知，查重前置）拦截；另存 / 新建时同步 `setProjectPath`，保持登记表准确。
 
 ### 通用文件桥 `aideaFs`（任意文件读写）
 
@@ -163,7 +174,7 @@ createDebouncer(ms, task): { push(); cancel() }
 - **响应**：仅 GET（其余 405）；`Cache-Control: no-store` + `ETag: mtime`（本地磁盘读无成本，缓存一致性坑不值当）；`Access-Control-Allow-Origin: *`（module import 是 CORS 模式请求）。
 - **`app://`**：生产用 `app://./index.html` 加载 renderer，刻不意用 `file://`（origin 为 null 致 CORS/ESM/相对解析行为不一致）；与 `aidea-plugin` 同款 privileges。
 
-### SDK 单实例
+### SDK 模块单实例（插件与宿主共享实例，区别于应用单进程）
 
 插件 bundle 必须与宿主共享同一 `vue/pinia/naive-ui/konva` 模块实例（两个 Vue 副本 = 组件上下文断裂）：
 

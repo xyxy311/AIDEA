@@ -58,6 +58,8 @@ function stubFileBridge(overrides: Record<string, unknown> = {}) {
     readFile: vi.fn(async () => {
       throw new Error('stub: readFile 未配置')
     }),
+    claimProject: vi.fn(async () => ({ intercepted: false })),
+    setProjectPath: vi.fn(async () => {}),
   }
   const assembled = { ...bridge, ...overrides }
   ;(window as any).aideaFile = assembled
@@ -189,5 +191,45 @@ describe('useProjectFile - 原生文件 IO 编排', () => {
     expect(useNodeStore().rootNode?.text).toBe('最近项目')
     expect(useFileStore().getSavedPath()).toBe('C:/p/rec.aidea.json')
     expect(messageMock.success).toHaveBeenCalled()
+  })
+
+  it('openProject 命中其它窗口已打开项目 → 拦截本次打开（不载入、不改路径、提示）', async () => {
+    const bridge = stubFileBridge({
+      openProject: vi.fn(async () => ({
+        canceled: false,
+        path: 'C:/p/proj.aidea.json',
+        name: 'proj.aidea.json',
+        content: validProjectJson('我的项目'),
+      })),
+      claimProject: vi.fn(async () => ({ intercepted: true, windowId: 7 })),
+    })
+    const { useProjectFile } = await import('@/composables/useProjectFile')
+    const { useNodeStore } = await import('@/stores/node')
+    const { useFileStore } = await import('@/stores/file')
+
+    await useProjectFile().openProject()
+
+    expect(bridge.claimProject).toHaveBeenCalledWith('C:/p/proj.aidea.json')
+    expect(useNodeStore().rootNode?.text).not.toBe('我的项目') // 未载入
+    expect(useFileStore().getSavedPath()).toBeNull() // 未改路径
+    expect(messageMock.warning).toHaveBeenCalled()
+  })
+
+  it('openRecentFile 命中其它窗口已打开项目 → 拦截，不读盘不载入', async () => {
+    const bridge = stubFileBridge({
+      readFile: vi.fn(async () => ({ content: validProjectJson('最近项目') })),
+      claimProject: vi.fn(async () => ({ intercepted: true, windowId: 7 })),
+    })
+    const { useRecentFilesStore } = await import('@/stores/recentFiles')
+    const recent = useRecentFilesStore()
+    recent.add('rec.aidea.json', 'C:/p/rec.aidea.json')
+    const { useProjectFile } = await import('@/composables/useProjectFile')
+    const { useNodeStore } = await import('@/stores/node')
+
+    await useProjectFile().openRecentFile('rec.aidea.json')
+
+    expect(bridge.readFile).not.toHaveBeenCalled() // 提前拦截，不读盘
+    expect(useNodeStore().rootNode?.text).not.toBe('最近项目')
+    expect(messageMock.warning).toHaveBeenCalled()
   })
 }, 30000)

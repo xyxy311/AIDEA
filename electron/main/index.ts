@@ -7,7 +7,7 @@
 import { app, BrowserWindow, Menu, dialog } from 'electron'
 import path from 'node:path'
 import { IPC } from '../shared/bridge'
-import { registerIpc } from './ipc'
+import { registerIpc, unregisterProjectWindow } from './ipc'
 import { startPluginWatching } from './pluginWatch'
 import { startI18nWatching } from './i18nWatch'
 import { registerPrivilegedSchemes, registerProtocolHandlers } from './protocol'
@@ -24,7 +24,8 @@ registerPrivilegedSchemes()
 // 编辑快捷键由渲染层 useKeyboardShortcuts 处理
 Menu.setApplicationMenu(null)
 
-let mainWindow: BrowserWindow | null = null
+/** 已打开的窗口集合：每个窗口即一个独立的「应用」（渲染层各窗口 Pinia 天然隔离） */
+const windows = new Set<BrowserWindow>()
 
 function createMainWindow(): void {
   // 局部 win 引用：后续回调闭包捕获同一实例，避免对模块级可空变量的收窄问题
@@ -42,12 +43,12 @@ function createMainWindow(): void {
       sandbox: true,
     },
   })
-  mainWindow = win
+  windows.add(win)
 
   // 最大化状态推送（true=最大化/全屏，false=离开；Aero Snap 半屏 isMaximized 本为 false，无需处理）
   const sendMaximized = (maximized: boolean): void => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send(IPC.WINDOW_MAXIMIZED_CHANGED, maximized)
+    if (win.isDestroyed()) return
+    win.webContents.send(IPC.WINDOW_MAXIMIZED_CHANGED, maximized)
   }
   win.on('maximize', () => sendMaximized(true))
   win.on('unmaximize', () => sendMaximized(false))
@@ -82,30 +83,44 @@ function createMainWindow(): void {
   }
 
   win.on('closed', () => {
-    mainWindow = null
+    windows.delete(win)
+    // 移除该窗口在「项目已打开」登记表里的项（该窗口独占的项目随之释放）
+    unregisterProjectWindow(win.id)
   })
 }
 
-void app.whenReady().then(() => {
-  // 生产首跑把 extraResources 的 seed 复制进 userData（插件/i18n），须先于协议与 watch
-  seedUserData().then(() => {
-    registerProtocolHandlers()
-    registerIpc()
-    createMainWindow()
-
-    // 插件目录 watch：增删改经 IPC.CHANGED 推送给 renderer
-    startPluginWatching()
-    // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
-    startI18nWatching()
-  })
-
-  // macOS 惯例：Dock 点击重新创建窗口
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
-  })
-})
-
-// 桌面工具：全平台 window-all-closed 直接退出（不做 macOS 常驻）
-app.on('window-all-closed', () => {
+// 单实例锁：全应用共用单进程（共享同一份 userData / Chromium profile）。
+// 修复「第二进程并发写共享 profile 导致 renderer 白屏」；再次启动 = second-instance → 新开窗口。
+const gotTheLock = app.requestSingleInstanceLock()
+if (!gotTheLock) {
   app.quit()
-})
+} else {
+  // 再次启动（双击 exe / 二次打开）= 新开一个窗口；各窗口即一个独立「应用」
+  app.on('second-instance', () => {
+    createMainWindow()
+  })
+
+  void app.whenReady().then(() => {
+    // 生产首跑把 extraResources 的 seed 复制进 userData（插件/i18n），须先于协议与 watch
+    seedUserData().then(() => {
+      registerProtocolHandlers()
+      registerIpc()
+      createMainWindow()
+
+      // 插件目录 watch：增删改经 IPC.CHANGED 推送给 renderer
+      startPluginWatching()
+      // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
+      startI18nWatching()
+    })
+
+    // macOS 惯例：Dock 点击重新创建窗口
+    app.on('activate', () => {
+      if (windows.size === 0) createMainWindow()
+    })
+  })
+
+  // 桌面工具：全平台 window-all-closed 直接退出（不做 macOS 常驻）
+  app.on('window-all-closed', () => {
+    app.quit()
+  })
+}

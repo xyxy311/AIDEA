@@ -57,7 +57,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "AIDEA"
+      "shortcutName": "AIDEA",
+      "include": "build/installer.nsh"
     }
   },
   "devDependencies": {

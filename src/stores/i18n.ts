@@ -7,7 +7,7 @@
 import { computed, reactive } from 'vue'
 import { defineStore } from 'pinia'
 import zhCN from '@/locales/zh-CN.json'
-import { LOCALE_ENTRIES, DEFAULT_LOCALE } from '@/constants/locale'
+import { LOCALE_ENTRIES, BUILTIN_LOCALE } from '@/constants/locale'
 import type { TBundle } from '@/composables/useT'
 import { isValidI18nId, parseLanguageMeta } from '../../electron/shared/i18n'
 
@@ -20,8 +20,8 @@ export interface AvailableLocale {
 }
 
 export const useI18nStore = defineStore('i18n', () => {
-  /** 语言包内容（含 @meta 头；t() 只遍历点路径，@meta 不影响取值），seed 预填 zh-CN */
-  const bundles = reactive<Record<string, TBundle>>({ [DEFAULT_LOCALE]: zhCN })
+  /** 语言包内容（含 @meta 头；t() 只遍历点路径，@meta 不影响取值），seed 预填内置兜底语言 zh-CN */
+  const bundles = reactive<Record<string, TBundle>>({ [BUILTIN_LOCALE]: zhCN })
   /** 各语言元数据（id→元信息），seed 来自 LOCALE_ENTRIES，运行时语言登记时并入 */
   const locales = reactive<Record<string, AvailableLocale>>(
     Object.fromEntries(LOCALE_ENTRIES.map((e) => [e.id, { ...e, builtin: true }])),
@@ -38,14 +38,14 @@ export const useI18nStore = defineStore('i18n', () => {
     if (!isValidI18nId(id)) return { ok: false, error: '语言 id 含非法字符' }
     const res = parseLanguageMeta(bundle, id)
     if (!res.ok) return { ok: false, error: res.error }
-    locales[id] = { ...res.meta, builtin: id === DEFAULT_LOCALE }
+    locales[id] = { ...res.meta, builtin: id === BUILTIN_LOCALE }
     bundles[id] = bundle
     return { ok: true }
   }
 
   /** 注销一个语言包（运行时文件被删除时调用）。内置种子 zh-CN 永不可注销（安全网）。 */
   function unregisterPackage(id: string): void {
-    if (id === DEFAULT_LOCALE) return
+    if (id === BUILTIN_LOCALE) return
     if (!locales[id]) return
     delete locales[id]
     delete bundles[id]

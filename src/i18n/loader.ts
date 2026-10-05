@@ -1,13 +1,13 @@
 /**
  * loader.ts —— 运行时 i18n 装载源（全 renderer 唯一的 window.aideaI18n 桥访问点，仿 sources/desktop.ts）。
  * reloadI18n()：list() → 全量对账（注销已消失的非内置语言）→ 逐个 read() 并 registerPackage()；
- * 删除当前在用语言时回退默认语言（安全网）。订阅 onChanged 实现 i18n 目录增删改热登记（即插即用）。
+ * 删除当前在用语言时回退内置兜底语言（zh-CN，安全网）。订阅 onChanged 实现 i18n 目录增删改热登记（即插即用）。
  * ⚠ 模块加载时读桥（preload 注入先于应用脚本）；IPC 失败一律 console.error + 空集兜底，不崩。
  */
 import type { I18nBridge } from '../../electron/shared/bridge'
 import { useI18nStore } from '@/stores/i18n'
 import { useThemeStore } from '@/stores/theme'
-import { DEFAULT_LOCALE } from '@/constants/locale'
+import { BUILTIN_LOCALE } from '@/constants/locale'
 
 // 全 renderer 唯一桥访问点
 const bridge: I18nBridge = window.aideaI18n
@@ -54,8 +54,8 @@ export async function reloadI18n(): Promise<void> {
     }
   }
 
-  // 当前在用语言已从语言表消失 → 回退默认语言（安全网；available 由响应式链驱动下拉同步）
+  // 当前在用语言已从语言表消失 → 回退内置兜底语言（zh-CN 永远可用；安全网，available 由响应式链驱动下拉同步）
   if (!i18n.available.some((a) => a.id === useThemeStore().locale)) {
-    useThemeStore().setLocale(DEFAULT_LOCALE)
+    useThemeStore().setLocale(BUILTIN_LOCALE)
   }
 }

@@ -13,8 +13,8 @@ describe('useT（i18n 响应式内核）', () => {
     setActivePinia(createPinia())
   })
 
-  it('默认语言 zh-CN：点路径取值 + {name} 插值', () => {
-    expect(getLocale()).toBe('zh-CN')
+  it('默认语言 en-US：运行时包未登记时回退内置 zh-CN 表（点路径取值 + {name} 插值）', () => {
+    expect(getLocale()).toBe('en-US')
     expect(t('menuBar.file')).toBe('文件')
     expect(t('menuBar.openFailed', { message: '磁盘已满' })).toBe('打开文件失败：磁盘已满')
   })
@@ -47,6 +47,7 @@ describe('useT（i18n 响应式内核）', () => {
     const localT = createT(bundles)
     const theme = useThemeStore()
 
+    theme.setLocale('zh-CN')
     expect(localT('menuBar.file')).toBe('文件')
     theme.setLocale('en-US')
     expect(localT('menuBar.file')).toBe('File')
@@ -67,6 +68,7 @@ describe('useT（i18n 响应式内核）', () => {
       'en-US': { menuBar: { file: 'File' } },
     })
     const label = computed(() => localT('menuBar.file'))
+    theme.setLocale('zh-CN')
     expect(label.value).toBe('文件')
 
     theme.setLocale('en-US')

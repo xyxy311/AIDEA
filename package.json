@@ -58,6 +58,11 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AIDEA",
+      "installerLanguages": [
+        "en-US",
+        "zh-CN"
+      ],
+      "displayLanguageSelector": true,
       "include": "build/installer.nsh"
     }
   },

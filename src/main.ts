@@ -17,13 +17,15 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(VueKonva)
 
-app.mount('#app')
+// 运行时 i18n 装载：默认界面语言是运行时语言 en-US，必须先装载再 mount，
+// 否则首帧按默认语言渲染时命中不到包、回退中文（闪中文再切英文）。装载后持续订阅目录变更热登记。
+async function boot(): Promise<void> {
+  await reloadI18n()
+  app.mount('#app')
+  void usePluginStore().init()
+}
 
-// 引导装载插件（需要 pinia 已安装；run 时间表由启动时的 enabled 快照决定）
-void usePluginStore().init()
-
-// 运行时 i18n 装载：启动扫描登记（含 en-US 等运行时资源）+ 订阅目录变更热登记（即插即用）
-void reloadI18n()
+void boot()
 subscribeI18nChanges(() => {
   void reloadI18n()
 })

@@ -20,8 +20,11 @@ export const LOCALE_ENTRIES: ReadonlyArray<LocaleEntry> = [
   { id: 'zh-CN', label: '简体中文', naiveBase: 'zh-CN' },
 ]
 
-/** 默认界面语言 = 种子首语言（zh-CN）；themeStore 的 locale 默认值与本值一致 */
-export const DEFAULT_LOCALE: LocaleId = LOCALE_ENTRIES[0].id
+/** 编译期内置兜底语言：仅 zh-CN，永远在语言表里、永不可注销、作为 t() 最终回退 */
+export const BUILTIN_LOCALE: LocaleId = LOCALE_ENTRIES[0].id
+
+/** 默认界面语言（英文）；themeStore 的 locale 默认值与本值一致。en-US 为运行时语言，启动时由 loader 登记 */
+export const DEFAULT_LOCALE: LocaleId = 'en-US'
 
 /** 语言选择器选项（由种子派生；运行时语言登记后下拉改由 i18nStore.available 接管） */
 export interface LocaleOption {

@@ -123,6 +123,9 @@ export const CONNECTION_SELECTED_LINER_PADDING: number = 4
 /** 选中态衬线透明度（半透明，突出选中标识但不遮蔽用户原色） */
 export const CONNECTION_SELECTED_LINER_OPACITY: number = 0.6
 
+/** 节点拖入连线插入判定：节点矩形外扩距离（世界 px），略微提前触发高亮 */
+export const CONNECTION_INSERT_HIT_PADDING: number = 8
+
 /** 连线标签文字字号（px，世界坐标） */
 export const CONNECTION_LABEL_FONT_SIZE: number = 14
 

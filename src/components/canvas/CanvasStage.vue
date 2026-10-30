@@ -109,6 +109,8 @@ const marquee = useMarqueeSelection(props.viewId)
 
 // ── 节点拖动 ──
 const nodeDrag = useNodeDragging(props.viewId)
+/** 拖动无连线节点悬于连线上的插入目标连线 id（模板自动解包） */
+const insertTargetConnId = nodeDrag.insertTargetConnId
 
 // ── 网格键盘交互（仅主视图实例化；内联视图不启用，置 null）──
 const grid = props.viewId === 'main' ? useGridMode('main') : null
@@ -677,6 +679,7 @@ function handleStageMouseUp(e: unknown): void {
           :connection-id="connItem.id"
           :parent-id="view.viewedNodeId"
           :is-selected="view.selectedConnectionIds.has(connItem.id)"
+          :is-insert-target="insertTargetConnId === connItem.id"
           @click="handleConnectionClick"
           @dblclick="handleConnectionDblClick"
         />

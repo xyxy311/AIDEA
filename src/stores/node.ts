@@ -629,7 +629,18 @@ export const useNodeStore = defineStore('node', () => {
   function updateConnection(
     parentId: string,
     connectionId: string,
-    partial: Partial<Pick<Connection, 'lineStyle' | 'strokeWidth' | 'strokeColor' | 'directed' | 'text'>>,
+    partial: Partial<
+      Pick<
+        Connection,
+        | 'lineStyle'
+        | 'strokeWidth'
+        | 'strokeColor'
+        | 'directed'
+        | 'text'
+        | 'fromNodeId'
+        | 'toNodeId'
+      >
+    >,
   ): void {
     const parent = nodes.get(parentId)
     if (!parent) return

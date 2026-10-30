@@ -144,6 +144,7 @@ export function useClipboard() {
         height: src.height,
         text: src.text,
         borderColor: src.borderColor,
+        tagIds: [...(src.tagIds ?? [])],
       })
       nodeStore.nodes.set(newId, newNode)
       nodeChanges.push({ type: 'add', id: newId, new: deepClone(newNode) })

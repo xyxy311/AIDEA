@@ -25,6 +25,8 @@ const props = defineProps<{
   connectionId: string
   parentId: string
   isSelected: boolean
+  /** 拖动无连线节点悬于本连线时的插入提示高亮 */
+  isInsertTarget?: boolean
 }>()
 
 // ── Emits ──
@@ -104,7 +106,7 @@ const linerConfig = computed(() => {
   )
 
   return {
-    visible: props.isSelected,
+    visible: props.isSelected || props.isInsertTarget === true,
     points: [g.fx, g.fy, g.tx, g.ty],
     stroke: theme.scheme.canvas.connectionSelected,
     strokeWidth: linerWidth,

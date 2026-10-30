@@ -15,6 +15,8 @@ import {
   screenToMainWorld,
   screenToInlineWorld,
 } from '@/utils/view'
+import { findConnectionInsertTarget } from '@/utils/connectionInsert'
+import { CONNECTION_INSERT_HIT_PADDING } from '@/constants'
 
 /**
  * 全局共享：当前是否正在拖拽节点（跨视图实例同步）。
@@ -38,6 +40,12 @@ export function useNodeDragging(viewId: string) {
 
   /** 是否正在拖动节点（已超过阈值激活） */
   const isDragging: Ref<boolean> = ref(false)
+
+  /**
+   * 拖动无连线节点悬于某条连线上时的插入目标连线 id（null = 无目标）。
+   * 供 WhiteboardConnection 高亮提示，拖动释放时把节点插入连线（A->B 变 A->C->B）。
+   */
+  const insertTargetConnId: Ref<string | null> = ref(null)
 
   /** mousedown 命中的节点 ID（拖动候选，未激活前不改变选中状态） */
   let pendingNodeId: string | null = null
@@ -105,7 +113,17 @@ export function useNodeDragging(viewId: string) {
    * 跨视图 reparent 的 performReparent 不动——grid 仅主视图，reparent 到内联视图的
    * 内联世界坐标不吸附（保持简单）。
    */
-  function commitMovePositions(): void {
+  /**
+   * 收集待提交的节点移动（网格模式下先吸附并同步 store，使显示与历史一致）。
+   * 返回空数组表示无位移。
+   */
+  function collectMovePositions(): Array<{
+    id: string
+    oldX: number
+    oldY: number
+    newX: number
+    newY: number
+  }> {
     const positions: Array<{
       id: string
       oldX: number
@@ -127,13 +145,55 @@ export function useNodeDragging(viewId: string) {
         positions.push({ id, oldX: start.x, oldY: start.y, newX, newY })
       }
     })
+    return positions
+  }
+
+  function commitMovePositions(): void {
+    const positions = collectMovePositions()
     if (positions.length > 0) commands.commitNodeMove(positions)
+  }
+
+  /**
+   * 更新插入目标连线：仅单节点拖拽且节点无任何连线时判定；
+   * 命中条件见 utils/connectionInsert（线段与节点外扩矩形相交）。
+   */
+  function updateInsertTarget(): void {
+    insertTargetConnId.value = null
+    const id = pendingNodeId
+    if (dragStartPositions.size !== 1 || !id) return
+    const node = nodeStore.getNode(id)
+    if (!node) return
+    const conns = nodeStore.getConnections(view.viewedNodeId)
+    // 无连线节点：本视图连线中无涉及该节点的连线
+    if (conns.some((c) => c.fromNodeId === id || c.toNodeId === id)) return
+    insertTargetConnId.value = findConnectionInsertTarget(
+      conns,
+      (nid) => nodeStore.getNode(nid) ?? undefined,
+      { x: node.x, y: node.y, width: node.width, height: node.height },
+      id,
+      CONNECTION_INSERT_HIT_PADDING,
+    )
+  }
+
+  /**
+   * 提交"节点插入连线"：节点移动 + 原连线改端 + 新增 C->B 合并为单条历史。
+   */
+  function commitInsertIntoConnection(): void {
+    const connId = insertTargetConnId.value
+    const id = pendingNodeId
+    if (!connId || !id) {
+      commitMovePositions()
+      return
+    }
+    const positions = collectMovePositions()
+    commands.insertNodeIntoConnection(view.viewedNodeId, connId, id, positions)
   }
 
   /** 清理拖拽状态（含视图状态恢复） */
   function cleanupDragState(): void {
     isDragging.value = false
     globalIsDraggingNode.value = false
+    insertTargetConnId.value = null
     pendingNodeId = null
     pendingStart = null
     dragStartPositions.clear()
@@ -270,6 +330,8 @@ export function useNodeDragging(viewId: string) {
     const target = resolveDropTarget(clientX, clientY, mainRect)
     if (target) {
       performReparent(target, clientX, clientY, mainRect)
+    } else if (insertTargetConnId.value) {
+      commitInsertIntoConnection()
     } else {
       commitMovePositions()
     }
@@ -342,6 +404,9 @@ export function useNodeDragging(viewId: string) {
     dragStartPositions.forEach((start, id) => {
       nodeStore.moveNode(id, start.x + deltaX, start.y + deltaY)
     })
+
+    // 移动后更新"节点插入连线"目标（供连线高亮，释放时插入）
+    updateInsertTarget()
   }
 
   /**
@@ -404,5 +469,5 @@ export function useNodeDragging(viewId: string) {
     }
   }
 
-  return { isDragging, handleMouseDown, handleMouseMove, handleMouseUp }
+  return { isDragging, insertTargetConnId, handleMouseDown, handleMouseMove, handleMouseUp }
 }

@@ -467,6 +467,57 @@ export function useCommands() {
     return connId
   }
 
+  /**
+   * 节点插入连线（拖入 A->B 之间）：原连线改为 A->C，新增 C->B（继承原样式，不含文字）。
+   * 与拖拽节点移动（positions）合并为单条历史，undo 一步还原。
+   */
+  function insertNodeIntoConnection(
+    parentId: string,
+    connectionId: string,
+    nodeId: string,
+    positions: Array<{ id: string; oldX: number; oldY: number; newX: number; newY: number }>,
+  ): void {
+    const parent = nodeStore.getNode(parentId)
+    const conn = parent?.connections.find((c) => c.id === connectionId)
+    if (!parent || !conn) return
+    if (conn.fromNodeId === nodeId || conn.toNodeId === nodeId) return
+
+    const oldTo = conn.toNodeId
+    nodeStore.updateConnection(parentId, connectionId, { toNodeId: nodeId })
+    const newConnId = nodeStore.addConnection(parentId, nodeId, oldTo, {
+      lineStyle: conn.lineStyle,
+      strokeWidth: conn.strokeWidth,
+      strokeColor: conn.strokeColor,
+      directed: conn.directed,
+    })
+    const newConn = parent.connections.find((c) => c.id === newConnId)
+    if (!newConn) return
+
+    history.pushCommand({
+      nodeChanges: positions.map((p) => ({
+        type: 'modify' as const,
+        id: p.id,
+        old: { x: p.oldX, y: p.oldY },
+        new: { x: p.newX, y: p.newY },
+      })),
+      connChanges: [
+        {
+          type: 'modify' as const,
+          parentId,
+          connectionId,
+          old: { toNodeId: oldTo },
+          new: { toNodeId: nodeId },
+        },
+        {
+          type: 'add' as const,
+          parentId,
+          connectionId: newConn.id,
+          connection: deepClone(newConn),
+        },
+      ],
+    })
+  }
+
   /** 删除连线 */
   function deleteConnections(parentId: string, connIds: string[]): void {
     if (connIds.length === 0) return
@@ -782,6 +833,7 @@ export function useCommands() {
     reparentTo,
     // 连线
     addConnection,
+    insertNodeIntoConnection,
     deleteConnections,
     moveConnections,
     updateConnection,

@@ -38,7 +38,7 @@ components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/Canva
 | 子系统 | 一句话 | 详见 |
 | --- | --- | --- |
 | 撤销重做 | 数据写统一经 `useCommands`：捕获旧值→store→`DataPatch`→入栈；支持 coalesce/batch | `命令层与撤销重做.md` |
-| 画布与渲染 | 主/内联视图共用 `CanvasStage`，内联视图是 DOM 覆盖层渲染 | `画布与渲染.md` |
+| 画布与渲染 | 主/内联视图共用 `CanvasStage`，内联视图是 DOM 覆盖层渲染；拖动无连线节点可插入连线（A→B 变 A→C→B） | `画布与渲染.md` |
 | 面板与侧边栏 | delta 排布模型：登记表回答问题，localStorage 只存用户改动，实时派生目录 | `可拖拽面板与左右侧边栏.md` |
 | 顶部栏 | 品类表 `TOP_BAR_CATALOG` 登记 + `TopBarZone` 渲染 | `顶部栏按钮注册与拖拽.md` |
 | 预设样式 | presets store 单一数据源，节点/连线分组完全独立，1-9 随筛选联动 | `预设管理.md` |

@@ -44,6 +44,22 @@ describe('useClipboard', () => {
     expect(nodeStore.getNode(aId)?.text).toBe('A')
   })
 
+  it('copy + paste preserves tagIds', () => {
+    const nodeStore = useNodeStore()
+    const project = useProjectStore()
+    const clipboard = useClipboard()
+
+    const parentId = project.currentNodeId
+    const aId = nodeStore.addNode(parentId, 100, 100, 'A')
+    nodeStore.getNode(aId)!.tagIds = ['tag-1', 'tag-2']
+
+    clipboard.copy([aId])
+    const newIds = clipboard.paste(parentId)
+    expect(nodeStore.getNode(newIds[0])!.tagIds).toEqual(['tag-1', 'tag-2'])
+    // 原节点标签不受影响
+    expect(nodeStore.getNode(aId)!.tagIds).toEqual(['tag-1', 'tag-2'])
+  })
+
   it('copy + paste clones internal connections (sibling nodes)', () => {
     const nodeStore = useNodeStore()
     const project = useProjectStore()

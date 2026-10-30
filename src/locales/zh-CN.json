@@ -171,6 +171,7 @@
     "nodeTree": "节点树",
     "references": "可引用节点",
     "newChild": "新建子节点",
+    "showAllNodes": "显示全部",
     "deleteCurrent": "删除当前节点",
     "deleteConfirmCurrent": "确定删除当前节点及其所有子节点？",
     "deleteConfirmNode": "确定删除此节点及其所有子节点？",

@@ -747,8 +747,10 @@ export function useCommands() {
     const centerX = (minX + maxX) / 2 - DEFAULT_NODE_WIDTH / 2
     const centerY = (minY + maxY) / 2 - DEFAULT_NODE_HEIGHT / 2
 
-    // ── 新建容器节点（放主视图当前层级）──
-    const containerId = nodeStore.addNode(currentViewId, centerX, centerY, '组合')
+    // ── 新建容器节点（放主视图当前层级，样式同 createNode 取默认节点预设）──
+    const containerId = nodeStore.addNode(currentViewId, centerX, centerY, '组合', {
+      borderColor: presets.defaultNodePreset?.borderColor,
+    })
     const containerNode = captureNodeFull(nodeStore, containerId)
 
     // ── 组合 ≈ 新建容器节点 + reparentTo 到容器（batch 合并为单条历史）──

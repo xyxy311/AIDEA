@@ -171,6 +171,7 @@
     "nodeTree": "Node Tree",
     "references": "Referable Nodes",
     "newChild": "New Child Node",
+    "showAllNodes": "Show All",
     "deleteCurrent": "Delete Current Node",
     "deleteConfirmCurrent": "Delete this node and all its children?",
     "deleteConfirmNode": "Delete this node and all its children?",

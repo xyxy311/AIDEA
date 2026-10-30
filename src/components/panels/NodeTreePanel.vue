@@ -2,10 +2,11 @@
 /**
  * NodeTreePanel - 节点树面板：基于 parentId 展示节点树，支持展开/收起、单击切换视图、
  * 双击重命名（根节点文本即项目名）、新建/递归删除、右键菜单、拖拽移动节点（跨视图 reparent）、
- * 叶子节点颜色减淡。
+ * 「显示全部」勾选（控制叶子节点显隐，状态持久化）、叶子节点颜色减淡。
  */
 import { ref, nextTick, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { NButton, NInput, NScrollbar, NDropdown, useDialog } from 'naive-ui'
+import { useStorage } from '@vueuse/core'
+import { NButton, NCheckbox, NInput, NScrollbar, NDropdown, useDialog } from 'naive-ui'
 import type { DropdownOption } from 'naive-ui'
 import { useMessage } from 'naive-ui'
 import {
@@ -43,10 +44,14 @@ const dialog = useDialog()
 /** 根节点名称（即项目名，单一数据源） */
 const rootName = computed(() => nodeStore.getNode(rootViewId.value)?.text ?? '')
 
-/** 列表节点树：过滤根节点（名称在顶部工具栏）并将子级深度左移 1，使首层子级对齐 */
+/** 「显示全部」勾选态：勾选显示叶子节点（全部节点），不勾选只显示有子节点的节点；持久化到应用配置 */
+const showAll = useStorage('aidea-node-tree-show-all', false)
+
+/** 列表节点树：过滤根节点（名称在顶部工具栏）并将子级深度左移 1，使首层子级对齐；
+ * 不勾选「显示全部」时隐藏叶子节点（只显示有子节点的节点） */
 const treeItems = computed(() =>
   flatTree.value
-    .filter((item) => !item.isRoot)
+    .filter((item) => !item.isRoot && (showAll.value || item.hasChildren))
     .map((item) => ({ ...item, depth: item.depth - 1 })),
 )
 
@@ -309,8 +314,16 @@ function handleRootDblClick(): void {
           @dblclick.stop="handleRootDblClick"
         >{{ rootName }}</span>
 
-        <!-- 与根节点名称紧挨的按钮：添加子节点 + 删除当前节点 -->
+        <!-- 与根节点名称紧挨的按钮：显示全部勾选框 + 新建子节点 -->
         <div class="panel-actions">
+          <NCheckbox
+            size="small"
+            class="show-all-check"
+            v-model:checked="showAll"
+            :title="t('leftSidebar.showAllNodes')"
+          >
+            <span class="show-all-label">{{ t('leftSidebar.showAllNodes') }}</span>
+          </NCheckbox>
           <!-- 纯图标按钮：新建子节点 -->
           <NButton
             size="tiny"
@@ -465,8 +478,18 @@ function handleRootDblClick(): void {
 
 .panel-actions {
   display: flex;
+  align-items: center;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.show-all-check {
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.show-all-label {
+  font-size: 12px;
 }
 
 .action-btn {

@@ -255,6 +255,7 @@ export function useProjectFile(options?: { confirm?: ProjectConfirmFn }) {
       // 项目已在其它窗口打开 → main 已聚焦该窗口，此处拦截本次打开（不替换当前内容）
       const claim = await nativeFile.claimProject(res.path)
       if (claim.intercepted) {
+        message.warning(t('menuBar.alreadyOpen'))
         return
       }
       const data = parseProjectFile(res.content)

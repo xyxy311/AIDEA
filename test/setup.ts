@@ -73,4 +73,34 @@ if (typeof window !== 'undefined') {
     configurable: true,
     writable: true,
   })
+
+  Object.defineProperty(window, 'aideaMcp', {
+    value: {
+      // 良性默认桩：请求订阅返回 no-op 退订、清单发布/回执/窗口态上报 no-op、
+      // 配置返回默认值（enabled=false）。需要具体行为的用例自行覆写。
+      onRequest: () => () => {},
+      respond: () => {},
+      publishTools: () => {},
+      onStatus: () => () => {},
+      reportWindowState: () => {},
+      getConfig: async () => ({
+        enabled: false,
+        port: 9876,
+        token: 'test-token-0123456789abcdef',
+        limits: {
+          maxOpsPerBatch: 100,
+          maxNodesPerCreate: 200,
+          maxDeletesPerCall: 200,
+          toolTimeoutMs: 60000,
+          maxConcurrent: 4,
+          maxCallsPerMinute: 120,
+        },
+      }),
+      setConfig: async () => {
+        throw new Error('test setup: aideaMcp.setConfig 未配置具体 stub')
+      },
+    },
+    configurable: true,
+    writable: true,
+  })
 }

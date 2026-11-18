@@ -26,6 +26,7 @@ utils/      纯函数（generateId, calculateTextContentSize, command, dock, top
 config/     配色 colorSchemes.ts（亮/暗 + 主色，见 docs/主题与配色.md）
 locales/    UI 文本 zh-CN/en-US.json（i18n 占位层，见 docs/多语言.md）
 stores/     node / tag / view / project / additions / presets / history / theme / layout / file / uiRegistry / modal
+mcp/        Agent MCP 工具面（registry/host/schema/viewText/tools，见 docs/Agent-MCP接入.md）
 composables/useCommands（命令层）/ useActiveView / useT / 画布交互
 components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/CanvasStage/InlineView*/Overviews/…，见 docs/画布与渲染.md）
              topbar（按钮逻辑组件） / panels（左侧/右侧面板，纯内容） / layout（ActivityBar/AppShell/Sidebars） / common（通用件，见 docs/基础组件.md）
@@ -48,6 +49,7 @@ components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/Canva
 | 插件系统 | 适配层是稳定 SDK（只增不改）；load-collection 是唯一可变点 | `插件系统.md` |
 | 插件 UI 注册 | uiRegistry 品类表驱动面板/按钮；`${pluginId}:${id}` 键规范化 | `插件UI注册.md` |
 | 插件模态面板 | 插件面板经 DockPanel 外包错误边界；浮窗/模态外壳 | `插件模态面板.md` |
+| Agent MCP 接入 | 外部 AI Agent 经 MCP（本地 Streamable HTTP）读写项目；工具面 21 个，写经 useCommands 可撤销 | `Agent-MCP接入.md` |
 
 ## 主要模块连接
 
@@ -56,6 +58,7 @@ components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/Canva
 - **视图状态**：`view` store 是工厂（每视图一实例：主 + 多个内联），`viewedNodeId`/`stageScale`/选中态；`project` 管导航/快照/`switchView`。
 - **面板/按钮**：`panels`/`topbar` 品类表登记 → `uiRegistry` 目录 → `layout` store 读 delta 实时派生渲染目录 → `ActivityBar`/`LeftTopBar`/`RightTopBar`/`DockContainer` 渲染。
 - **插件接入**：插件经 `PluginAdapter`（唯一出入口）→ 命令层/各域 api → `uiRegistry` 注册 UI → 布局自动派生；`PluginModalHost`/`PluginFloatingHost` 承载模态/浮窗。
+- **Agent MCP**：MCP 客户端 → main（协议/鉴权/路由）→ 第 6 座桥 `aideaMcp` → `src/mcp/host` → registry 工具面（写经命令层，可撤销）；清单/窗口态由 renderer 发布缓存。
 - **主题/多语言**：themeStore 单一数据源 → Naive UI + CSS 变量 + 画布 chrome 色；UI 文本经 `useT` 的 `t()`。
 - **项目文件**：`projectFile`（AppShell 注入）→ fileStore + 命令层载入/保存；登录态/快照由 `project` store 维护。
 

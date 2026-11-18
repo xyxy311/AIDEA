@@ -14,6 +14,7 @@ import {
 } from '../shared/bridge'
 import { rescan } from './plugins'
 import { getI18nFile, rescanI18n } from './i18n'
+import { getMcpConfig, getToolBridge, setMcpConfig } from './mcp'
 
 /** 项目文件对话框的过滤规则（mutable 数组，匹配 Electron FileFilter 类型） */
 const PROJECT_FILTERS: Electron.FileFilter[] = [
@@ -239,5 +240,30 @@ export function registerIpc(): void {
       }
     }
     return { intercepted: false }
+  })
+
+  // ── Agent MCP（第 6 座桥；装配见 mcp/index.ts，initMcp 在 app ready 后调用）──
+
+  // 配置读取 / 更新（更新即时生效并推送 MCP_STATUS）
+  ipcMain.handle(IPC.MCP_CONFIG_GET, () => getMcpConfig())
+  ipcMain.handle(IPC.MCP_CONFIG_SET, (_event, patch: Parameters<typeof setMcpConfig>[0]) => setMcpConfig(patch))
+
+  // renderer → main：工具回执（requestId 匹配 pending）
+  ipcMain.on(IPC.MCP_RESPONSE, (_event, res) => {
+    getToolBridge()?.resolveResponse(res)
+  })
+
+  // renderer → main：工具/resource 清单缓存（按发送窗口盖章缓存）
+  ipcMain.on(IPC.MCP_PUBLISH_TOOLS, (event, tools, resources) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    getToolBridge()?.setManifests(win.id, tools ?? [], resources ?? [])
+  })
+
+  // renderer → main：窗口业务态上报（windowId 以 webContents 归属为准，不信任载荷）
+  ipcMain.on(IPC.MCP_WINDOW_STATE, (event, state) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    getToolBridge()?.reportWindowState(win.id, state)
   })
 }

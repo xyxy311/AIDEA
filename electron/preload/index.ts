@@ -1,6 +1,7 @@
 /**
- * preload/index.ts —— contextBridge 窄桥，暴露五座桥：
- * aideaDesktop（插件系统）、aideaWindow（窗口 chrome）、aideaFile（项目文件）、aideaFs（任意文件读写）、aideaI18n（运行时 i18n 目录）。
+ * preload/index.ts —— contextBridge 窄桥，暴露六座桥：
+ * aideaDesktop（插件系统）、aideaWindow（窗口 chrome）、aideaFile（项目文件）、aideaFs（任意文件读写）、aideaI18n（运行时 i18n 目录）、
+ * aideaMcp（Agent MCP：main→renderer 工具调用请求/回执 + 清单与窗口态上报 + 配置读写）。
  * 安全边界：只暴露契约白名单内方法，绝不暴露 ipcRenderer 本体或任何带路径参数的通道；
  * 类型标注对齐各 Bridge 接口，契约漂移会在 type-check 期暴露。
  */
@@ -11,6 +12,14 @@ import type {
   FileBridge,
   FsBridge,
   I18nBridge,
+  McpBridge,
+  McpToolRequest,
+  McpToolResponse,
+  McpToolManifest,
+  McpResourceManifest,
+  McpStatus,
+  McpWindowState,
+  McpConfigPatch,
   WindowBridge,
 } from '../shared/bridge'
 import { IPC } from '../shared/bridge'
@@ -78,8 +87,36 @@ const i18nBridge: I18nBridge = {
   },
 }
 
+const mcpBridge: McpBridge = {
+  onRequest: (cb: (req: McpToolRequest) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, req: McpToolRequest): void => {
+      cb(req)
+    }
+    ipcRenderer.on(IPC.MCP_REQUEST, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.MCP_REQUEST, listener)
+    }
+  },
+  respond: (res: McpToolResponse) => ipcRenderer.send(IPC.MCP_RESPONSE, res),
+  publishTools: (tools: McpToolManifest[], resources: McpResourceManifest[]) =>
+    ipcRenderer.send(IPC.MCP_PUBLISH_TOOLS, tools, resources),
+  onStatus: (cb: (status: McpStatus) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, status: McpStatus): void => {
+      cb(status)
+    }
+    ipcRenderer.on(IPC.MCP_STATUS, listener)
+    return () => {
+      ipcRenderer.removeListener(IPC.MCP_STATUS, listener)
+    }
+  },
+  reportWindowState: (state: McpWindowState) => ipcRenderer.send(IPC.MCP_WINDOW_STATE, state),
+  getConfig: () => ipcRenderer.invoke(IPC.MCP_CONFIG_GET),
+  setConfig: (patch: McpConfigPatch) => ipcRenderer.invoke(IPC.MCP_CONFIG_SET, patch),
+}
+
 contextBridge.exposeInMainWorld('aideaDesktop', bridge)
 contextBridge.exposeInMainWorld('aideaWindow', windowBridge)
 contextBridge.exposeInMainWorld('aideaFile', fileBridge)
 contextBridge.exposeInMainWorld('aideaFs', fsBridge)
 contextBridge.exposeInMainWorld('aideaI18n', i18nBridge)
+contextBridge.exposeInMainWorld('aideaMcp', mcpBridge)

@@ -138,7 +138,7 @@ createDebouncer(ms, task): { push(); cancel() }
 1. **main 启动**（`scripts/dev.mjs` 编排，见下）：`electron/main/index.ts` 顶层 `registerPrivilegedSchemes()`（scheme 特权在 app ready 前固化）→ `Menu.setApplicationMenu(null)` → `requestSingleInstanceLock()`（未拿到锁即 `app.quit()`；否则进入下方当 ready 引导）。
 2. **app ready 后**：`registerProtocolHandlers()`（`aidea-plugin://` + `app://`）→ `registerIpc()` → `createMainWindow()`（`contextIsolation`/`sandbox`，`preload: dist-electron/preload.cjs`）→ `startPluginWatching()`。
    - dev：`VITE_DEV_SERVER_URL` 存在 → `win.loadURL(devUrl)`；生产 → `win.loadURL('app://./index.html')`。
-3. **preload**（`index.ts`）：`contextBridge.exposeInMainWorld` 暴露五座桥（aideaDesktop/aideaWindow/aideaFile/aideaFs/aideaI18n）。注入先于应用脚本，故 renderer 模块顶部可直接读 `window.aideaDesktop`。
+3. **preload**（`index.ts`）：`contextBridge.exposeInMainWorld` 暴露六座桥（aideaDesktop/aideaWindow/aideaFile/aideaFs/aideaI18n/aideaMcp）。注入先于应用脚本，故 renderer 模块顶部可直接读 `window.aideaDesktop`。
 4. **renderer**（`src/main.ts`）：`Konva.pixelRatio` → `app.use(pinia)` → `mount('#app')` → `void usePluginStore().init()`。
 5. **`init()`**（`src/stores/plugin.ts`）：`subscribePluginChanges`（置 `dirDirty`）→ `await collectPluginEntries()` → `useLayoutStore().setDiscoveredPluginIds(...)`（回填在先，注册前 delta 已正确）→ `new PluginManager({ entries, getEnabled })` → `mgr.installAll()`（装载 → activate → 注册 UI）。
 6. **插件装载**：`entry.loader()` 动态 `import(url)`；dev 经 vite transform、生产经 `aidea-plugin://` 协议 → bare import 由 import map 解析到 `/vendor/*.js` → 与宿主共享同一 SDK 实例。
@@ -191,5 +191,15 @@ dev 插件根 `<仓库根>/plugins/`，生产 `userData/plugins/`——两形态
 ### watch 只提示、不热重载
 
 入目录变更只置 `dirDirty` + toast「重启后生效」，**不做真热重载**：真热卸载需要运行期下线链路（回滚 UI 注册 + delta 处置 + undo 语义 + 快捷键回收 + 浮动层状态），每项都是状态残留风险源。提示式覆盖大部分价值，开发者迭代靠重启兜底。指纹含入口文件内容 sha1 hash 的原因：纯 ids/manifest 快照看不出「同 id 仅改 plugin.js 内容」，hash 让「改」可检测；`awaitWriteFinish` + debounce 跳过半成品/合并多次写入。
+
+### 第 6 座桥 `aideaMcp`（Agent MCP，双向桥）
+
+外部 AI Agent 经 MCP 读写项目，详见 `Agent-MCP接入.md`。与既有五座桥（单向：renderer 调 main）不同，这是一座**双向桥**：
+
+- **main → renderer 请求**：`MCP_REQUEST`（`webContents.send` + requestId）→ renderer `src/mcp/host.ts` 执行 → `MCP_RESPONSE` 回执（requestId 匹配 `toolBridge.ts` 的 pending map，超时 60s 兜底）。业务状态全在 renderer pinia，工具执行必须回到 renderer；main 只做协议/鉴权/路由/超时。
+- **renderer → main 上报**：`MCP_PUBLISH_TOOLS`（工具/resource 清单缓存，`tools/list` 数据源）、`MCP_WINDOW_STATE`（windowId 以 `event.sender` 归属盖章，不信任载荷）。
+- **配置面**：`mcp:config:get` / `mcp:config:set`（invoke；set 即时 stop/start 并向全部窗口推 `MCP_STATUS`）。
+- **安全**：仅 `POST /mcp`，绑 `127.0.0.1`；Origin 白名单（本机回环，无 Origin 放行）；Bearer token；不返回 CORS 头。`mcp.json` 存 userData（`enabled` 默认 false）。
+- **踩坑点**：清单发布（publishTools）先于窗口态 `toolReady:true` 上报，路由层据此拒绝未就绪窗口（not_ready）；`history.beginBatch` 非（re-entrant）重入——`aidea_batch` 事务内的子工具经 `ctx.inBatch` 跳过自身 batch 边界，batch 首错回滚用「commitBatch 收拢 → undo → 弹出 redo 残留」实现（rollbackBatch 只丢历史不还原数据）。
 
 > 插件 UI 注册 / 面板派生 / 模态与浮动层 / 开发约束分别见 `插件系统.md`、`插件UI注册.md`、`插件模态面板.md`、`插件开发手册.md`。

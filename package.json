@@ -11,6 +11,7 @@
     "build": "vue-tsc --noEmit && vite build && node scripts/build-electron.mjs",
     "test": "vitest run --passWithNoTests",
     "type-check": "vue-tsc --noEmit && tsc -p tsconfig.electron.json",
+    "mcp:cli": "node tools/mcp-cli.mjs",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win"
   },

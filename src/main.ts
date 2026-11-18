@@ -6,6 +6,7 @@ import App from './App.vue'
 import './assets/main.css'
 import { usePluginStore } from '@/stores/plugin'
 import { reloadI18n, subscribeI18nChanges } from '@/i18n/loader'
+import { installMcpHost } from '@/mcp/host'
 
 // Konva 全局画布像素密度：默认 stage canvas 按像素比 1 渲染，
 // 在 DPR>1 的高分屏会被拉大导致画布内容模糊（而 HTML 组件由浏览器自动高清化）。
@@ -23,6 +24,8 @@ async function boot(): Promise<void> {
   await reloadI18n()
   app.mount('#app')
   void usePluginStore().init()
+  // Agent MCP 宿主：订阅工具请求、发布清单、上报窗口态（非桌面形态 no-op）
+  installMcpHost()
 }
 
 void boot()

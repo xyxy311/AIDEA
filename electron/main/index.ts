@@ -13,6 +13,7 @@ import { startI18nWatching } from './i18nWatch'
 import { registerPrivilegedSchemes, registerProtocolHandlers } from './protocol'
 import { attachWindowShortcuts } from './shortcuts'
 import { seedUserData } from './seedData'
+import { initMcp, stopMcp } from './mcp'
 
 // 固定 userData 目录名（%APPDATA%/AIDEA），与 productName 解耦、避免改名导致旧配置丢失
 app.setName('AIDEA')
@@ -111,6 +112,9 @@ if (!gotTheLock) {
       startPluginWatching()
       // 运行时 i18n 目录 watch：增删改经 IPC.I18N_CHANGED 推送给 renderer（语言即插即用热登记）
       startI18nWatching()
+
+      // Agent MCP：读配置、装配 toolBridge，enabled 才监听 127.0.0.1（§7 安全模型）
+      void initMcp()
     })
 
     // macOS 惯例：Dock 点击重新创建窗口
@@ -122,5 +126,11 @@ if (!gotTheLock) {
   // 桌面工具：全平台 window-all-closed 直接退出（不做 macOS 常驻）
   app.on('window-all-closed', () => {
     app.quit()
+  })
+
+  // MCP 服务器随 app 退出关闭：pending 请求全部立即失败（shutting_down）；
+  // server.close 是进程退出前的尽力而为，不阻塞退出链路。
+  app.on('will-quit', () => {
+    void stopMcp()
   })
 }

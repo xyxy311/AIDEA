@@ -43,6 +43,22 @@ export const IPC = {
   I18N_READ: 'i18n:read',
   /** main → renderer：运行时 i18n 目录变更推送（增/删/改对应语言 id 列表） */
   I18N_CHANGED: 'i18n:changed',
+
+  // ── Agent MCP（第 6 座桥）──
+  /** main → renderer：MCP 工具调用请求（requestId 关联回执） */
+  MCP_REQUEST: 'mcp:request',
+  /** renderer → main：工具调用回执（按 requestId 匹配 pending） */
+  MCP_RESPONSE: 'mcp:response',
+  /** renderer → main：工具/resource 清单缓存上报 */
+  MCP_PUBLISH_TOOLS: 'mcp:publish-tools',
+  /** main → renderer：服务器运行状态推送 */
+  MCP_STATUS: 'mcp:status',
+  /** renderer → main：本窗口业务态上报（windowId 由 main 盖章） */
+  MCP_WINDOW_STATE: 'mcp:window-state',
+  /** renderer → main：读取 MCP 配置 */
+  MCP_CONFIG_GET: 'mcp:config:get',
+  /** renderer → main：更新 MCP 配置（即时生效并推送新状态） */
+  MCP_CONFIG_SET: 'mcp:config:set',
 } as const
 
 /**
@@ -266,6 +282,136 @@ export interface I18nBridge {
   onChanged(cb: (ids: string[]) => void): () => void
 }
 
+// ── Agent MCP 接入（第 6 座桥 window.aideaMcp）──
+
+/** MCP 护栏上限（userData/mcp.json 的 limits 段；语义见 docs/Agent-MCP接入.md） */
+export interface McpLimitsConfig {
+  /** aidea_batch 单次批内最大 op 数 */
+  maxOpsPerBatch: number
+  /** aidea_node_create 单次最多创建节点数 */
+  maxNodesPerCreate: number
+  /** aidea_node_delete 单次最多删除节点数（含子树展开） */
+  maxDeletesPerCall: number
+  /** 单次工具调用超时（ms，main 侧计时） */
+  toolTimeoutMs: number
+  /** 全局最大并发工具调用数 */
+  maxConcurrent: number
+  /** 每客户端滑动窗口（60s）内最大调用次数 */
+  maxCallsPerMinute: number
+}
+
+/** MCP 配置（userData/mcp.json 的形状） */
+export interface McpConfig {
+  /** 总开关（默认关）：false 时不监听端口 */
+  enabled: boolean
+  /** 监听端口（仅 127.0.0.1；占用即报错不换端口） */
+  port: number
+  /** Bearer token（随机生成；设置面板可查看/复制/重置） */
+  token: string
+  limits: McpLimitsConfig
+}
+
+/** setConfig 的增量补丁；regenerateToken=true 时重新生成 token（忽略 token 字段） */
+export interface McpConfigPatch {
+  enabled?: boolean
+  port?: number
+  token?: string
+  regenerateToken?: boolean
+  limits?: Partial<McpLimitsConfig>
+}
+
+/** MCP 服务器运行状态（main 推送，设置面板展示） */
+export interface McpStatus {
+  /** 配置开关（≠ running） */
+  enabled: boolean
+  /** HTTP 服务器是否在监听 */
+  running: boolean
+  port: number
+  /** 最近一次启动/运行错误（null = 正常） */
+  error: string | null
+}
+
+/** renderer 上报的窗口业务态（windowId/focused 由 main 侧盖章） */
+export interface McpWindowState {
+  projectName: string
+  dirty: boolean
+  /** renderer host 已注册且清单已发布（未就绪窗口不接收路由） */
+  toolReady: boolean
+}
+
+/** main 缓存的完整窗口态（aidea_windows_list 的条目） */
+export interface McpWindowInfo extends McpWindowState {
+  windowId: number
+  focused: boolean
+}
+
+/** 工具清单条目（renderer 单一数据源 → main 缓存；tools/list 直接回包） */
+export interface McpToolManifest {
+  name: string
+  title: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
+/** MCP resource 清单条目 */
+export interface McpResourceManifest {
+  uri: string
+  name: string
+  description: string
+  mimeType: string
+}
+
+/** main → renderer 的工具调用请求 */
+export interface McpToolRequest {
+  requestId: string
+  /** 工具名（resource 读取用内部伪工具 __resource__） */
+  tool: string
+  args: Record<string, unknown>
+}
+
+/** MCP content 项（tools/call 结果；工具同步返回，全部单 JSON） */
+export type McpContentItem =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string }
+
+/** tools/call 的 MCP 结果形状 */
+export interface McpToolCallResult {
+  content: McpContentItem[]
+  isError?: boolean
+}
+
+/** renderer → main 的工具回执 */
+export interface McpToolResponse {
+  requestId: string
+  ok: boolean
+  /** ok=true：最终 MCP 结果（host 已包装 content） */
+  result?: McpToolCallResult
+  /** ok=false：单行错误文本（main 包装为 isError:true） */
+  error?: string
+}
+
+/**
+ * preload 经 contextBridge 暴露的 MCP 桥（window.aideaMcp）。
+ * 双向桥：main→renderer 请求（onRequest/respond），renderer→main 清单与窗口态上报；
+ * 配置读写经 invoke，状态经 onStatus 推送。
+ */
+export interface McpBridge {
+  /** 订阅工具调用请求（host 常驻一个订阅）；返回退订函数 */
+  onRequest(cb: (req: McpToolRequest) => void): () => void
+  /** 按 requestId 回执工具调用结果 */
+  respond(res: McpToolResponse): void
+  /** 发布工具/resource 清单缓存（host 启动时一次） */
+  publishTools(tools: McpToolManifest[], resources: McpResourceManifest[]): void
+  /** 订阅服务器状态推送；返回退订函数 */
+  onStatus(cb: (status: McpStatus) => void): () => void
+  /** 上报本窗口业务态（windowId 由 main 盖章） */
+  reportWindowState(state: McpWindowState): void
+  /** 读取 MCP 配置 */
+  getConfig(): Promise<McpConfig>
+  /** 更新 MCP 配置（即时生效；返回更新后的完整配置） */
+  setConfig(patch: McpConfigPatch): Promise<McpConfig>
+}
+
 declare global {
   interface Window {
     /** 纯桌面形态恒存在；仅 sources/desktop.ts 允许访问（架构红线） */
@@ -281,5 +427,7 @@ declare global {
     aideaFs: FsBridge
     /** 纯桌面形态恒存在；全 renderer 唯一访问点为 src/i18n/loader.ts */
     aideaI18n: I18nBridge
+    /** 纯桌面形态恒存在；全 renderer 唯一运行时访问点为 src/mcp/host.ts */
+    aideaMcp: McpBridge
   }
 }

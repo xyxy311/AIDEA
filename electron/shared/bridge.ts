@@ -53,6 +53,8 @@ export const IPC = {
   MCP_PUBLISH_TOOLS: 'mcp:publish-tools',
   /** main → renderer：服务器运行状态推送 */
   MCP_STATUS: 'mcp:status',
+  /** renderer → main：读取当前运行状态快照（订阅前的初始状态） */
+  MCP_STATUS_GET: 'mcp:status:get',
   /** renderer → main：本窗口业务态上报（windowId 由 main 盖章） */
   MCP_WINDOW_STATE: 'mcp:window-state',
   /** renderer → main：读取 MCP 配置 */
@@ -404,6 +406,8 @@ export interface McpBridge {
   publishTools(tools: McpToolManifest[], resources: McpResourceManifest[]): void
   /** 订阅服务器状态推送；返回退订函数 */
   onStatus(cb: (status: McpStatus) => void): () => void
+  /** 读取当前运行状态快照（订阅建立前已发生的状态变化不会补发，需先取一次） */
+  getStatus(): Promise<McpStatus>
   /** 上报本窗口业务态（windowId 由 main 盖章） */
   reportWindowState(state: McpWindowState): void
   /** 读取 MCP 配置 */

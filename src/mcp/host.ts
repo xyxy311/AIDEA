@@ -210,6 +210,13 @@ export function onMcpStatus(cb: (status: McpStatus) => void): () => void {
   return bridge.onStatus(cb)
 }
 
+/** 读取当前服务器状态快照（推送只覆盖订阅后的变化，面板打开时须先拉一次） */
+export async function getMcpStatusSafe(): Promise<McpStatus | null> {
+  const bridge = window.aideaMcp
+  if (!bridge) return null
+  return bridge.getStatus()
+}
+
 /** 读取 MCP 配置（设置面板）；桥缺失时返回 null */
 export async function getMcpConfigSafe(): Promise<McpConfig | null> {
   const bridge = window.aideaMcp

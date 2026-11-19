@@ -14,7 +14,7 @@ import {
 } from '../shared/bridge'
 import { rescan } from './plugins'
 import { getI18nFile, rescanI18n } from './i18n'
-import { getMcpConfig, getToolBridge, setMcpConfig } from './mcp'
+import { getMcpConfig, getMcpStatus, getToolBridge, setMcpConfig } from './mcp'
 
 /** 项目文件对话框的过滤规则（mutable 数组，匹配 Electron FileFilter 类型） */
 const PROJECT_FILTERS: Electron.FileFilter[] = [
@@ -247,6 +247,8 @@ export function registerIpc(): void {
   // 配置读取 / 更新（更新即时生效并推送 MCP_STATUS）
   ipcMain.handle(IPC.MCP_CONFIG_GET, () => getMcpConfig())
   ipcMain.handle(IPC.MCP_CONFIG_SET, (_event, patch: Parameters<typeof setMcpConfig>[0]) => setMcpConfig(patch))
+  // 状态快照：面板打开时主动拉取（推送只覆盖订阅后的变化）
+  ipcMain.handle(IPC.MCP_STATUS_GET, () => getMcpStatus())
 
   // renderer → main：工具回执（requestId 匹配 pending）
   ipcMain.on(IPC.MCP_RESPONSE, (_event, res) => {

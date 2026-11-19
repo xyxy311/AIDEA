@@ -109,6 +109,7 @@ const mcpBridge: McpBridge = {
       ipcRenderer.removeListener(IPC.MCP_STATUS, listener)
     }
   },
+  getStatus: () => ipcRenderer.invoke(IPC.MCP_STATUS_GET),
   reportWindowState: (state: McpWindowState) => ipcRenderer.send(IPC.MCP_WINDOW_STATE, state),
   getConfig: () => ipcRenderer.invoke(IPC.MCP_CONFIG_GET),
   setConfig: (patch: McpConfigPatch) => ipcRenderer.invoke(IPC.MCP_CONFIG_SET, patch),

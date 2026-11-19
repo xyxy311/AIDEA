@@ -11,6 +11,7 @@ import '@/components/settings/settings-shared.css'
 import { TOOLS } from '@/mcp/registry'
 import {
   getMcpConfigSafe,
+  getMcpStatusSafe,
   onMcpStatus,
   setMcpConfigSafe,
   subscribeMcpLogs,
@@ -30,15 +31,21 @@ const showLogs = ref(false)
 
 let unsubStatus: () => void = () => {}
 let unsubLogs: () => void = () => {}
+/** 是否已收到状态推送（避免快照覆盖更新的推送） */
+let pushReceived = false
 
 onMounted(async () => {
-  config.value = await getMcpConfigSafe()
+  // 先订阅推送，再补拉一次快照：初始化/重开面板时错过的广播由此补上
   unsubStatus = onMcpStatus((s) => {
+    pushReceived = true
     status.value = s
   })
   unsubLogs = subscribeMcpLogs((entries) => {
     logs.value = entries
   })
+  const [configSnapshot, statusSnapshot] = await Promise.all([getMcpConfigSafe(), getMcpStatusSafe()])
+  config.value = configSnapshot
+  if (!pushReceived && statusSnapshot) status.value = statusSnapshot
 })
 onUnmounted(() => {
   unsubStatus()

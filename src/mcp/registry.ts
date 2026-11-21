@@ -10,7 +10,7 @@ import { NODE_TOOLS } from './tools/node'
 import { CONNECTION_TOOLS } from './tools/connection'
 import { MISC_TOOLS } from './tools/misc'
 
-/** 全量工具（21 个：T1–T21；aidea_windows_list 由 main 本地应答，handler 缺省） */
+/** 全量工具（22 个：T0–T21；aidea_windows_list 由 main 本地应答，handler 缺省） */
 export const TOOLS: McpToolDef[] = [...BOARD_TOOLS, ...NODE_TOOLS, ...CONNECTION_TOOLS, ...MISC_TOOLS]
 
 /** 全量 resource（3 个） */

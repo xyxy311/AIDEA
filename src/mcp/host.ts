@@ -55,13 +55,14 @@ export function subscribeMcpLogs(cb: (entries: McpCallLogEntry[]) => void): () =
 
 // ── 输出包装 ──
 
-/** ToolOutput → 最终 MCP content（image 特例单独成项） */
+/** ToolOutput → 最终 MCP content（image 特例单独成项；text 直接透传） */
 function toCallResult(output: McpToolOutput): McpToolCallResult {
   if (output.kind === 'image') {
     return { content: [{ type: 'image', data: output.data, mimeType: output.mimeType }] }
   }
+  const text = output.kind === 'text' ? output.text : JSON.stringify(output.payload)
   return {
-    content: [{ type: 'text', text: JSON.stringify(output.payload) }],
+    content: [{ type: 'text', text }],
     ...(output.isError === true ? { isError: true } : {}),
   }
 }

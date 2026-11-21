@@ -6,6 +6,7 @@ import { useNodeStore } from '@/stores/node'
 import { useHistoryStore } from '@/stores/history'
 import { useTagsStore } from '@/stores/tags'
 import { runTool, type RunToolResult } from '../registry'
+import { nodeHandles } from '../tools/shared'
 
 const ctx = { inBatch: false }
 
@@ -161,7 +162,7 @@ describe('aidea_batch（原子批，D5/T18）', () => {
     expect(out.ok).toBe(false)
     expect(out.failedAt).toBe(2)
     expect(out.failedTool).toBe('aidea_node_delete')
-    expect(out.error).toContain('node not found')
+    expect(out.error).toContain('node ref not found')
     expect(out.results).toHaveLength(2) // 前两步成功结果保留
 
     const nodeStore = useNodeStore()
@@ -182,5 +183,165 @@ describe('aidea_batch（原子批，D5/T18）', () => {
     const result = await runTool('aidea_batch', { ops: [{ tool: 'aidea_nope' }] }, ctx)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toContain('unknown tool')
+  })
+})
+
+// ── 读接口改版（三层读模型 + 链式文本 + 句柄/名字写侧统一）──
+
+function textOutput(result: RunToolResult): string {
+  expect(result.ok).toBe(true)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (result as any).output.text as string
+}
+
+describe('三层读模型（T0 outline / T2 view_read / T3 node_get）', () => {
+  it('I4：三个读工具都不产生历史条目', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['A', 'B'] }, ctx),
+    ).createdIds
+    await runTool('aidea_connection_add', { parentId: 'root', fromNodeId: ids[0], toNodeId: ids[1] }, ctx)
+    const past = useHistoryStore().past.length
+    await runTool('aidea_outline', {}, ctx)
+    await runTool('aidea_view_read', {}, ctx)
+    await runTool('aidea_node_get', { nodeId: 'root' }, ctx)
+    expect(useHistoryStore().past.length).toBe(past)
+  })
+
+  it('outline 返回 kind:text；depth=1 只列直接子节点；全叶子退化列出叶子预览', async () => {
+    await runTool('aidea_node_create', { parentId: 'root', texts: ['甲', '乙', '丙'] }, ctx)
+    const result = await runTool('aidea_outline', { depth: 1 }, ctx)
+    const text = textOutput(result)
+    expect(text).toContain('OUTLINE /')
+    expect(text).toContain('ROOT N')
+    expect(text).toContain('甲')
+    expect(text).toContain('(+3 子, +3 叶)')
+  })
+
+  it('view_read 返回链式文本：CHAINS / UNLINKED / 字典，边段带 C<n>', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['A', 'B'] }, ctx),
+    ).createdIds
+    await runTool('aidea_connection_add', { parentId: 'root', fromNodeId: ids[0], toNodeId: ids[1], text: '下一跳' }, ctx)
+    const text = textOutput(await runTool('aidea_view_read', {}, ctx))
+    expect(text).toContain('CHAINS')
+    expect(text).toMatch(/\[N[^\s\]]{3,} A[^\]]*\]--C1 下一跳-->/)
+    expect(text).toContain('UNLINKED')
+    expect(text).toContain('STYLE')
+    expect(text).toContain('LINK')
+    expect(text).toContain('TAGS')
+    expect(text).toContain('VIEW /')
+  })
+
+  it('view_read nodeId 接受句柄与名字；json format 返回结构化数据', async () => {
+    const [containerId] = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['容器'] }, ctx),
+    ).createdIds
+    const [innerId] = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: containerId, texts: ['内部'] }, ctx),
+    ).createdIds
+    const text = textOutput(await runTool('aidea_view_read', { nodeId: '容器' }, ctx))
+    expect(text).toContain('内部')
+    // json 逃生口
+    const result = await runTool('aidea_view_read', { nodeId: containerId, format: 'json' }, ctx)
+    expect(result.ok).toBe(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = (result as any).output.payload as { viewedNodeId: string; nodes: unknown[]; chains: unknown[] }
+    expect(p.viewedNodeId).toBe(containerId)
+    expect(p.nodes).toHaveLength(1)
+    expect(p.chains).toHaveLength(0)
+    void innerId
+  })
+
+  it('node_get：坐标取整 + handle/displayName', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['精度节点'], layout: 'row', gap: 3 }, ctx),
+    ).createdIds
+    await runTool('aidea_node_move', { nodeIds: [ids[0]], mode: 'delta', dx: 10.6, dy: 20.4 }, ctx)
+    const result = await runTool('aidea_node_get', { nodeId: ids[0] }, ctx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const node = (result as any).output.payload.node as { handle: string; displayName: string; x: number; y: number }
+    expect(node.handle).toMatch(/^N\w{3,}$/)
+    expect(node.displayName).toBe('精度节点')
+    expect(node.x).toBe(11)
+    expect(node.y).toBe(20)
+  })
+})
+
+describe('写侧统一：句柄 / 名字 / 预设名', () => {
+  it('句柄寻址写入（读出的 handle 可直接回写）', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['目标'] }, ctx),
+    ).createdIds
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handle = ((await runTool('aidea_node_get', { nodeId: ids[0] }, ctx)) as any).output.payload.node.handle as string
+    const out = payload<{ applied: number }>(
+      await runTool('aidea_node_set_text', { updates: [{ nodeId: handle, text: '改名后' }] }, ctx),
+    )
+    expect(out.applied).toBe(1)
+    expect(useNodeStore().getNode(ids[0])?.text).toBe('改名后')
+  })
+
+  it('名字(2) 后缀寻址写入；同名第二个节点可区分', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['项目', '项目'] }, ctx),
+    ).createdIds
+    const out = payload<{ applied: number }>(
+      await runTool('aidea_node_set_text', { updates: [{ nodeId: '项目(2)', text: '第二个' }] }, ctx),
+    )
+    expect(out.applied).toBe(1)
+    expect(useNodeStore().getNode(ids[0])?.text).toBe('项目')
+    expect(useNodeStore().getNode(ids[1])?.text).toBe('第二个')
+  })
+
+  it('节点预设名写入（borderColor 接受名字，D3）', async () => {
+    const out = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['蓝色节点'], borderColor: 'Blue' }, ctx),
+    )
+    expect(useNodeStore().getNode(out.createdIds[0])?.borderColor.toLowerCase()).toBe('#3b82f6')
+  })
+
+  it('连线 preset 名建线 + patch preset 改样式', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['A', 'B'] }, ctx),
+    ).createdIds
+    const conn = payload<{ connectionId: string }>(
+      await runTool('aidea_connection_add', { parentId: 'root', fromNodeId: ids[0], toNodeId: ids[1], preset: 'Red Dashed' }, ctx),
+    ).connectionId
+    const nodeStore = useNodeStore()
+    const conn1 = nodeStore.findConnectionById(conn)?.connection
+    expect(conn1?.lineStyle).toBe('dashed')
+    expect(conn1?.strokeColor.toLowerCase()).toBe('#ef4444')
+
+    await runTool('aidea_connection_update', { connectionIds: [conn], patch: { preset: 'Green Plain' } }, ctx)
+    const conn2 = nodeStore.findConnectionById(conn)?.connection
+    expect(conn2?.directed).toBe(false)
+    expect(conn2?.strokeColor.toLowerCase()).toBe('#22c55e')
+  })
+
+  it('连线 C<n> 与 Nfrom>Nto 寻址删除', async () => {
+    const ids = payload<{ createdIds: string[] }>(
+      await runTool('aidea_node_create', { parentId: 'root', texts: ['A', 'B', 'C'] }, ctx),
+    ).createdIds
+    await runTool('aidea_connection_add', { parentId: 'root', fromNodeId: ids[0], toNodeId: ids[1] }, ctx)
+    await runTool('aidea_connection_add', { parentId: 'root', fromNodeId: ids[1], toNodeId: ids[2] }, ctx)
+    const out = payload<{ removed: number }>(
+      await runTool('aidea_connection_remove', { connectionIds: ['C2'] }, ctx),
+    )
+    expect(out.removed).toBe(1)
+    expect(useNodeStore().getConnections('root')).toHaveLength(1)
+    const handles = nodeHandles()
+    const pair = `N${handles.get(ids[0]!)}>N${handles.get(ids[1]!)}`
+    const out2 = payload<{ removed: number }>(
+      await runTool('aidea_connection_remove', { connectionIds: [pair] }, ctx),
+    )
+    expect(out2.removed).toBe(1)
+    expect(useNodeStore().getConnections('root')).toHaveLength(0)
+  })
+
+  it('预设名未命中 → ToolError 附候选，不误写', async () => {
+    const result = await runTool('aidea_node_create', { parentId: 'root', texts: ['X'], borderColor: '不存在的预设' }, ctx)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toContain('unknown node preset')
+    expect(useNodeStore().nodes.size).toBe(1) // 仅 root，未创建
   })
 })

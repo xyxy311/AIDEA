@@ -321,6 +321,7 @@
     "logsHint": "最近 {count} 条（新到旧）",
     "logsEmpty": "暂无调用记录",
     "tools.aidea_board_overview": "整板概览",
+    "tools.aidea_outline": "视图大纲",
     "tools.aidea_view_read": "读取视图文本",
     "tools.aidea_node_search": "搜索节点",
     "tools.aidea_node_get": "节点详情",

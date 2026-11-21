@@ -38,6 +38,7 @@ const USAGE = `AIDEA MCP 调试客户端（模拟 Agent 调用）
   init                       MCP 握手（initialize，显示 serverInfo / 协议版本）
   tools [--full]             列出工具清单（--full 输出完整 manifest JSON）
   call <tool> [json|@file]   调用工具；args 为内联 JSON 或 @路径.json，缺省 {}
+  outline [rootId] [depth]   = call aidea_outline（树状索引层，先大纲后细节）
   windows                    = call aidea_windows_list（列出窗口与 windowId）
   res                        resources/list（3 个 resource）
   read <uri>                 resources/read（如 aidea://view/current）
@@ -223,7 +224,7 @@ function tryParse(text) {
   }
 }
 
-/** MCP result（content 数组）→ 友好输出 */
+/** MCP result（content 数组）→ 友好输出；>2k 字符默认截断展示（--full 看原文） */
 async function printResult(result, flags) {
   const contents = result?.content ?? []
   if (result?.isError) console.log(c.red('✗ isError:true'))
@@ -241,8 +242,15 @@ async function printResult(result, flags) {
       }
       continue
     }
-    const parsed = tryParse(item.text)
-    console.log(parsed !== undefined ? JSON.stringify(parsed, null, 2) : item.text)
+    const raw = String(item.text ?? '')
+    const parsed = tryParse(raw)
+    const pretty = parsed !== undefined ? JSON.stringify(parsed, null, 2) : raw
+    if (pretty.length > 2000 && !flags.full) {
+      console.log(pretty.slice(0, 2000))
+      console.log(c.yellow(`…（共 ${pretty.length} 字符，截断展示；加 --full 查看全文）`))
+      continue
+    }
+    console.log(pretty)
   }
 }
 
@@ -427,6 +435,12 @@ async function dispatch(ctx, positional) {
     case 'init': return cmdInit(ctx)
     case 'tools': return cmdTools(ctx)
     case 'call': return cmdCall(ctx, rest)
+    case 'outline': {
+      const args = {}
+      if (rest[0]) args.rootId = rest[0]
+      if (rest[1]) args.depth = Number(rest[1])
+      return callAndPrint(ctx.endpoint, 'aidea_outline', args, ctx.flags, ctx.timeoutMs)
+    }
     case 'windows':
     case 'win': return callAndPrint(ctx.endpoint, 'aidea_windows_list', {}, ctx.flags, ctx.timeoutMs)
     case 'res':

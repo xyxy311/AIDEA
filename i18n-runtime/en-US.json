@@ -322,6 +322,7 @@
     "logsHint": "Last {count} calls (newest first)",
     "logsEmpty": "No calls yet",
     "tools.aidea_board_overview": "Board overview",
+    "tools.aidea_outline": "View outline",
     "tools.aidea_view_read": "Read view text",
     "tools.aidea_node_search": "Search nodes",
     "tools.aidea_node_get": "Node details",

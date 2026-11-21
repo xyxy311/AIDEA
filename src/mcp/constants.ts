@@ -9,16 +9,36 @@ export const MCP_TOOL_PREFIX = 'aidea_'
 /** 建节点/排布的默认间距（px） */
 export const MCP_LAYOUT_GAP = 24
 
-/** T2 视图读取默认与上限 */
-export const MCP_VIEW_READ_DEFAULT_MAX_NODES = 300
-export const MCP_VIEW_READ_MAX_NODES_CAP = 2000
+/** T0 outline 默认与上限 */
+export const MCP_OUTLINE_DEFAULT_DEPTH = 3
+export const MCP_OUTLINE_MAX_DEPTH = 10
+export const MCP_OUTLINE_DEFAULT_LIMIT = 50
+export const MCP_OUTLINE_MAX_LIMIT = 500
+/** 全叶子退化时列出的叶子名个数 */
+export const MCP_OUTLINE_LEAF_PREVIEW = 5
+
+/** T2 链式视图读取默认与上限 */
+export const MCP_CHAIN_DEFAULT_MAX_CHAINS = 40
+export const MCP_CHAIN_MAX_CHAINS_CAP = 200
+export const MCP_CHAIN_DEFAULT_UNLINKED_LIMIT = 20
+export const MCP_CHAIN_LABEL_MAX = 40
+/** includeLayout 行带段的节点上限 */
+export const MCP_LAYOUT_MAX_NODES = 300
 
 /** T4 搜索默认与上限 */
 export const MCP_SEARCH_DEFAULT_LIMIT = 50
 export const MCP_SEARCH_LIMIT_CAP = 200
 
-/** 截图默认与上限 */
-export const MCP_SCREENSHOT_DEFAULT_MAX_WIDTH = 1600
+/** 内置默认连线样式（四元组全等才省略边段样式名；与 src/constants/index.ts DEFAULT_* 一致） */
+export const MCP_DEFAULT_CONN_STYLE = {
+  lineStyle: 'solid',
+  strokeWidth: 2,
+  strokeColor: '#6b7280',
+  directed: true,
+} as const
+
+/** 截图默认与上限（小图快查：图会留在上下文里） */
+export const MCP_SCREENSHOT_DEFAULT_MAX_WIDTH = 1024
 export const MCP_SCREENSHOT_MAX_WIDTH_CAP = 4000
 
 /** renderer 侧护栏（对应 limits 默认值；超限返回结构化错误） */

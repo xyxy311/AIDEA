@@ -31,9 +31,10 @@ export interface McpToolContext {
   inBatch: boolean
 }
 
-/** 工具 handler 输出：json 载荷（host 包 content text）或 image（截图）；isError 用于结构化失败（如 batch 首错回滚） */
+/** 工具 handler 输出：json 载荷（host 包 content text）、text 纯文本（读侧新格式）或 image（截图）；isError 用于结构化失败（如 batch 首错回滚） */
 export type McpToolOutput =
   | { kind: 'json'; payload: unknown; isError?: boolean }
+  | { kind: 'text'; text: string; isError?: boolean }
   | { kind: 'image'; data: string; mimeType: string }
 
 /** 工具定义（登记表条目） */

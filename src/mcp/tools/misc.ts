@@ -9,7 +9,7 @@ import { useHistoryStore } from '@/stores/history'
 import { adapter } from '@/plugin/adapter'
 import { MCP_LIMITS, MCP_SCREENSHOT_DEFAULT_MAX_WIDTH, MCP_SCREENSHOT_MAX_WIDTH_CAP } from '../constants'
 import type { McpToolDef, McpToolOutput } from '../types'
-import { ToolError, requireNode, schema } from './shared'
+import { ToolError, resolveNodeRef, schema } from './shared'
 import { findTool } from '../registry'
 
 // konva 惰性加载：registry 链路（含纯函数单测）不因 import 本文件而触发 konva 的 node 入口
@@ -24,7 +24,7 @@ const tagApply: McpToolDef = {
   inputSchema: schema({
     type: 'object',
     properties: {
-      nodeIds: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1 },
+      nodeIds: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1, description: 'Node refs (handle N<code>, name or id).' },
       tagNames: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1 },
       mode: { type: 'string', enum: ['append', 'replace'], description: 'Default "append".' },
     },
@@ -36,10 +36,9 @@ const tagApply: McpToolDef = {
     const nodeStore = useNodeStore()
     const api = adapter.api
     const commands = useCommands()
-    const ids = args.nodeIds as string[]
+    const ids = (args.nodeIds as string[]).map((ref) => resolveNodeRef(ref).id)
     const tagNames = args.tagNames as string[]
     const mode = typeof args.mode === 'string' ? args.mode : 'append'
-    for (const id of ids) requireNode(id)
 
     // 缺失标签先建（定义层，不可撤销）；重名精确匹配复用
     const existing = api.tag.list()
@@ -90,15 +89,14 @@ const viewSwitch: McpToolDef = {
   inputSchema: schema({
     type: 'object',
     properties: {
-      nodeId: { type: 'string', minLength: 1 },
+      nodeId: { type: 'string', minLength: 1, description: 'Node ref: handle N<code>, name or full id.' },
     },
     required: ['nodeId'],
     additionalProperties: false,
   }),
   risk: 'write',
   handler: (args) => {
-    const nodeId = String(args.nodeId)
-    requireNode(nodeId)
+    const nodeId = resolveNodeRef(String(args.nodeId)).id
     adapter.api.view.switch(nodeId)
     return { kind: 'json', payload: { viewedNodeId: nodeId, isMain: nodeId === ROOT_NODE_ID } }
   },
@@ -275,12 +273,12 @@ const screenshot: McpToolDef = {
   name: 'aidea_screenshot',
   title: 'mcp.tools.aidea_screenshot',
   description:
-    'Capture the canvas as a PNG image so you can see it. mode "viewport" (default) captures the current visible viewport; mode "board" captures the bounding box of all nodes. maxWidth caps the output width in pixels (default 1600).',
+    'Capture the canvas as a PNG image so you can see it. mode "viewport" (default) captures the current visible viewport; mode "board" captures the bounding box of all nodes. maxWidth caps the output width in pixels (default 1024 — images stay in context, keep them small).',
   inputSchema: schema({
     type: 'object',
     properties: {
       mode: { type: 'string', enum: ['viewport', 'board'], description: 'Default "viewport".' },
-      maxWidth: { type: 'integer', minimum: 200, maximum: MCP_SCREENSHOT_MAX_WIDTH_CAP, description: 'Default 1600.' },
+      maxWidth: { type: 'integer', minimum: 200, maximum: MCP_SCREENSHOT_MAX_WIDTH_CAP, description: 'Default 1024.' },
     },
     additionalProperties: false,
   }),

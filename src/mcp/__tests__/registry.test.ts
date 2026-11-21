@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { RESOURCES, TOOLS, findTool, runTool } from '../registry'
 
 describe('TOOLS 登记表契约', () => {
-  it('恰好 21 个工具（T1–T21）', () => {
-    expect(TOOLS).toHaveLength(21)
+  it('恰好 22 个工具（T0–T21）', () => {
+    expect(TOOLS).toHaveLength(22)
   })
 
   it('名称统一 aidea_ 前缀且唯一', () => {

@@ -10,8 +10,18 @@ import { adapter } from '@/plugin/adapter'
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from '@/constants'
 import { MCP_LAYOUT_GAP, MCP_LIMITS } from '../constants'
 import type { McpToolDef } from '../types'
-import { ToolError, nodeSnapshot, requireNode, schema } from './shared'
-import { connectionSnapshot } from './board'
+import {
+  ToolError,
+  connectionSnapshot,
+  handleToken,
+  nodeHandles,
+  nodeSnapshot,
+  resolveNodeRef,
+  resolvePresetColor,
+  schema,
+  siblingDisplayNames,
+  uniqueNameOf,
+} from './shared'
 import type { WhiteboardNode } from '@/types'
 
 /** 现有子节点包围盒（无子节点返回 null） */
@@ -66,11 +76,11 @@ const nodeGet: McpToolDef = {
   name: 'aidea_node_get',
   title: 'mcp.tools.aidea_node_get',
   description:
-    'Get one node in detail: full node fields, parent id, path to root (first lines), children snapshots, sibling connections, tag ids and reference name.',
+    'Get one node in detail (three-layer read model, detail layer): full node fields with integer geometry, parent id, handle and unique display name, path to root (first lines), children snapshots, sibling connections, tag ids and reference name. nodeId accepts a handle N<code>, unique name or full id.',
   inputSchema: schema({
     type: 'object',
     properties: {
-      nodeId: { type: 'string', minLength: 1 },
+      nodeId: { type: 'string', minLength: 1, description: 'Node ref: handle N<code>, unique name or full id.' },
     },
     required: ['nodeId'],
     additionalProperties: false,
@@ -78,32 +88,36 @@ const nodeGet: McpToolDef = {
   risk: 'read',
   handler: (args) => {
     const nodeStore = useNodeStore()
-    const nodeId = String(args.nodeId)
-    const n = requireNode(nodeId)
+    const n = resolveNodeRef(String(args.nodeId))
+    const handles = nodeHandles()
+    const kids = nodeStore.childrenOf(n.id)
+    const kidNames = siblingDisplayNames(kids)
     const parent = n.parentId ? nodeStore.getNode(n.parentId) : null
     return {
       kind: 'json',
       payload: {
         node: {
           id: n.id,
+          handle: handleToken(handles, n.id),
+          displayName: uniqueNameOf(n),
           parentId: n.parentId,
-          x: n.x,
-          y: n.y,
-          width: n.width,
-          height: n.height,
+          x: Math.round(n.x),
+          y: Math.round(n.y),
+          width: Math.round(n.width),
+          height: Math.round(n.height),
           text: n.text,
           borderColor: n.borderColor,
           tagIds: [...n.tagIds],
         },
         parentId: n.parentId,
         pathToRoot: nodeStore
-          .pathToRoot(nodeId)
+          .pathToRoot(n.id)
           .reverse()
           .map((id) => nodeStore.getNode(id)?.text.split('\n')[0]?.trim() ?? ''),
-        children: nodeStore.childrenOf(nodeId).map(nodeSnapshot),
+        children: kids.map((k) => nodeSnapshot(k, { handle: handleToken(handles, k.id), displayName: kidNames.get(k.id) })),
         connections: (parent?.connections ?? []).map(connectionSnapshot),
         tagIds: [...n.tagIds],
-        referenceName: nodeStore.referenceableNodes().find((r) => r.nodeId === nodeId)?.name ?? null,
+        referenceName: nodeStore.referenceableNodes().find((r) => r.nodeId === n.id)?.name ?? null,
       },
     }
   },
@@ -117,7 +131,7 @@ const nodeCreate: McpToolDef = {
   inputSchema: schema({
     type: 'object',
     properties: {
-      parentId: { type: 'string', minLength: 1 },
+      parentId: { type: 'string', minLength: 1, description: 'Parent node ref (handle N<code>, name or id).' },
       texts: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: MCP_LIMITS.maxNodesPerCreate, description: 'One entry per node (multi-line allowed via \\n).' },
       layout: { type: 'string', enum: ['auto', 'grid', 'row'], description: 'Default "auto".' },
       gap: { type: 'number', minimum: 0, maximum: 500, description: 'Spacing between created nodes. Default 24.' },
@@ -128,7 +142,8 @@ const nodeCreate: McpToolDef = {
         additionalProperties: false,
         description: 'Explicit origin overriding auto placement.',
       },
-      borderColor: { type: 'string', description: 'Node border color (hex, e.g. "#d1d5db"). Optional.' },
+      borderColor: { type: 'string', description: 'Node border color: hex (e.g. "#d1d5db") or a node preset name (e.g. "Blue"). Optional.' },
+      preset: { type: 'string', description: 'Node preset name applied to borderColor (alias of passing the name in borderColor). Optional.' },
     },
     required: ['parentId', 'texts'],
     additionalProperties: false,
@@ -136,15 +151,18 @@ const nodeCreate: McpToolDef = {
   risk: 'write',
   handler: (args, ctx) => {
     const nodeStore = useNodeStore()
-    const parentId = String(args.parentId)
-    requireNode(parentId)
+    const parent = resolveNodeRef(String(args.parentId))
+    const parentId = parent.id
     const texts = args.texts as string[]
     if (texts.length > MCP_LIMITS.maxNodesPerCreate) {
       throw new ToolError(`too many nodes: ${texts.length} > maxNodesPerCreate ${MCP_LIMITS.maxNodesPerCreate}`)
     }
     const layout = (typeof args.layout === 'string' ? args.layout : 'auto') as 'auto' | 'grid' | 'row'
     const gap = typeof args.gap === 'number' ? args.gap : MCP_LAYOUT_GAP
-    const borderColor = typeof args.borderColor === 'string' ? args.borderColor : undefined
+    // 预设名 → 色（D3）；borderColor 显式传入时优先
+    const presetColor = typeof args.preset === 'string' ? resolvePresetColor(args.preset) : undefined
+    const borderColor =
+      typeof args.borderColor === 'string' ? resolvePresetColor(args.borderColor) : presetColor
     const base = layoutBase(nodeStore.childrenOf(parentId), args.startAt as { x: number; y: number } | undefined, gap)
     const positions = layoutPositions(base, texts.length, layout, gap)
 
@@ -197,13 +215,20 @@ const nodeSetText: McpToolDef = {
       let applied = 0
       const conflicts: Array<{ nodeId: string; conflictRef: string }> = []
       for (const u of updates) {
-        if (!useNodeStore().getNode(u.nodeId)) {
-          conflicts.push({ nodeId: u.nodeId, conflictRef: `node not found: ${u.nodeId}` })
+        // 引用解析失败不致命：记入 conflicts（与引用名冲突同通道）
+        let target: WhiteboardNode | null = null
+        try {
+          target = resolveNodeRef(u.nodeId)
+        } catch {
+          target = null
+        }
+        if (!target) {
+          conflicts.push({ nodeId: u.nodeId, conflictRef: `node ref not found: ${u.nodeId}` })
           continue
         }
-        const res = api.setNodeText(u.nodeId, u.text)
+        const res = api.setNodeText(target.id, u.text)
         if (res.ok) applied++
-        else conflicts.push({ nodeId: u.nodeId, conflictRef: res.conflictRef ?? 'conflict' })
+        else conflicts.push({ nodeId: target.id, conflictRef: res.conflictRef ?? 'conflict' })
       }
       return { applied, conflicts }
     }
@@ -236,8 +261,9 @@ const nodeDelete: McpToolDef = {
   risk: 'danger',
   handler: (args) => {
     const nodeStore = useNodeStore()
-    const ids = args.nodeIds as string[]
-    for (const id of ids) requireNode(id)
+    const refs = args.nodeIds as string[]
+    // 入口统一解析（句柄/名字/id）；任一失败整体报错，不做"猜"
+    const ids = refs.map((ref) => resolveNodeRef(ref).id)
     // 子树展开计数（去重：祖先与后代同时入选时按后代一次计）
     const expanded = new Set<string>()
     for (const id of ids) for (const d of nodeStore.descendantsOf(id)) expanded.add(d)
@@ -281,8 +307,7 @@ const nodeMove: McpToolDef = {
     const commands = useCommands()
     const nodeApi = adapter.api.node
     const mode = String(args.mode)
-    const ids = args.nodeIds as string[]
-    for (const id of ids) requireNode(id)
+    const ids = (args.nodeIds as string[]).map((ref) => resolveNodeRef(ref).id)
 
     if (mode === 'delta') {
       const dx = typeof args.dx === 'number' ? args.dx : 0
@@ -290,11 +315,13 @@ const nodeMove: McpToolDef = {
       nodeApi.move(ids, { dx, dy })
       return { kind: 'json', payload: { moved: ids.length } }
     }
-    const positions = args.positions as Array<{ nodeId: string; x: number; y: number }>
-    if (!Array.isArray(positions) || positions.length === 0) {
+    const positions = (args.positions as Array<{ nodeId: string; x: number; y: number }> | undefined)?.map((p) => ({
+      ...p,
+      nodeId: resolveNodeRef(p.nodeId).id,
+    }))
+    if (!positions || positions.length === 0) {
       throw new ToolError('mode "absolute" requires positions[{nodeId,x,y}]')
     }
-    for (const p of positions) requireNode(p.nodeId)
     const moveAbsolute = (): number => {
       let moved = 0
       for (const p of positions) {
@@ -326,7 +353,7 @@ const nodeArrange: McpToolDef = {
   inputSchema: schema({
     type: 'object',
     properties: {
-      parentId: { type: 'string', minLength: 1 },
+      parentId: { type: 'string', minLength: 1, description: 'Node ref (handle/name/id) whose children get re-arranged.' },
       arrangement: { type: 'string', enum: ['grid', 'row', 'column'] },
       gap: { type: 'number', minimum: 0, maximum: 500, description: 'Default 24.' },
       includeConnections: { type: 'boolean', description: 'Reserved; connections follow their nodes automatically.' },
@@ -339,8 +366,8 @@ const nodeArrange: McpToolDef = {
     const nodeStore = useNodeStore()
     const commands = useCommands()
     const nodeApi = adapter.api.node
-    const parentId = String(args.parentId)
-    requireNode(parentId)
+    const parent = resolveNodeRef(String(args.parentId))
+    const parentId = parent.id
     const arrangement = String(args.arrangement) as 'grid' | 'row' | 'column'
     const gap = typeof args.gap === 'number' ? args.gap : MCP_LAYOUT_GAP
     const children = nodeStore.childrenOf(parentId)
@@ -396,8 +423,8 @@ const nodeReparent: McpToolDef = {
   inputSchema: schema({
     type: 'object',
     properties: {
-      nodeIds: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1 },
-      newParentId: { type: 'string', minLength: 1 },
+      nodeIds: { type: 'array', items: { type: 'string', minLength: 1 }, minItems: 1, description: 'Node refs (handle/name/id).' },
+      newParentId: { type: 'string', minLength: 1, description: 'New parent node ref (handle/name/id).' },
       position: {
         type: 'object',
         properties: { x: { type: 'number' }, y: { type: 'number' } },
@@ -411,10 +438,10 @@ const nodeReparent: McpToolDef = {
   }),
   risk: 'write',
   handler: (args) => {
-    const ids = args.nodeIds as string[]
-    const newParentId = String(args.newParentId)
-    requireNode(newParentId)
-    for (const id of ids) requireNode(id)
+    const refs = args.nodeIds as string[]
+    const newParent = resolveNodeRef(String(args.newParentId))
+    const ids = refs.map((ref) => resolveNodeRef(ref).id)
+    const newParentId = newParent.id
     const pos = args.position as { x: number; y: number } | undefined
     useCommands().reparentTo(ids, newParentId, pos ? new Map(ids.map((id) => [id, { x: pos.x, y: pos.y }])) : new Map())
     return { kind: 'json', payload: {} }
@@ -437,8 +464,7 @@ const nodeGroup: McpToolDef = {
   }),
   risk: 'write',
   handler: (args, ctx) => {
-    const ids = args.nodeIds as string[]
-    for (const id of ids) requireNode(id)
+    const ids = (args.nodeIds as string[]).map((ref) => resolveNodeRef(ref).id)
     const commands = useCommands()
     const title = typeof args.title === 'string' ? args.title : undefined
     const run = (): string => {

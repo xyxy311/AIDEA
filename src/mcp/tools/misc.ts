@@ -3,11 +3,17 @@
  * T19 标签清单 / T20 截图 / T21 窗口清单（main 本地应答，仅登记清单）。
  */
 import { ROOT_NODE_ID, useNodeStore } from '@/stores/node'
+import { useProjectStore } from '@/stores/project'
 import { useViewStore } from '@/stores/view'
 import { useCommands } from '@/composables/useCommands'
 import { useHistoryStore } from '@/stores/history'
 import { adapter } from '@/plugin/adapter'
-import { MCP_LIMITS, MCP_SCREENSHOT_DEFAULT_MAX_WIDTH, MCP_SCREENSHOT_MAX_WIDTH_CAP } from '../constants'
+import {
+  MCP_LIMITS,
+  MCP_SCREENSHOT_DEFAULT_MAX_WIDTH,
+  MCP_SCREENSHOT_MAX_WIDTH_CAP,
+} from '../constants'
+import { capturePixelRatio, parseWorldRect, worldBoundsOf, worldToScreenRect, type StageLike } from '../screenshot'
 import type { McpToolDef, McpToolOutput } from '../types'
 import { ToolError, resolveNodeRef, schema } from './shared'
 import { findTool } from '../registry'
@@ -240,15 +246,14 @@ const tagList: McpToolDef = {
 
 // ── T20 screenshot ──
 
-/** konva 结构化最小类型（规避 konva 包类型入口对 Stage/stages 的导出差异，零类型耦合） */
-interface StageLike {
-  width(): number
-  height(): number
-  container(): HTMLElement | null
-  toDataURL(config: { pixelRatio?: number; x?: number; y?: number; width?: number; height?: number }): string
-}
 interface KonvaLike {
   stages: StageLike[]
+}
+
+/** 动态加载 konva 并归一化为默认导出（CJS 互操作下 import 命名空间无 stages，stages 在默认导出对象上） */
+async function loadKonva(): Promise<KonvaLike> {
+  const mod = (await import('konva')) as unknown as { default?: KonvaLike }
+  return mod.default ?? (mod as unknown as KonvaLike)
 }
 
 /** 定位主视图 Konva stage：主视图容器元素由 view store 持有（CanvasStage 注册） */
@@ -258,58 +263,57 @@ function findMainStage(Konva: KonvaLike): StageLike | null {
   return Konva.stages.find((s) => s.container()?.parentElement === container) ?? null
 }
 
-/** 按 maxWidth 上限与总像素上限计算 capture pixelRatio */
-function capturePixelRatio(captureWidth: number, captureHeight: number, maxWidth: number): number {
-  let ratio = Math.min(2, maxWidth / Math.max(captureWidth, 1))
-  const maxPixels = 16_000_000
-  const pixels = captureWidth * captureHeight
-  if (pixels * ratio * ratio > maxPixels) {
-    ratio = Math.sqrt(maxPixels / pixels)
-  }
-  return Math.max(ratio, 0.05)
-}
-
 const screenshot: McpToolDef = {
   name: 'aidea_screenshot',
   title: 'mcp.tools.aidea_screenshot',
   description:
-    'Capture the canvas as a PNG image so you can see it. mode "viewport" (default) captures the current visible viewport; mode "board" captures the bounding box of all nodes. maxWidth caps the output width in pixels (default 1024 — images stay in context, keep them small).',
+    'Capture the canvas as a PNG image so you can see it. mode "viewport" (default) captures the current visible viewport; mode "board" captures the bounding box of all nodes in the current view, independent of the viewport pan/zoom. worldRect {x, y, width, height} in current-view world coordinates captures an arbitrary region and takes precedence over mode. maxWidth caps the output width in pixels (default 1024 — images stay in context, keep them small).',
   inputSchema: schema({
     type: 'object',
     properties: {
-      mode: { type: 'string', enum: ['viewport', 'board'], description: 'Default "viewport".' },
+      mode: { type: 'string', enum: ['viewport', 'board'], description: 'Default "viewport". Ignored when worldRect is given.' },
+      worldRect: {
+        type: 'object',
+        description: 'Region to capture, in current-view world coordinates (overrides mode).',
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          width: { type: 'number', minimum: 1 },
+          height: { type: 'number', minimum: 1 },
+        },
+        required: ['x', 'y', 'width', 'height'],
+        additionalProperties: false,
+      },
       maxWidth: { type: 'integer', minimum: 200, maximum: MCP_SCREENSHOT_MAX_WIDTH_CAP, description: 'Default 1024.' },
     },
     additionalProperties: false,
   }),
   risk: 'read',
   handler: async (args) => {
-    const Konva = (await import('konva')) as unknown as KonvaLike
+    const Konva = await loadKonva()
     const stage = findMainStage(Konva)
     if (!stage) throw new ToolError('canvas stage is not available (window not rendered?)')
-    if (stage.width() <= 0 || stage.height() <= 0) throw new ToolError('canvas has zero size (window minimized or hidden?)')
     const mode = typeof args.mode === 'string' ? args.mode : 'viewport'
     const maxWidth = typeof args.maxWidth === 'number' ? args.maxWidth : MCP_SCREENSHOT_DEFAULT_MAX_WIDTH
+    const worldRect = parseWorldRect(args.worldRect)
 
     let capture: { x?: number; y?: number; width: number; height: number }
-    if (mode === 'board') {
-      const nodeStore = useNodeStore()
-      let minX = Infinity
-      let minY = Infinity
-      let maxX = -Infinity
-      let maxY = -Infinity
-      for (const n of nodeStore.nodes.values()) {
-        if (n.parentId === null) continue
-        minX = Math.min(minX, n.x)
-        minY = Math.min(minY, n.y)
-        maxX = Math.max(maxX, n.x + n.width)
-        maxY = Math.max(maxY, n.y + n.height)
-      }
-      if (!Number.isFinite(minX)) throw new ToolError('board is empty (no nodes)')
-      capture = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+    if (worldRect) {
+      capture = worldToScreenRect(stage, worldRect)
+    } else if (mode === 'board') {
+      // 包围盒仅取当前主视图渲染的节点（childrenOf(currentNodeId)）；子视图（内联）节点坐标
+      // 属各自视图空间，不参与。toDataURL 按 Stage 屏幕坐标裁剪，须先做世界→屏幕换算。
+      const project = useProjectStore()
+      const bounds = worldBoundsOf(useNodeStore().childrenOf(project.currentNodeId))
+      if (!bounds) throw new ToolError('current view is empty (no nodes)')
+      capture = worldToScreenRect(stage, bounds)
     } else {
+      if (stage.width() <= 0 || stage.height() <= 0) {
+        throw new ToolError('canvas has zero size (window minimized or hidden?)')
+      }
       capture = { width: stage.width(), height: stage.height() }
     }
+    if (capture.width <= 0 || capture.height <= 0) throw new ToolError('capture region has zero size')
 
     const pixelRatio = capturePixelRatio(capture.width, capture.height, maxWidth)
     const dataUrl = stage.toDataURL({ ...capture, pixelRatio })

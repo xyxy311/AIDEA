@@ -49,7 +49,7 @@ components/  canvas（WhiteboardCanvas/WhiteboardNode/WhiteboardConnection/Canva
 | 插件系统 | 适配层是稳定 SDK（只增不改）；load-collection 是唯一可变点 | `插件系统.md` |
 | 插件 UI 注册 | uiRegistry 品类表驱动面板/按钮；`${pluginId}:${id}` 键规范化 | `插件UI注册.md` |
 | 插件模态面板 | 插件面板经 DockPanel 外包错误边界；浮窗/模态外壳 | `插件模态面板.md` |
-| Agent MCP 接入 | 外部 AI Agent 经 MCP（本地 Streamable HTTP）读写项目；工具面 21 个，写经 useCommands 可撤销 | `Agent-MCP接入.md` |
+| Agent MCP 接入 | 外部 AI Agent 经 MCP（本地 Streamable HTTP）读写项目；工具面 22 个（三层读模型：outline → view_read → node_get），写经 useCommands 可撤销 | `Agent-MCP接入.md` |
 
 ## 主要模块连接
 

@@ -40,6 +40,8 @@ export const MCP_DEFAULT_CONN_STYLE = {
 /** 截图默认与上限（小图快查：图会留在上下文里） */
 export const MCP_SCREENSHOT_DEFAULT_MAX_WIDTH = 1024
 export const MCP_SCREENSHOT_MAX_WIDTH_CAP = 4000
+/** 截图画布单边设备像素上限（Chromium canvas 尺寸限制，超过会渲染失败） */
+export const MCP_SCREENSHOT_MAX_EDGE_PX = 16384
 
 /** renderer 侧护栏（对应 limits 默认值；超限返回结构化错误） */
 export const MCP_LIMITS = {

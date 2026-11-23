@@ -42,8 +42,9 @@ const USAGE = `AIDEA MCP 调试客户端（模拟 Agent 调用）
   windows                    = call aidea_windows_list（列出窗口与 windowId）
   res                        resources/list（3 个 resource）
   read <uri>                 resources/read（如 aidea://view/current）
-  shot [--board] [--max-width n] [--out <png>]
-                             = call aidea_screenshot；返回的 PNG 存到 --out（默认 ./mcp-shot-<时间戳>.png）
+  shot [--board] [--rect x,y,w,h] [--max-width n] [--out <png>]
+                             = call aidea_screenshot；--rect 为当前视图世界坐标区域（x,y,width,height，
+                               逗号分隔，优先于 --board）；返回的 PNG 存到 --out（默认 ./mcp-shot-<时间戳>.png）
   demo                       模拟一次 Agent 小流程：ping→init→tools→windows→overview→截图
   repl                       交互模式（逐条输入上述命令；exit 退出）
   help                       本帮助
@@ -67,13 +68,14 @@ const USAGE = `AIDEA MCP 调试客户端（模拟 Agent 调用）
   node tools/mcp-cli.mjs call aidea_node_create '{"parentId":"root","texts":["想法A","想法B"]}'
   node tools/mcp-cli.mjs call aidea_batch @batch.json        # args 较大时用文件
   node tools/mcp-cli.mjs shot --board --out shot.png
+  node tools/mcp-cli.mjs shot --rect 100,200,800,600 --out region.png   # 指定世界坐标区域
   node tools/mcp-cli.mjs repl
 `
 
 // ── 参数解析 ──
 
 const BOOL_FLAGS = new Set(['raw', 'full', 'board', 'show-token', 'help'])
-const VALUE_FLAGS = new Set(['port', 'token', 'config', 'url', 'timeout', 'out', 'max-width'])
+const VALUE_FLAGS = new Set(['port', 'token', 'config', 'url', 'timeout', 'out', 'max-width', 'rect'])
 
 function parseArgs(argv) {
   const flags = {}
@@ -296,7 +298,8 @@ async function parseCallArgs(raw) {
   if (raw.startsWith('@')) {
     const file = raw.slice(1)
     try {
-      return JSON.parse(await fs.readFile(file, 'utf8'))
+      // 容错 UTF-8 BOM（Windows PowerShell 写文件默认带 BOM，JSON.parse 会直接失败）
+      return JSON.parse((await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, ''))
     } catch (err) {
       throw new CliError(`无法读取参数文件 ${file}：${err.message}`)
     }
@@ -304,13 +307,23 @@ async function parseCallArgs(raw) {
   try {
     return JSON.parse(raw)
   } catch (err) {
-    throw new CliError(`args 不是合法 JSON：${err.message}（内联 JSON 建议用 @file 代替）`)
+    throw new CliError(`args 不是合法 JSON：${err.message}（PowerShell 内联 JSON 引号需写成 '{\\"mode\\":\\"board\\"}'，或用 @file）`)
   }
 }
 
 async function cmdCall(ctx, positional) {
   const tool = positional[0]
   if (!tool) throw new CliError('用法：call <tool> [json|@file]')
+  // --board/--rect/--max-width 只对 shot 命令生效；call 收到说明用户想传工具参数——
+  // 静默忽略会导致截图退化为视口，必须报错指路
+  const dropped = ['board', 'rect', 'max-width'].filter((k) => ctx.flags[k] !== undefined)
+  if (dropped.length > 0) {
+    throw new CliError(
+      `--${dropped.join('/--')} 仅 shot 命令支持，call 不会把它们传给工具——` +
+        `截图请用 shot（如 node tools/mcp-cli.mjs shot --board --out 1.png），` +
+        `或把参数写进内联 JSON / @file（如 '{\\"mode\\":\\"board\\"}'）`,
+    )
+  }
   const args = await parseCallArgs(positional[1])
   await callAndPrint(ctx.endpoint, tool, args, ctx.flags, ctx.timeoutMs)
 }
@@ -337,9 +350,23 @@ async function cmdRead(ctx, positional) {
   console.log(c.dim(`(${elapsed}ms)`))
 }
 
+/** --rect x,y,width,height（当前视图世界坐标，逗号分隔）→ worldRect；发包前先校验 */
+function parseRectFlag(raw) {
+  const parts = raw.split(',').map((s) => Number(s.trim()))
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+    throw new CliError(`--rect 需要 4 个逗号分隔数字：x,y,width,height（如 --rect 100,200,800,600），收到 "${raw}"`)
+  }
+  const [x, y, width, height] = parts
+  if (width <= 0 || height <= 0) throw new CliError('--rect 的 width/height 必须 > 0')
+  return { x, y, width, height }
+}
+
 async function cmdShot(ctx) {
+  // --rect 优先于 --board（与工具端 worldRect > mode 语义一致），两者同时给出时省略 mode
+  const worldRect = ctx.flags.rect !== undefined ? parseRectFlag(ctx.flags.rect) : null
   const args = {
-    ...(ctx.flags.board ? { mode: 'board' } : {}),
+    ...(ctx.flags.board && !worldRect ? { mode: 'board' } : {}),
+    ...(worldRect ? { worldRect } : {}),
     ...(ctx.flags['max-width'] ? { maxWidth: Number(ctx.flags['max-width']) } : {}),
   }
   const out = ctx.flags.out ?? path.join(process.cwd(), `mcp-shot-${Date.now()}.png`)

@@ -1,10 +1,10 @@
 # Agent MCP 接入
 
-AIDEA 内置一个 **MCP 服务器**（本地 Streamable HTTP），任意 MCP 客户端（Claude Code / Claude Desktop / Cursor / VS Code / MCP Inspector 等）可以读取并修改当前打开的项目：查整板结构、按视图读文本、批量建节点与连线、打标签、切换视图、undo/redo、截图画布。
+AIDEA 内置一个 **MCP 服务器**（本地 Streamable HTTP），任意 MCP 客户端（Claude Code / Claude Desktop / Cursor / VS Code / MCP Inspector 等）可以读取并修改当前打开的项目：查整板结构、按「大纲 → 视图 → 单节点」三层读、批量建节点与连线、打标签、切换视图、undo/redo、截图画布。
 
 - 每一次 AI 改动都**可撤销**（写路径统一经命令层，一次工具调用 = 一条历史，用户 Ctrl+Z 或模型调 `aidea_history` 均可回退）。
 - 零安装、随 app 分发：设置里打开开关，复制一行客户端配置即可用。
-- 决策定稿见 `plan/Agent-MCP接入方案.md`。
+- 决策定稿见 `plan/Agent-MCP接入方案.md`；读侧改版定稿见 `plan/Agent-MCP读接口改版方案.md`。
 
 ---
 
@@ -84,18 +84,43 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 - 传输：**本地 Streamable HTTP**（无状态），JSON-RPC 2.0，单 JSON 响应（无 SSE 流）；`notifications/*` 返回 202。
 - 方法面：`initialize` / `tools/list` / `tools/call` / `resources/list` / `resources/read` / `ping`。`tools/list` 恒定不随连接变化（无状态修订语义）。
-- 工具结果统一为 `content: [{ type: 'text', text: <JSON 字符串> }]`（截图例外，返回 image content）。
+- 工具结果统一为 `content: [{ type: 'text', text }]`（截图例外，返回 image content）。json 形工具的 `text` 为 JSON 字符串；读侧文本工具（`aidea_outline`、`aidea_view_read` 默认格式、`aidea://view/current`）直接返回**纯文本**（链式文本/大纲文本），不再包 JSON。
 - 失败一律 `isError: true` + 单行英文错误文本，不抛裸异常。
 - **undoHint**：写工具成功且产生了历史时，返回载荷附带 `undoHint`（如 "Added 1 undoable history entry; revert with aidea_history {action:\"undo\"} or the user's Ctrl+Z."）。模型可主动撤销，或提示用户 Ctrl+Z。
 - 所有工具均接受可选 `windowId`（见 §1.3）。
 
 ---
 
-## 3. 工具参考（21 个）
+## 3. 工具参考（22 个）
 
 风险分级：**读**（只读）/ **写**（可撤销写）/ **破坏性**（写且删除内容；描述内含安全指引，仅在用户明确要求时使用）。
 
-### 3.1 读（T1–T4）
+读侧为**三层读模型**（见 `plan/Agent-MCP读接口改版方案.md`）：**索引层** `aidea_outline`（树状大纲）→ **内容层** `aidea_view_read`（链式文本）→ **详情层** `aidea_node_get`（单节点全文与精确几何）。大板先 outline 决定要读哪个子视图，再 view_read 该视图，最后 node_get 取单节点细节。
+
+### 3.1 读（T0–T4）
+
+#### T0 `aidea_outline`（读）—— 树状大纲（索引层）
+
+入参：
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `rootId` | string | 项目根 | 子树根（句柄 `N<code>` / 唯一显示名 / 完整 id） |
+| `depth` | integer 1–10 | `3` | 展开的子层深度 |
+| `limit` | integer 1–500 | `50` | 输出行数上限（超限置 truncated 并提示用 `rootId` 下钻） |
+| `includeAdditions` | boolean | `false` | 在根行列出插件扩展数据的**键名**（值属插件私有，不暴露） |
+| `includeStyles` / `includeTags` | boolean | `true` | 样式名 / 标签名槽位 |
+
+返回（纯文本）：
+
+```
+OUTLINE /未命名项目  (深度 3 · 50 行上限)
+ROOT Nroo 未命名项目  (+19 子, +19 叶)
+  Nabc A 关卡设计 | 主线节点 | 简单  (+3 子, +4 叶)
+  Ndef B 备注 | 注释
+```
+
+规则：容器行带 `(+K 子, +L 叶)`；叶子默认只计数不列行——例外是某父的子节点**全部**是叶子时列前 5 个叶子名（防"整棵退化成空"）；不输出坐标（几何留给详情层）。句柄与 view_read 同源（全局唯一），可直接传给写工具。
 
 #### T1 `aidea_board_overview`（读）—— 一次调用建立心智模型
 
@@ -120,28 +145,60 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 用途：后续工具引用的 tag id / preset id / 当前视图节点 id 都在这里拿。
 
-#### T2 `aidea_view_read`（读）—— 读一个视图的结构化文本
+#### T2 `aidea_view_read`（读）—— 读一个视图的链式文本（内容层）
 
 入参：
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `nodeId` | string | 当前视图 | 读该节点的直接子级视图 |
-| `includeIds` | boolean | `true` | 单元格带 `[nodeId]` 前缀（模型可直接引用 id 调其它工具） |
-| `includeCoordinates` | boolean | `false` | 单元格带 `[x,y]` 坐标前缀 |
-| `maxNodes` | integer 1–2000 | `300` | 编入文本的最大节点数（超出截断） |
+| `nodeId` | string | 当前视图 | 视图容器节点（句柄 / 名字 / 完整 id） |
+| `label` | `'first' \| 'full'` | `'first'` | `first` = 首行 + `(+K行)` 标记；`full` = 全文 `\n` 转义 |
+| `labelMax` | integer 10–200 | `40` | 超长标签截断加 `…` |
+| `includeCoords` / `includeTags` / `includeStyles` | boolean | `true` | 坐标 / 标签 / 样式槽位开关 |
+| `includeUnlinked` | boolean | `true` | UNLINKED 小节 |
+| `unlinkedLimit` | integer 1–200 | `20` | 未连线节点超出折叠为计数行 |
+| `filter` | string | — | 名称子串（大小写不敏感）：命中链保留命中节点前后各 1 跳，未连线按名匹配 |
+| `maxChains` | integer 1–200 | `40` | 单页链条数（超出置 truncated + `nextAfter`） |
+| `after` | integer ≥0 | `0` | 链列表翻页偏移（回传上次响应的 `nextAfter`） |
+| `includeLayout` | boolean | `false` | 可选追加旧版 lineHit 行带段（保留能力，默认关） |
+| `format` | `'text' \| 'json'` | `'text'` | `json` 为精确逃生口：返回完整结构化数据（无分页/过滤） |
 
-返回：`{ viewedNodeId, titlePath, text, rows: [{index, nodeIds[]}], nodes: [{nodeId, firstLine, x, y, width, height, childCount}], connections: [{id, fromNodeId, toNodeId, text}], nodeCount, truncated }`
+> 已移除旧参数 `includeIds` / `includeCoordinates` / `maxNodes`（被句柄与分页取代；**破坏性变更**）。
 
-- 文本按**直线命中（lineHit）**算法编排：行间 `\n`、行内 ` | `，行内按 x 升序。
-- **无需解析文本**：`rows`/`nodes` 已给出每行的节点 id 与几何信息；`connections` 是该视图的同级连线。
-- `titlePath` 为祖先链路径（如 `/需求梳理/登录模块`）。
+返回（text 格式，纯文本）：
 
-#### T3 `aidea_node_get`（读）—— 节点详情
+```
+VIEW /关卡设计/关卡  153 子节点 · 124 连线 · 链 38 · 未连线 6
+N<code>=节点句柄（可直接传给写工具） · +K = 有 K 个子视图 · @x,y = 整数左上角
+边段：--C<n> 文字 | 样式-->（按位置读；C 编号 = 该连线在父连线表中的序号）
 
-入参：`{ nodeId }`。
+CHAINS
+[NRUo A 树屋遗址 | 主线节点 | 简单 | @0,260]--C3 起点-->[N6DX B 林缘草坡 | @220,260]--C7-->[NKBy C 古树枢纽 | Yellow | 简单 | @440,380]
+[C 古树枢纽]--C11-->[D 林下低道 | @660,380]--C12-->[E 溪流洼地 | @880,380]
+[E 溪流洼地]--C15-->[F 花草地 | @1100,380]--C16-->[G 根须廊 | @1320,380]
+[G 根须廊]--C20-->[C 古树枢纽]            ← 回边自成一链；与上三条拼出环 C-D-E-F-G-C
+UNLINKED
+[PQ12 图例 (+7行) | 注释 | 简单 | @0,0]
+STYLE  Default=#7d7d7d | Blue=#3b82f6 | …（节点预设全量）
+LINK   Default=solid#6b7280 单向 | Red Dashed=dashed#ef4444 单向 | Green Plain=solid#22c55e 双向 | …（连线预设全量）
+TAGS   主线 | 注释
+```
 
-返回：`{ node: {id, parentId, x, y, width, height, text, borderColor, tagIds[]}, parentId, pathToRoot: [首行...], children: [快照], connections: [...], tagIds, referenceName }`（`referenceName` 为 `#引用名`，无则 null）。
+要点：
+
+- **链式呈现**：连线以"链"编排（两遍起点 + 未消费出边 + 分支点断链），链长降序排序；**环不内联标记**——需跨链交叉比对（共享首尾 cell）。
+- **节点 cell**：首次出现全量 `[N句柄 名 (+K) | 标签 | 样式 | @x,y]`（槽位按省略条件收敛），再次出现短式 `[名]`（D0-a）。
+- **边段槽位固定**：`--C<n> 文字 | 样式-->` 按位置读，无需逃逸表；连线样式恰为内置默认（`solid/2px/#6b7280/有向`）时省略样式槽；未命中预设回退紧凑原始值（如 `dashed#ef4444`）；`directed=false` 渲染 `--`。
+- **句柄**：`N<code>` = 节点 id 的全局唯一最短前缀（≥3 位）；**写侧优先用句柄**。`C<n>` = 该连线在父连线表中的 1-based 下标（删除前序连线后会重排，需重读；`Nfrom>Nto` 寻址不受影响）。
+- **无向边**按存储 `from→to` 遍历（`--` 只影响显示）。
+- `STYLE`/`LINK` 给全量预设名 → 模型可按名写入（T5 `borderColor`、T12/T14 `preset`）；`TAGS` 给全量标签名。
+- 153 节点 / 124 连线的真实规模视图输出 ≤ 8,000 字符 / ≤ 120 行（回归测试锁定）。
+
+#### T3 `aidea_node_get`（读）—— 节点详情（详情层）
+
+入参：`{ nodeId }`（句柄 / 名字 / 完整 id）。
+
+返回：`{ node: {id, handle, displayName, parentId, x, y, width, height（均取整）, text, borderColor, tagIds[]}, parentId, pathToRoot: [首行...], children: [快照（含 handle/displayName，x/y 取整）], connections: [快照（含 directed/lineStyle/strokeWidth/strokeColor）], tagIds, referenceName }`（`referenceName` 为 `#引用名`，无则 null）。唯二保留几何信息的地方（cell 坐标已取整，outline 不含坐标）。
 
 #### T4 `aidea_node_search`（读）—— 搜索节点
 
@@ -152,23 +209,26 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 ### 3.2 写（T5–T18，全部可撤销）
 
 > 一次工具调用 = 一条历史（`aidea_batch` 整批一条）。文本用 `\n` 换行；节点文本以 `#` 开头会定义引用名（重名冲突见 T6）。
+>
+> **引用解析**：所有 `nodeId` / `parentId` / `nodeIds` 类入参统一走五级解析——完整 id 精确 → `N` 句柄（≥3 位前缀，唯一才接受）→ 唯一显示名精确（含 `(2)`/`(3)` 同名后缀）→ 唯一子串匹配 → 失败抛 ToolError 并附 ≤5 个候选（带句柄）。**句柄语法优先**：形如 `N<code>` 的入参只按句柄解析、不回退名字。解析失败只在入口报错，不"猜"，避免误写。
 
 #### T5 `aidea_node_create`（写）—— 批量创建节点
 
 | 参数 | 说明 |
 |---|---|
-| `parentId` | 目标父节点 id（其视图内创建） |
+| `parentId` | 目标父节点（句柄 / 名字 / id；其视图内创建） |
 | `texts` | string[]，1–200 项，每项一个节点（支持多行） |
 | `layout` | `auto`（默认：现有子节点包围盒下方一行）· `grid`（⌈√n⌉ 列网格）· `row`（单行） |
 | `gap` | number，默认 24（px 间距） |
 | `startAt` | `{x,y}`，显式左上角起点（覆盖 auto 基准） |
-| `borderColor` | hex，可选（缺省取当前节点预设） |
+| `borderColor` | hex **或节点预设名**（如 `"Blue"`），可选（缺省取当前节点预设） |
+| `preset` | 节点预设名（`borderColor` 的别名；两者同给时 `borderColor` 优先） |
 
 返回：`{ createdIds: string[], undoHint }`。
 
 #### T6 `aidea_node_set_text`（写）—— 批量改文本
 
-入参：`{ updates: [{nodeId, text}] }`（1–200 项）。引用名重名**不中断**：冲突项跳过并结构化返回。
+入参：`{ updates: [{nodeId, text}] }`（1–200 项；`nodeId` 走引用解析）。两类失败**不中断**、逐项记入 `conflicts`：引用解析失败（`node ref not found`）与引用名重名冲突；其余项正常应用。
 
 返回：`{ applied, conflicts: [{nodeId, conflictRef}], undoHint }`。
 
@@ -204,19 +264,19 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 #### T12 `aidea_connection_add`（写）—— 创建连线
 
-入参：`{ parentId, fromNodeId, toNodeId, lineStyle?: 'solid'|'dashed'|'dotted', strokeColor?, directed?, text? }`。两端必须是 `parentId` 的**直接子节点**（连线表示同级关系）。
+入参：`{ parentId, fromNodeId, toNodeId, preset?, lineStyle?: 'solid'|'dashed'|'dotted', strokeColor?, directed?, text? }`。两端必须是 `parentId` 的**直接子节点**（连线表示同级关系）；端点走引用解析。`preset` 为**连线预设名**（如 `"Red Dashed"`，展开为 lineStyle/strokeWidth/strokeColor/directed），显式样式字段覆盖预设。
 
 返回：`{ connectionId, undoHint }`。
 
 #### T13 `aidea_connection_remove`（破坏性）—— 删除连线
 
-入参：`{ connectionIds: string[] }`（跨父级自动定位）。返回：`{ removed, undoHint }`。
+入参：`{ connectionIds: string[] }`（跨父级自动定位）。每项连线引用接受三种寻址：`C<n>`（**当前视图**连线表 1-based 下标）、`Nfrom>Nto`（两端句柄/名字，接受双向写法）、完整 connection id。返回：`{ removed, connectionIds, undoHint }`。
 
 #### T14 `aidea_connection_update`（写）—— 批量改连线
 
-入参：`{ connectionIds, patch: { lineStyle?, strokeWidth? (1–10), strokeColor?, directed?, text? (string|null，null 清空文字) } }`。
+入参：`{ connectionIds（寻址同 T13）, patch: { preset?, lineStyle?, strokeWidth? (1–10), strokeColor?, directed?, text? (string|null，null 清空文字) } }`。`patch.preset` 为连线预设名，显式字段覆盖。
 
-返回：`{ updated, undoHint }`。
+返回：`{ updated, connectionIds, undoHint }`。
 
 #### T15 `aidea_tag_apply`（写）—— 打标签
 
@@ -250,9 +310,15 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 #### T20 `aidea_screenshot`（读）—— 画布截图
 
-入参：`{ mode?: 'viewport'(默认)|'board', maxWidth?: 1600 (200–4000) }`。
+入参：`{ mode?: 'viewport'(默认)|'board', worldRect?: { x, y, width, height }, maxWidth?: 1024 (200–4000) }`。默认 1024（对齐"图会留在上下文里，小图快查"）。
 
-返回 `content: [{ type: 'image', data: <base64 PNG>, mimeType: 'image/png' }]`。`board` 模式按全部节点包围盒裁剪；输出宽度按 `maxWidth` 归一（总像素上限约 16M 自动降采样）。窗口最小化/隐藏时画布无尺寸会报错（见 §7）。
+返回 `content: [{ type: 'image', data: <base64 PNG>, mimeType: 'image/png' }]`。输出宽度按 `maxWidth` 归一（总像素上限约 16M、画布单边 16384 自动降采样）。
+
+- `viewport`：当前可见视口（默认）；窗口最小化/隐藏时画布无尺寸会报错（见 §7）。
+- `board`：当前视图全部节点的包围盒（`childrenOf(currentNodeId)`），世界→屏幕换算后裁剪，**不受视口平移/缩放影响**；视图为空报错。
+- `worldRect`：指定区域截图（当前视图世界坐标，宽高 > 0），给出时优先于 `mode`。
+
+调试客户端对应命令：`npm run mcp:cli -- shot [--board] [--rect x,y,w,h] [--max-width n] [--out <png>]`。
 
 #### T21 `aidea_windows_list`（读）—— 窗口清单
 
@@ -265,7 +331,7 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 | URI | mime | 内容 |
 |---|---|---|
 | `aidea://project/current` | `application/json` | 当前项目序列化（与保存的 `.aidea.json` 同构） |
-| `aidea://view/current` | `text/markdown` | 当前主视图的结构化文本（同 T2 默认参数） |
+| `aidea://view/current` | `text/markdown` | 当前主视图的**链式文本**（同 T2 默认参数的 text 输出） |
 | `aidea://board/tags` | `application/json` | 标签字典（同 T19，便于客户端缓存） |
 
 同步按需生成（读取时 renderer 执行），无订阅/推送。
@@ -274,13 +340,17 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 ## 5. 常见任务手册（写给 Agent）
 
-**建立心智模型**：`board_overview` → `view_read`（当前视图）→ 需要时 `view_read{nodeId}` 下钻或 `node_search` 定位。
+**建立心智模型**（三层读模型，推荐调用序列）：`board_overview` → `outline{depth:3}`（~50 行，决定要读哪个子视图）→ 需要时 `outline{rootId}` 下钻 → `view_read{nodeId}`（读该视图的链 + 字典）→ 单节点细节用 `node_get` → 写工具（用句柄/名字）。
 
-**批量建一张子图**：`node_create{parentId, texts:[...]}` → 记下 `createdIds` → `connection_add` 连线 → `tag_apply` 打标 → `screenshot` 自检。一步到位可用 `batch` 把后三步打包成原子操作。
+**定位内容**：大板用 `view_read{filter}` 只看命中链（±1 跳）；全文搜索用 `node_search`；超过 `maxChains` 时按 `nextAfter` 翻页（`after` 参数）。
 
-**修改既有内容**：`node_search` / `view_read` 拿 id → `node_set_text`（注意 `conflicts` 返回）→ `node_move` / `node_arrange` 调整布局。
+**批量建一张子图**：`node_create{parentId, texts:[...]}` → 记下 `createdIds`（或读 outline 拿句柄）→ `connection_add`（可用 `preset:"捷径"`）→ `tag_apply` 打标 → `screenshot` 自检。一步到位可用 `batch` 把后三步打包成原子操作。
 
-**跨视图操作**：内联展开的子视图内容不在主视图文本里——用 `node_get{nodeId}` 拿 `children`，或 `view_read{nodeId}` 读该子视图；迁移用 `node_reparent`。
+**修改既有内容**：`outline` / `view_read` 拿句柄 → `node_set_text`（注意 `conflicts` 返回；解析失败会附候选，改用候选里的句柄）→ `node_move` / `node_arrange` 调整布局。
+
+**改连线**：`view_read` 里每条边带 `C<n>`；删除/修改用 `C<n>` 或 `Nfrom>Nto`。**删除连线后 `C<n>` 会重排**——先重读再寻址（`Nfrom>Nto` 不受影响）。
+
+**跨视图操作**：cell 里的 `(+K)` 标记表示该节点有 K 个子视图——用 `view_read{nodeId}` 读该子视图或 `node_get` 拿 `children`；迁移用 `node_reparent`。
 
 **改错了**：`aidea_history{action:'undo'}`（可连续撤销）；也可提示用户 Ctrl+Z。
 
@@ -312,7 +382,7 @@ UI 里 Transport Type 选 **Streamable HTTP**，URL 填 `http://127.0.0.1:9876/m
 
 ## 7. 故障排查
 
-> 联调推荐先用仓库自带的调试客户端 `tools/mcp-cli.mjs` 自检（零依赖，自动读取 mcp.json 的端口与 token）：`npm run mcp:cli -- ping`。支持 `tools` / `call <tool> [json|@file]` / `shot` / `repl`（交互模式）/ `demo`（模拟一次 Agent 小流程），详见 `node tools/mcp-cli.mjs help`。
+> 联调推荐先用仓库自带的调试客户端 `tools/mcp-cli.mjs` 自检（零依赖，自动读取 mcp.json 的端口与 token）：`npm run mcp:cli -- ping`。支持 `tools` / `call <tool> [json|@file]` / `outline [rootId] [depth]` / `shot` / `repl`（交互模式）/ `demo`（模拟一次 Agent 小流程）；大响应（>2k 字符）默认截断展示，加 `--full` 看全文。详见 `node tools/mcp-cli.mjs help`。
 
 | 现象 | 排查 |
 |---|---|
@@ -342,11 +412,14 @@ MCP 客户端 ──POST /mcp（JSON-RPC 2.0 + Bearer）──▶ main（electro
         │  第 6 座桥 aideaMcp（MCP_REQUEST / MCP_RESPONSE / MCP_PUBLISH_TOOLS / MCP_STATUS / MCP_WINDOW_STATE）
         ▼
 renderer（src/mcp/）
-  registry.ts  工具登记表（21 工具 + 3 resource，单一数据源）
+  registry.ts  工具登记表（22 工具 + 3 resource，单一数据源）
   host.ts      installMcpHost()：请求处理 / 清单发布 / 窗口态上报 / 调用日志 / undoHint
   schema.ts    最小 JSON Schema 校验器（零依赖）
-  viewText.ts  MCP 专用视图转文本（直线命中）
-  tools/*      分域 handler：写路径全部经 useCommands（可撤销）
+  naming.ts        读侧命名纯函数：句柄分配 / 同名消歧 / 颜色归一化 / 预设名匹配
+  chainText.ts     链分解（两遍起点 + 未消费出边 + 分支点断链）与链式视图文本
+  outlineText.ts   索引层大纲文本
+  viewText.ts  MCP 专用视图转文本（直线命中；view_read includeLayout 可选段用）
+  tools/*      分域 handler：写路径全部经 useCommands（可撤销）；引用解析在 tools/shared.ts
 ```
 
 - **工具清单唯一数据源在 renderer**（`registry.ts`），启动时经 `aideaMcp.publishTools()` 推给 main 缓存；`tools/list` 由 main 从缓存应答。
@@ -362,7 +435,8 @@ renderer（src/mcp/）
 | `electron/shared/bridge.ts` | `IPC.MCP_*` 通道 + `McpBridge` 等契约 |
 | `electron/preload/index.ts` | 暴露 `window.aideaMcp`（host.ts 是全 renderer 唯一访问点） |
 | `src/mcp/{registry,host,schema,viewText,types,constants}.ts` | 工具面与宿主 |
-| `src/mcp/tools/{board,node,connection,misc}.ts` | 分域 handler |
+| `src/mcp/{naming,chainText,outlineText}.ts` | 读侧纯函数：命名/句柄、链式文本、大纲文本（零 store 依赖，单测直测） |
+| `src/mcp/tools/{board,node,connection,misc}.ts` | 分域 handler（引用解析与预设名解析在 `tools/shared.ts`） |
 | `src/components/settings/McpSection.vue` | 设置分区 |
 | `tools/mcp-cli.mjs` | 调试客户端（模拟 Agent 调用，零依赖；`npm run mcp:cli`） |
 | 测试 | `src/mcp/__tests__/` · `electron/main/mcp/__tests__/` |
@@ -371,7 +445,22 @@ renderer（src/mcp/）
 
 ## 9. 设计决策要点
 
-- **精选 21 个意图级工具**而非 1:1 暴露适配层（11 域 ~136 方法）：模型语用契约 ≠ 插件 SDK 契约，且工具清单直接吃上下文窗口。
-- **`src/mcp/viewText.ts` 与 `plugins/ai/utils/viewText.ts` 是有意隔离的两份实现**：消费者/边界/演进节奏不同（面板可调参可试验、MCP 契约求稳）。对照测试 `src/mcp/__tests__/viewText.test.ts` 锁定同一节点集的行分组一致，插件版行为分叉会立刻报红。生产代码（`src/**` 非 `__tests__`）禁止 import `plugins/`。
+- **精选 22 个意图级工具**而非 1:1 暴露适配层（11 域 ~136 方法）：模型语用契约 ≠ 插件 SDK 契约，且工具清单直接吃上下文窗口。
+- **读侧三层模型（读接口改版）**：索引层 outline / 内容层 view_read（链式文本）/ 详情层 node_get，把"要不要展开"从一次大读变成一串小读。旧版 lineHit 全量输出（153 节点实测 53,441 字符 / 2,549 行）被链式文本取代（同规模 ≤ 8,000 字符 / ≤ 120 行）；`lineHitRows` 降级为 `includeLayout` 可选段，与插件对照测试保留。
+- **读与写共用同一套词汇**（G4）：节点 = 全局唯一最短前缀句柄 `N<code>` 或唯一显示名；连线 = `C<n>`（父连线表 1-based 下标）或 `Nfrom>Nto`；样式走预设名（正反向匹配 + 归一化 hex）。读输出的名字/句柄可直接传给写工具，消除"能读不能写"。
+- **序列化层取整，不动存储**：`x/y` 保持 float（Konva 拖拽产生浮点），只在 MCP 输出取整——避免拖动抖动、undo 快照不等与既有项目迁移。
+- **`src/mcp/viewText.ts` 与 `plugins/ai/utils/viewText.ts` 是有意隔离的两份实现**：消费者/边界/演进节奏不同（面板可调参可试验、MCP 契约求稳）。对照测试 `src/mcp/__tests__/viewText.test.ts` 锁定同一节点集的行分组一致，插件版行为分叉会立刻报红。生产代码（`src/**` 非 `__tests__`）禁止 import `plugins/`。链式文本的三个模块（`naming/chainText/outlineText.ts`）同为零 store 依赖纯函数，单测直测。
 - **MCP 不是插件**，不占用插件扩展点（未来如开放，必须「内核不变 + `ctx.register.registerMcpTool` 只增」，清单变化走 `publishTools()` 重推）。
 - 与内置 `plugins/ai` 互补：`ai` = AIDEA 调外部模型；MCP = 外部 Agent 驱动 AIDEA。二期可让 `ai` 插件复用 `src/mcp/registry.ts` 的工具定义。
+
+---
+
+## 10. 读侧已知缺陷（三层读模型，均已评估接受）
+
+1. **`-->` 与节点名冲突**：节点名/连线文字含 `→` 或 `-->` 时会污染边段渲染（实测命中极低，零逃逸表换取格式简单）。
+2. **`|` 破坏槽位解析**：节点名或连线文字含 `|` 时 cell/边段槽位可能错位（同理接受）。
+3. **环需跨链比对**：闭环标记 `↩回[X]` 仅在"链走回当前链内已有节点"时出现；多数环表现为多条链共享首尾节点，模型需交叉比对（实测闭环标记触发率极低）。
+4. **`C<n>` 删除重排**：删除前序连线后，后续连线编号前移——契约是"删除连线后重新读取再按 C 寻址"；`Nfrom>Nto` 与完整 id 不受影响。
+5. **无向边遍历方向固定**：`directed=false` 仍按存储 `from→to` 分解与遍历，可能与人类视觉意图相反（`--` 只影响显示）。
+6. **additions 只给键名**：插件扩展数据属插件私有命名空间（`pluginId:key`），值形状未知，outline 的 `includeAdditions` 只列键名。
+7. **句柄前缀可能随新增节点加长**：句柄是"读取时全局集合"的最短唯一前缀，新节点前缀冲突会使既有句柄变长；解析要求"解析时唯一"，歧义即报候选——读出的句柄建议及时使用。
